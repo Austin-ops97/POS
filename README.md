@@ -1,36 +1,156 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NexaPOS
+
+A cleaner, smarter POS for modern businesses. Universal Stripe-powered point of sale SaaS platform for retail, services, rentals, and restaurants.
+
+## Features
+
+- **Fast Checkout** — Tablet-optimized register with barcode scanning and category tabs
+- **Stripe Payments** — PaymentIntents, Stripe Terminal, Tap to Pay, Connect onboarding
+- **Inventory Management** — Stock tracking, transfers, adjustments, low-stock alerts
+- **Multi-Location** — Manage multiple stores from one account
+- **Employee Permissions** — Role-based access with PIN login for registers
+- **Reports & Analytics** — Sales dashboards, charts, and exportable reports
+- **Refunds & Receipts** — Full/partial refunds via Stripe with digital receipts
+- **SaaS Billing** — Stripe Billing for subscription plans
+
+## Tech Stack
+
+- **Frontend:** Next.js 15, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend:** Next.js API Routes
+- **Database:** PostgreSQL with Prisma ORM
+- **Auth:** Clerk
+- **Payments:** Stripe (Connect, Terminal, Billing, Webhooks)
+- **State:** Zustand
+- **Forms:** React Hook Form + Zod
+- **Charts:** Recharts
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL database
+- Clerk account ([clerk.com](https://clerk.com))
+- Stripe account ([stripe.com](https://stripe.com))
+
+### 1. Clone and Install
+
+```bash
+git clone <repo-url>
+cd nexapos
+npm install
+```
+
+### 2. Environment Variables
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
+| `CLERK_SECRET_KEY` | Clerk secret key |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `NEXT_PUBLIC_APP_URL` | App URL (e.g. `http://localhost:3000`) |
+
+### 3. Database Setup
+
+```bash
+npx prisma migrate dev --name init
+npx prisma db seed
+```
+
+### 4. Stripe Webhook (Development)
+
+Use the Stripe CLI to forward webhooks locally:
+
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET` in `.env`.
+
+### 5. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── (marketing)/     # Public website
+│   ├── (dashboard)/     # Authenticated app
+│   ├── onboarding/      # Business setup wizard
+│   └── api/             # API routes
+├── components/
+│   ├── ui/              # UI primitives
+│   ├── marketing/       # Marketing components
+│   ├── dashboard/       # Dashboard components
+│   └── register/        # Checkout components
+├── lib/                 # Utilities, auth, stripe, validations
+└── stores/              # Zustand stores
+```
 
-## Learn More
+## Demo Data
 
-To learn more about Next.js, take a look at the following resources:
+After seeding, the database includes:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Business:** Demo Market & Services
+- **Location:** Main Store
+- **Employees:** Owner, Manager, Cashier (PIN: `1234`)
+- **Products:** T-Shirt, Hat, Coffee, Phone Charger, Service Labor, Equipment Rental, Custom Fee
+- **Orders:** Paid card, paid cash, refunded, and held orders
+- **Customers:** John Smith, Sarah Johnson, Business Account Customer
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stripe Integration
 
-## Deploy on Vercel
+### Connect (Merchant Onboarding)
+Merchants connect their Stripe account via Settings → Payments. Uses Stripe Connect Express accounts.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### PaymentIntents
+Card payments use PaymentIntents created server-side. Webhooks confirm payment success — the frontend never marks orders as paid.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Terminal
+Register card readers in Settings → Payments → Stripe Terminal. Supports simulated readers in development.
+
+### Billing
+SaaS subscriptions managed via Stripe Billing. Plans: Starter ($29), Pro ($79), Multi-Location ($149), Enterprise (custom).
+
+## Security
+
+- No raw card data stored
+- Stripe webhook signature verification
+- Backend recalculates all order totals
+- Role-based access control (RBAC)
+- All queries scoped by `businessId`
+- Employee PINs hashed with bcrypt
+- Audit logging for sensitive actions
+
+## Deployment
+
+Designed for deployment on:
+
+- **Frontend/API:** Vercel
+- **Database:** Supabase, Railway, or any PostgreSQL provider
+- **Auth:** Clerk (hosted)
+- **Payments:** Stripe (hosted)
+
+```bash
+npm run build
+```
+
+## License
+
+Private — All rights reserved.

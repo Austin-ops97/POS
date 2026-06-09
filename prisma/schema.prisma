@@ -1,0 +1,829 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum BusinessType {
+  RETAIL
+  SERVICE
+  RENTAL
+  RESTAURANT
+  HYBRID
+}
+
+enum OnboardingStep {
+  BUSINESS_PROFILE
+  LOCATION_SETUP
+  POS_CONFIG
+  STRIPE_CONNECT
+  FIRST_PRODUCTS
+  CHOOSE_PLAN
+  COMPLETED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
+
+enum ProductType {
+  PHYSICAL
+  SERVICE
+  RENTAL
+  DIGITAL
+  CUSTOM
+}
+
+enum OrderStatus {
+  DRAFT
+  HELD
+  PENDING_PAYMENT
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+  CANCELED
+  FAILED
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  GIFT_CARD
+  STORE_CREDIT
+  MANUAL
+  SPLIT
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REQUIRES_ACTION
+}
+
+enum RefundReason {
+  CUSTOMER_RETURN
+  DAMAGED_ITEM
+  WRONG_ITEM
+  DUPLICATE_CHARGE
+  CUSTOMER_SATISFACTION
+  OTHER
+}
+
+enum InventoryMovementType {
+  SALE
+  REFUND
+  MANUAL_ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+  DAMAGED
+  LOST
+  RECEIVED
+  RETURN_TO_STOCK
+}
+
+enum StripeAccountStatus {
+  NOT_CONNECTED
+  PENDING
+  CONNECTED
+  RESTRICTED
+  READY
+}
+
+enum ReaderStatus {
+  ONLINE
+  OFFLINE
+  BUSY
+  NEEDS_UPDATE
+}
+
+enum SubscriptionPlan {
+  STARTER
+  PRO
+  MULTI_LOCATION
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum RegisterSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  PAID_IN
+  PAID_OUT
+  OPENING
+  CLOSING
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  REFUND
+  VOID
+  DISCOUNT
+  INVENTORY_ADJUSTMENT
+  SETTINGS_CHANGE
+  EMPLOYEE_CHANGE
+  LOGIN
+  PAYMENT
+}
+
+// ─── Core Multi-Tenant ───────────────────────────────────────────────────────
+
+model Business {
+  id              String       @id @default(cuid())
+  name            String
+  legalName       String?
+  type            BusinessType @default(RETAIL)
+  phone           String?
+  email           String?
+  website         String?
+  logoUrl         String?
+  primaryColor    String       @default("#1e3a5f")
+  onboardingStep  OnboardingStep @default(BUSINESS_PROFILE)
+  onboardingComplete Boolean   @default(false)
+  demoMode        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  locations       Location[]
+  employees       EmployeeProfile[]
+  products        Product[]
+  categories      Category[]
+  customers       Customer[]
+  orders          Order[]
+  discounts       Discount[]
+  taxRates        TaxRate[]
+  inventoryItems  InventoryItem[]
+  stripeAccount   StripeAccount?
+  subscription    Subscription?
+  settings        BusinessSetting?
+  moduleSettings  ModuleSetting[]
+  auditLogs       AuditLog[]
+  registerSessions RegisterSession[]
+
+  @@index([createdAt])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  street      String?
+  city        String?
+  state       String?
+  zip         String?
+  country     String   @default("US")
+  timezone    String   @default("America/New_York")
+  taxRegion   String?
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryItems InventoryItem[]
+  orders      Order[]
+  taxRates    TaxRate[]
+  terminalReaders TerminalReader[]
+  registerSessions RegisterSession[]
+  employeeLocations EmployeeLocation[]
+
+  @@index([businessId])
+}
+
+model User {
+  id            String   @id @default(cuid())
+  clerkId       String   @unique
+  email         String
+  firstName     String?
+  lastName      String?
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employees     EmployeeProfile[]
+
+  @@index([email])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  employees   EmployeeProfile[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model EmployeeProfile {
+  id          String         @id @default(cuid())
+  businessId  String
+  userId      String?
+  roleId      String
+  name        String
+  email       String
+  phone       String?
+  pinHash     String?
+  status      EmployeeStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id])
+  role        Role     @relation(fields: [roleId], references: [id])
+  locations   EmployeeLocation[]
+  orders      Order[]
+  refunds     Refund[]
+  registerSessions RegisterSession[]
+  auditLogs   AuditLog[]
+
+  @@index([businessId])
+  @@index([email])
+}
+
+model EmployeeLocation {
+  id         String @id @default(cuid())
+  employeeId String
+  locationId String
+
+  employee   EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, locationId])
+}
+
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products    Product[]
+
+  @@index([businessId])
+}
+
+model Product {
+  id              String      @id @default(cuid())
+  businessId      String
+  categoryId      String?
+  name            String
+  description     String?
+  sku             String?
+  barcode         String?
+  brand           String?
+  supplier        String?
+  imageUrl        String?
+  price           Decimal     @db.Decimal(10, 2)
+  cost            Decimal?    @db.Decimal(10, 2)
+  type            ProductType @default(PHYSICAL)
+  taxable         Boolean     @default(true)
+  taxCategory     String?
+  trackInventory  Boolean     @default(true)
+  isActive        Boolean     @default(true)
+  isFavorite      Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category        Category? @relation(fields: [categoryId], references: [id])
+  variants        ProductVariant[]
+  modifierGroups  ProductModifierGroup[]
+  inventoryItems  InventoryItem[]
+  orderItems      OrderItem[]
+
+  @@index([businessId])
+  @@index([sku])
+  @@index([barcode])
+  @@index([createdAt])
+}
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  productId   String
+  name        String
+  sku         String?
+  barcode     String?
+  price       Decimal? @db.Decimal(10, 2)
+  attributes  Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([barcode])
+}
+
+model ModifierGroup {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  required    Boolean  @default(false)
+  minSelect   Int      @default(0)
+  maxSelect   Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  options     ModifierOption[]
+  products    ProductModifierGroup[]
+
+  @@index([businessId])
+}
+
+model ModifierOption {
+  id              String   @id @default(cuid())
+  modifierGroupId String
+  name            String
+  priceAdjustment Decimal  @default(0) @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+}
+
+model ProductModifierGroup {
+  id              String @id @default(cuid())
+  productId       String
+  modifierGroupId String
+
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, modifierGroupId])
+}
+
+// ─── Inventory ───────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id              String   @id @default(cuid())
+  businessId      String
+  locationId      String
+  productId       String
+  quantityOnHand  Int      @default(0)
+  quantityReserved Int     @default(0)
+  reorderPoint    Int      @default(5)
+  costPerUnit     Decimal? @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  movements       InventoryMovement[]
+
+  @@unique([locationId, productId])
+  @@index([businessId])
+  @@index([locationId])
+}
+
+model InventoryMovement {
+  id              String              @id @default(cuid())
+  businessId      String
+  inventoryItemId String
+  type            InventoryMovementType
+  quantity        Int
+  previousQty     Int
+  newQty          Int
+  reason          String?
+  referenceId     String?
+  employeeId      String?
+  createdAt       DateTime            @default(now())
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([inventoryItemId])
+  @@index([createdAt])
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
+model Customer {
+  id              String   @id @default(cuid())
+  businessId      String
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  address         String?
+  notes           String?
+  tags            String[]
+  birthday        DateTime?
+  marketingOptIn  Boolean  @default(false)
+  taxExempt       Boolean  @default(false)
+  stripeCustomerId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders          Order[]
+
+  @@index([businessId])
+  @@index([email])
+  @@index([phone])
+}
+
+// ─── Orders & Payments ───────────────────────────────────────────────────────
+
+model Order {
+  id              String      @id @default(cuid())
+  businessId      String
+  locationId      String
+  orderNumber     String
+  status          OrderStatus @default(DRAFT)
+  employeeId      String?
+  customerId      String?
+  subtotal        Decimal     @default(0) @db.Decimal(10, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount       Decimal     @default(0) @db.Decimal(10, 2)
+  total           Decimal     @default(0) @db.Decimal(10, 2)
+  notes           String?
+  heldAt          DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location @relation(fields: [locationId], references: [id])
+  employee        EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
+  receipts        Receipt[]
+  appliedDiscounts OrderDiscount[]
+
+  @@unique([businessId, orderNumber])
+  @@index([businessId])
+  @@index([locationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  productId       String?
+  variantId       String?
+  name            String
+  sku             String?
+  quantity        Int      @default(1)
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  discountAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  taxAmount       Decimal  @default(0) @db.Decimal(10, 2)
+  total           Decimal  @db.Decimal(10, 2)
+  modifiers       Json?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order           Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id])
+  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+  refundItems     RefundItem[]
+
+  @@index([orderId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  businessId            String
+  orderId               String
+  method                PaymentMethod
+  status                PaymentStatus @default(PENDING)
+  amount                Decimal       @db.Decimal(10, 2)
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+  cardLast4             String?
+  cardBrand             String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  order                 Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([orderId])
+  @@index([stripePaymentIntentId])
+}
+
+model Refund {
+  id              String       @id @default(cuid())
+  businessId      String
+  orderId         String
+  employeeId      String?
+  amount          Decimal      @db.Decimal(10, 2)
+  taxAmount       Decimal      @default(0) @db.Decimal(10, 2)
+  reason          RefundReason
+  reasonNote      String?
+  stripeRefundId  String?
+  returnToStock   Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  order           Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  employee        EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  items           RefundItem[]
+
+  @@index([businessId])
+  @@index([orderId])
+}
+
+model RefundItem {
+  id          String @id @default(cuid())
+  refundId    String
+  orderItemId String
+  quantity    Int
+  amount      Decimal @db.Decimal(10, 2)
+
+  refund      Refund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+}
+
+model Discount {
+  id              String       @id @default(cuid())
+  businessId      String
+  name            String
+  code            String?
+  type            DiscountType
+  value           Decimal      @db.Decimal(10, 2)
+  minCartAmount   Decimal?     @db.Decimal(10, 2)
+  usageLimit      Int?
+  usageCount      Int          @default(0)
+  startDate       DateTime?
+  endDate         DateTime?
+  requiresApproval Boolean     @default(false)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderDiscounts  OrderDiscount[]
+
+  @@index([businessId])
+  @@index([code])
+}
+
+model OrderDiscount {
+  id          String  @id @default(cuid())
+  orderId     String
+  discountId  String?
+  name        String
+  type        DiscountType
+  value       Decimal @db.Decimal(10, 2)
+  amount      Decimal @db.Decimal(10, 2)
+
+  order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discount    Discount? @relation(fields: [discountId], references: [id])
+}
+
+model TaxRate {
+  id              String   @id @default(cuid())
+  businessId      String
+  locationId      String?
+  name            String
+  rate            Decimal  @db.Decimal(5, 4)
+  appliesToProducts Boolean @default(true)
+  appliesToServices Boolean @default(true)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location? @relation(fields: [locationId], references: [id])
+
+  @@index([businessId])
+  @@index([locationId])
+}
+
+model Receipt {
+  id          String   @id @default(cuid())
+  businessId  String
+  orderId     String
+  receiptNumber String
+  emailedTo   String?
+  printed     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([orderId])
+}
+
+// ─── Cash Drawer ─────────────────────────────────────────────────────────────
+
+model RegisterSession {
+  id              String              @id @default(cuid())
+  businessId      String
+  locationId      String
+  employeeId      String
+  status          RegisterSessionStatus @default(OPEN)
+  openingCash     Decimal             @default(0) @db.Decimal(10, 2)
+  cashSales       Decimal             @default(0) @db.Decimal(10, 2)
+  cashRefunds     Decimal             @default(0) @db.Decimal(10, 2)
+  paidIn          Decimal             @default(0) @db.Decimal(10, 2)
+  paidOut         Decimal             @default(0) @db.Decimal(10, 2)
+  expectedCash    Decimal?            @db.Decimal(10, 2)
+  actualCash      Decimal?            @db.Decimal(10, 2)
+  overShort       Decimal?            @db.Decimal(10, 2)
+  openedAt        DateTime            @default(now())
+  closedAt        DateTime?
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location @relation(fields: [locationId], references: [id])
+  employee        EmployeeProfile @relation(fields: [employeeId], references: [id])
+  cashMovements   CashMovement[]
+
+  @@index([businessId])
+  @@index([locationId])
+}
+
+model CashMovement {
+  id                String           @id @default(cuid())
+  registerSessionId String
+  type              CashMovementType
+  amount            Decimal          @db.Decimal(10, 2)
+  reason            String?
+  createdAt         DateTime         @default(now())
+
+  registerSession   RegisterSession @relation(fields: [registerSessionId], references: [id], onDelete: Cascade)
+}
+
+// ─── Stripe ──────────────────────────────────────────────────────────────────
+
+model StripeAccount {
+  id                  String              @id @default(cuid())
+  businessId          String              @unique
+  stripeAccountId     String?             @unique
+  status              StripeAccountStatus @default(NOT_CONNECTED)
+  chargesEnabled      Boolean             @default(false)
+  payoutsEnabled      Boolean             @default(false)
+  detailsSubmitted    Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model TerminalReader {
+  id              String       @id @default(cuid())
+  businessId      String
+  locationId      String?
+  stripeReaderId  String?
+  name            String
+  serialNumber    String?
+  status          ReaderStatus @default(OFFLINE)
+  isDefault       Boolean      @default(false)
+  lastActiveAt    DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  location        Location? @relation(fields: [locationId], references: [id])
+
+  @@index([businessId])
+  @@index([locationId])
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  businessId            String             @unique
+  plan                  SubscriptionPlan   @default(STARTER)
+  status                SubscriptionStatus @default(TRIALING)
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?
+  stripePriceId         String?
+  currentPeriodEnd      DateTime?
+  trialEndsAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+// ─── Settings & Audit ────────────────────────────────────────────────────────
+
+model BusinessSetting {
+  id                        String  @id @default(cuid())
+  businessId                String  @unique
+  enableCash                Boolean @default(true)
+  enableCard                Boolean @default(true)
+  enableManualDiscount      Boolean @default(true)
+  requireCustomer           Boolean @default(false)
+  requireManagerRefund      Boolean @default(true)
+  allowCustomItems          Boolean @default(true)
+  requirePinAtRegister      Boolean @default(false)
+  requireManagerPinRefund   Boolean @default(true)
+  managerPinDiscountThreshold Decimal? @db.Decimal(5, 2)
+  sessionTimeoutMinutes     Int     @default(30)
+  receiptFooter             String?
+  showCashierOnReceipt      Boolean @default(true)
+  showCustomerOnReceipt     Boolean @default(true)
+  showSkuOnReceipt          Boolean @default(false)
+  enableBarcodeScanning     Boolean @default(true)
+  enableReceiptPrinting     Boolean @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  business                  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model ModuleSetting {
+  id          String  @id @default(cuid())
+  businessId  String
+  module      String
+  enabled     Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, module])
+  @@index([businessId])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  businessId  String
+  employeeId  String?
+  action      AuditAction
+  entity      String
+  entityId    String?
+  details     Json?
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee    EmployeeProfile? @relation(fields: [employeeId], references: [id])
+
+  @@index([businessId])
+  @@index([createdAt])
+  @@index([entity])
+}

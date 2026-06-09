@@ -1,0 +1,154 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  formatOrderStatus,
+  getOrderStatusVariant,
+} from "@/lib/status-utils";
+
+export default async function CustomerDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const ctx = await requireAuth();
+
+  const customer = await db.customer.findFirst({
+    where: { id, businessId: ctx.business.id, deletedAt: null },
+    include: {
+      orders: {
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      },
+    },
+  });
+
+  if (!customer) notFound();
+
+  const paidOrders = customer.orders.filter(
+    (o) => o.status === "PAID" || o.status === "PARTIALLY_REFUNDED"
+  );
+  const totalSpent = paidOrders.reduce((sum, o) => sum + Number(o.total), 0);
+  const avgOrder = paidOrders.length > 0 ? totalSpent / paidOrders.length : 0;
+  const lastOrder = customer.orders[0];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/customers">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {customer.firstName} {customer.lastName ?? ""}
+          </h1>
+          <p className="text-sm text-slate-500">
+            Customer since {formatDate(customer.createdAt)}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Total Orders" value={String(customer.orders.length)} />
+        <StatCard title="Total Spent" value={formatCurrency(totalSpent)} />
+        <StatCard title="Average Order" value={formatCurrency(avgOrder)} />
+        <StatCard
+          title="Last Order"
+          value={lastOrder ? formatDate(lastOrder.createdAt) : "—"}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Contact Info</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {customer.email && (
+              <p className="text-slate-600">
+                <span className="font-medium text-slate-900">Email:</span> {customer.email}
+              </p>
+            )}
+            {customer.phone && (
+              <p className="text-slate-600">
+                <span className="font-medium text-slate-900">Phone:</span> {customer.phone}
+              </p>
+            )}
+            {customer.address && (
+              <p className="text-slate-600">
+                <span className="font-medium text-slate-900">Address:</span> {customer.address}
+              </p>
+            )}
+            {customer.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-2">
+                {customer.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary">{tag}</Badge>
+                ))}
+              </div>
+            )}
+            {customer.notes && (
+              <p className="pt-2 text-slate-600">{customer.notes}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Order History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {customer.orders.length === 0 ? (
+              <p className="text-sm text-slate-500">No orders yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-3 text-left font-medium text-slate-600">Order</th>
+                    <th className="pb-3 text-left font-medium text-slate-600">Date</th>
+                    <th className="pb-3 text-left font-medium text-slate-600">Total</th>
+                    <th className="pb-3 text-left font-medium text-slate-600">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customer.orders.map((order) => (
+                    <tr key={order.id} className="border-b border-slate-100">
+                      <td className="py-3">
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="font-medium text-slate-900 hover:underline"
+                        >
+                          {order.orderNumber}
+                        </Link>
+                      </td>
+                      <td className="py-3 text-slate-600">
+                        {formatDate(order.createdAt)}
+                      </td>
+                      <td className="py-3 font-medium text-slate-900">
+                        {formatCurrency(Number(order.total))}
+                      </td>
+                      <td className="py-3">
+                        <Badge variant={getOrderStatusVariant(order.status)}>
+                          {formatOrderStatus(order.status)}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
