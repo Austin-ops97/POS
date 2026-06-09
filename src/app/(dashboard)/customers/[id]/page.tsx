@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getCustomerById } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -21,24 +21,14 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const ctx = await requireAuth();
 
-  const customer = await db.customer.findFirst({
-    where: { id, businessId: ctx.business.id, deletedAt: null },
-    include: {
-      orders: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      },
-    },
-  });
-
+  const customer = await getCustomerById(ctx, id);
   if (!customer) notFound();
 
-  const paidOrders = customer.orders.filter(
-    (o) => o.status === "PAID" || o.status === "PARTIALLY_REFUNDED"
-  );
-  const totalSpent = paidOrders.reduce((sum, o) => sum + Number(o.total), 0);
+  const orders = (customer as { orders?: Array<{ id: string; orderNumber: string; status: string; total: number | string; createdAt: Date | string }> }).orders ?? [];
+  const paidOrders = orders.filter((o) => o.status === "PAID" || o.status === "PARTIALLY_REFUNDED");
+  const totalSpent = (customer as { totalSpent?: number }).totalSpent ?? paidOrders.reduce((sum, o) => sum + Number(o.total), 0);
   const avgOrder = paidOrders.length > 0 ? totalSpent / paidOrders.length : 0;
-  const lastOrder = customer.orders[0];
+  const lastOrder = orders[0];
 
   return (
     <div className="space-y-6">
@@ -59,7 +49,7 @@ export default async function CustomerDetailPage({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Orders" value={String(customer.orders.length)} />
+        <StatCard title="Total Orders" value={String(orders.length)} />
         <StatCard title="Total Spent" value={formatCurrency(totalSpent)} />
         <StatCard title="Average Order" value={formatCurrency(avgOrder)} />
         <StatCard
@@ -84,19 +74,19 @@ export default async function CustomerDetailPage({
                 <span className="font-medium text-slate-900">Phone:</span> {customer.phone}
               </p>
             )}
-            {customer.address && (
+            {"address" in customer && customer.address && (
               <p className="text-slate-600">
                 <span className="font-medium text-slate-900">Address:</span> {customer.address}
               </p>
             )}
-            {customer.tags.length > 0 && (
+            {"tags" in customer && Array.isArray(customer.tags) && customer.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-2">
-                {customer.tags.map((tag) => (
+                {customer.tags.map((tag: string) => (
                   <Badge key={tag} variant="secondary">{tag}</Badge>
                 ))}
               </div>
             )}
-            {customer.notes && (
+            {"notes" in customer && customer.notes && (
               <p className="pt-2 text-slate-600">{customer.notes}</p>
             )}
           </CardContent>
@@ -107,7 +97,7 @@ export default async function CustomerDetailPage({
             <CardTitle>Order History</CardTitle>
           </CardHeader>
           <CardContent>
-            {customer.orders.length === 0 ? (
+            {orders.length === 0 ? (
               <p className="text-sm text-slate-500">No orders yet.</p>
             ) : (
               <table className="w-full text-sm">
@@ -120,7 +110,7 @@ export default async function CustomerDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {customer.orders.map((order) => (
+                  {orders.map((order: { id: string; orderNumber: string; createdAt: Date | string; total: number | string; status: string }) => (
                     <tr key={order.id} className="border-b border-slate-100">
                       <td className="py-3">
                         <Link
@@ -137,8 +127,8 @@ export default async function CustomerDetailPage({
                         {formatCurrency(Number(order.total))}
                       </td>
                       <td className="py-3">
-                        <Badge variant={getOrderStatusVariant(order.status)}>
-                          {formatOrderStatus(order.status)}
+                        <Badge variant={getOrderStatusVariant(order.status as Parameters<typeof getOrderStatusVariant>[0])}>
+                          {formatOrderStatus(order.status as Parameters<typeof formatOrderStatus>[0])}
                         </Badge>
                       </td>
                     </tr>

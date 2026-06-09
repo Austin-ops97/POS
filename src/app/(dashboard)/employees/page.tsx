@@ -1,73 +1,47 @@
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getEmployees } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/dashboard/empty-state";
-import { UserCog, UserPlus } from "lucide-react";
-import { getEmployeeStatusVariant } from "@/lib/status-utils";
+import { Card, CardContent } from "@/components/ui/card";
+import { UserPlus } from "lucide-react";
 
 export default async function EmployeesPage() {
   const ctx = await requireAuth();
-
-  const employees = await db.employeeProfile.findMany({
-    where: { businessId: ctx.business.id, deletedAt: null },
-    include: { role: true },
-    orderBy: { name: "asc" },
-  });
+  const employees = await getEmployees(ctx);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Employees</h1>
-          <p className="text-sm text-slate-500">
-            Manage team members and permissions
-          </p>
+          <p className="text-sm text-slate-500">Manage team members and roles</p>
         </div>
-        <Button>
-          <UserPlus className="h-4 w-4" />
-          Invite Employee
-        </Button>
+        <Button><UserPlus className="h-4 w-4" />Invite Employee</Button>
       </div>
-
-      {employees.length === 0 ? (
-        <EmptyState
-          icon={UserCog}
-          title="No employees yet"
-          description="Invite team members to help run your business."
-          actionLabel="Invite Employee"
-          actionHref="/employees"
-        />
-      ) : (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <Card>
+        <CardContent className="p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-4 py-3 text-left font-medium text-slate-600">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-600">Email</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-600">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
+              <tr className="border-b border-slate-200 text-left text-slate-500">
+                <th className="p-4 font-medium">Name</th>
+                <th className="p-4 font-medium">Email</th>
+                <th className="p-4 font-medium">Role</th>
+                <th className="p-4 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-900">{employee.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{employee.email}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline">{employee.role.name}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={getEmployeeStatusVariant(employee.status)}>
-                      {employee.status}
-                    </Badge>
-                  </td>
+              {employees.map((emp: { id: string; name: string; email: string; status: string; role: { name: string } }) => (
+                <tr key={emp.id} className="border-b border-slate-100">
+                  <td className="p-4 font-medium text-slate-900">{emp.name}</td>
+                  <td className="p-4 text-slate-600">{emp.email}</td>
+                  <td className="p-4 text-slate-600">{emp.role.name}</td>
+                  <td className="p-4"><Badge variant="success">{emp.status}</Badge></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

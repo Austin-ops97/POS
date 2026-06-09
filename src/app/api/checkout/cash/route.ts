@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo-mode";
+import { demoJson, handleDemoCashPayment } from "@/lib/demo-api";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
@@ -21,6 +23,16 @@ const cashPaymentSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const body = await request.json();
+    if (isDemoMode()) {
+      const result = handleDemoCashPayment(body.orderId);
+      return demoJson({
+        success: true,
+        orderNumber: result.order?.orderNumber,
+        order: result.order,
+        paid: true,
+      });
+    }
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
@@ -32,7 +44,6 @@ export async function POST(request: Request) {
       return jsonError("Cash payments are disabled for this business", 400);
     }
 
-    const body = await request.json();
     const { orderId, amountTendered, emailedTo } = cashPaymentSchema.parse(body);
 
     const order = await db.order.findFirst({

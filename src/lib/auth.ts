@@ -1,5 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "./db";
+import { isDemoMode } from "./demo-mode";
+import { demoAuthContext } from "./demo-data";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
 
 export type AuthContext = {
@@ -16,6 +18,8 @@ export type AuthContext = {
 };
 
 export async function getAuthUser() {
+  if (isDemoMode()) return null;
+
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
 
@@ -40,6 +44,10 @@ export async function getAuthUser() {
 }
 
 export async function getAuthContext(businessId?: string): Promise<AuthContext | null> {
+  if (isDemoMode()) {
+    return demoAuthContext;
+  }
+
   const user = await getAuthUser();
   if (!user) return null;
 
@@ -97,6 +105,7 @@ export function hasPermission(
   ctx: AuthContext,
   permission: string
 ): boolean {
+  if (isDemoMode()) return true;
   if (ctx.employee.role.name === "Owner") return true;
   return ctx.employee.role.permissions.some(
     (rp) => rp.permission.key === permission

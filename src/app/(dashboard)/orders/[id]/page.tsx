@@ -7,7 +7,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getOrderById } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,19 +27,7 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const ctx = await requireAuth();
 
-  const order = await db.order.findFirst({
-    where: { id, businessId: ctx.business.id },
-    include: {
-      customer: true,
-      employee: true,
-      items: { include: { product: true } },
-      payments: true,
-      refunds: true,
-      receipts: true,
-      location: true,
-    },
-  });
-
+  const order = await getOrderById(ctx, id);
   if (!order) notFound();
 
   const canRefund =
@@ -59,13 +47,16 @@ export default async function OrderDetailPage({
               <h1 className="text-2xl font-bold text-slate-900">
                 {order.orderNumber}
               </h1>
-              <Badge variant={getOrderStatusVariant(order.status)}>
-                {formatOrderStatus(order.status)}
+              <Badge variant={getOrderStatusVariant(order.status as Parameters<typeof getOrderStatusVariant>[0])}>
+                {formatOrderStatus(order.status as Parameters<typeof formatOrderStatus>[0])}
               </Badge>
             </div>
             <p className="text-sm text-slate-500">
               {formatDate(order.createdAt)}
-              {order.location && ` · ${order.location.name}`}
+              {(() => {
+                const loc = (order as unknown as { location?: { name: string } }).location;
+                return loc ? ` · ${loc.name}` : "";
+              })()}
             </p>
           </div>
         </div>
@@ -104,11 +95,11 @@ export default async function OrderDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {order.items.map((item) => (
+                  {order.items.map((item: { id: string; name: string; quantity: number; unitPrice: unknown; total: unknown; sku?: string }) => (
                     <tr key={item.id} className="border-b border-slate-100">
                       <td className="py-3">
                         <p className="font-medium text-slate-900">{item.name}</p>
-                        {item.sku && (
+                        {"sku" in item && item.sku && (
                           <p className="text-xs text-slate-500">{item.sku}</p>
                         )}
                       </td>
@@ -147,14 +138,14 @@ export default async function OrderDetailPage({
             </CardContent>
           </Card>
 
-          {order.refunds.length > 0 && (
+          {order.refunds?.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Refunds</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
-                  {order.refunds.map((refund) => (
+                  {order.refunds.map((refund: { id: string; amount: unknown; reason: string; createdAt: Date | string }) => (
                     <li
                       key={refund.id}
                       className="flex items-center justify-between rounded-lg border border-slate-100 p-3"
@@ -185,16 +176,16 @@ export default async function OrderDetailPage({
                 <div className="space-y-1 text-sm">
                   <p className="font-medium text-slate-900">
                     <Link
-                      href={`/customers/${order.customer.id}`}
+                      href={`/customers/${"id" in order.customer ? order.customer.id : (order as { customerId?: string }).customerId}`}
                       className="hover:underline"
                     >
                       {order.customer.firstName} {order.customer.lastName ?? ""}
                     </Link>
                   </p>
-                  {order.customer.email && (
+                  {"email" in order.customer && order.customer.email && (
                     <p className="text-slate-600">{order.customer.email}</p>
                   )}
-                  {order.customer.phone && (
+                  {"phone" in order.customer && order.customer.phone && (
                     <p className="text-slate-600">{order.customer.phone}</p>
                   )}
                 </div>
@@ -213,7 +204,7 @@ export default async function OrderDetailPage({
                 <p className="text-sm text-slate-500">No payments recorded.</p>
               ) : (
                 <ul className="space-y-3">
-                  {order.payments.map((payment) => (
+                  {order.payments.map((payment: { id: string; method: string; status: string; amount: unknown; cardLast4?: string; cardBrand?: string; createdAt?: Date | string }) => (
                     <li
                       key={payment.id}
                       className="flex items-center justify-between"
@@ -221,17 +212,17 @@ export default async function OrderDetailPage({
                       <div>
                         <p className="font-medium text-slate-900">
                           {payment.method}
-                          {payment.cardLast4 && ` · ${payment.cardBrand} ${payment.cardLast4}`}
+                          {"cardLast4" in payment && payment.cardLast4 && ` · ${"cardBrand" in payment ? payment.cardBrand : ""} ${payment.cardLast4}`}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {formatDate(payment.createdAt)}
+                          {"createdAt" in payment && payment.createdAt ? formatDate(payment.createdAt) : ""}
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-slate-900">
                           {formatCurrency(Number(payment.amount))}
                         </p>
-                        <Badge variant={getPaymentStatusVariant(payment.status)}>
+                        <Badge variant={getPaymentStatusVariant(payment.status as Parameters<typeof getPaymentStatusVariant>[0])}>
                           {payment.status}
                         </Badge>
                       </div>
@@ -255,14 +246,14 @@ export default async function OrderDetailPage({
             </Card>
           )}
 
-          {order.receipts.length > 0 && (
+          {Array.isArray((order as unknown as { receipts?: unknown[] }).receipts) && (order as unknown as { receipts: unknown[] }).receipts.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Receipts</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-sm">
-                  {order.receipts.map((receipt) => (
+                  {(order as unknown as { receipts: Array<{ id: string; receiptNumber: string; printed?: boolean; emailedTo?: string }> }).receipts.map((receipt) => (
                     <li key={receipt.id} className="text-slate-600">
                       {receipt.receiptNumber}
                       {receipt.printed && " · Printed"}

@@ -1,40 +1,38 @@
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getCustomers, getOrders } from "@/lib/queries";
 import { CustomersTable } from "@/components/dashboard/customers-table";
 
 export default async function CustomersPage() {
   const ctx = await requireAuth();
-  const businessId = ctx.business.id;
-
-  const customers = await db.customer.findMany({
-    where: { businessId, deletedAt: null },
-    include: {
-      orders: {
-        where: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] } },
-        select: { total: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const customerRows = customers.map((c) => ({
-    id: c.id,
-    name: `${c.firstName} ${c.lastName ?? ""}`.trim(),
-    email: c.email,
-    phone: c.phone,
-    orderCount: c.orders.length,
-    totalSpent: c.orders.reduce((sum, o) => sum + Number(o.total), 0),
-  }));
+  const [customers, orders] = await Promise.all([getCustomers(ctx), getOrders(ctx)]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Customers</h1>
-        <p className="text-sm text-slate-500">
-          Manage customer profiles and history
-        </p>
+        <p className="text-sm text-slate-500">Manage customer profiles and history</p>
       </div>
-      <CustomersTable customers={customerRows} />
+      <CustomersTable
+        customers={customers.map((c: {
+          id: string;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+        }) => {
+          const custOrders = (orders as Array<{ customerId?: string | null; status: string; total: unknown }>).filter(
+            (o) => o.customerId === c.id && (o.status === "PAID" || o.status === "PARTIALLY_REFUNDED")
+          );
+          return {
+            id: c.id,
+            name: `${c.firstName} ${c.lastName ?? ""}`.trim(),
+            email: c.email ?? null,
+            phone: c.phone ?? null,
+            orderCount: custOrders.length,
+            totalSpent: custOrders.reduce((sum, o) => sum + Number(o.total), 0),
+          };
+        })}
+      />
     </div>
   );
 }

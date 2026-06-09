@@ -1,32 +1,27 @@
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getInventory } from "@/lib/queries";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 
 export default async function InventoryPage() {
   const ctx = await requireAuth();
-  const businessId = ctx.business.id;
+  const items = await getInventory(ctx);
 
-  const items = await db.inventoryItem.findMany({
-    where: { businessId },
-    include: {
-      product: true,
-      location: true,
-    },
-    orderBy: { quantityOnHand: "asc" },
-  });
-
-  const rows = items.map((item) => ({
+  const rows = items.map((item: {
+    id: string;
+    quantityOnHand: number;
+    reorderPoint: number;
+    product: { name: string; sku?: string | null };
+    location?: { name: string };
+  }) => ({
     id: item.id,
     productName: item.product.name,
-    sku: item.product.sku,
+    sku: item.product.sku ?? null,
     quantityOnHand: item.quantityOnHand,
     reorderPoint: item.reorderPoint,
-    locationName: item.location.name,
+    locationName: item.location?.name ?? "Main Store",
   }));
 
-  const lowStockCount = rows.filter(
-    (r) => r.quantityOnHand <= r.reorderPoint
-  ).length;
+  const lowStockCount = rows.filter((r) => r.quantityOnHand <= r.reorderPoint).length;
 
   return (
     <div className="space-y-6">

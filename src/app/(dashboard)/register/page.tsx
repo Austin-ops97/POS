@@ -112,14 +112,13 @@ export default function RegisterPage() {
       );
       setProducts(productList);
 
-      if (data.categories) {
-        setCategories(data.categories);
+      if (data.categories?.length) {
+        setCategories(data.categories.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
       } else {
         const cats = new Map<string, Category>();
-        for (const p of productList) {
-          if (p.categoryId) {
-            cats.set(p.categoryId, { id: p.categoryId, name: p.categoryId });
-          }
+        for (const p of (data.products || data) as { categoryId?: string; category?: { id: string; name: string } }[]) {
+          if (p.category?.id) cats.set(p.category.id, { id: p.category.id, name: p.category.name });
+          else if (p.categoryId) cats.set(p.categoryId, { id: p.categoryId, name: p.categoryId });
         }
         if (cats.size > 0) setCategories(Array.from(cats.values()));
       }

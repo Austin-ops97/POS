@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo-mode";
+import { demoJson, demoOrders } from "@/lib/demo-api";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { serializeDecimal } from "@/lib/order-service";
@@ -15,10 +17,23 @@ const paymentIntentSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const body = await request.json();
+    if (isDemoMode()) {
+      const order = demoOrders.find((o) => o.id === body.orderId);
+      if (order) {
+        order.status = "PAID";
+        order.paidAt = new Date();
+      }
+      return demoJson({
+        paid: true,
+        status: "succeeded",
+        orderNumber: order?.orderNumber,
+        demo: true,
+      });
+    }
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
-    const body = await request.json();
     const { orderId } = paymentIntentSchema.parse(body);
 
     const order = await db.order.findFirst({

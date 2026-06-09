@@ -57,7 +57,7 @@ export default function HomePage() {
                   <Button size="lg">Start Free Trial</Button>
                 </Link>
                 <Link href="/dashboard">
-                  <Button variant="outline" size="lg">View Demo</Button>
+                  <Button variant="outline" size="lg">View Live Demo</Button>
                 </Link>
               </div>
             </div>

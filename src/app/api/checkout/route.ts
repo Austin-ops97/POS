@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo-mode";
+import { demoJson, handleDemoCheckout } from "@/lib/demo-api";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createOrderRecord, serializeDecimal, verifyLocationAccess } from "@/lib/order-service";
 import { checkoutSchema } from "@/lib/validations";
@@ -11,10 +13,19 @@ const createOrderSchema = checkoutSchema.omit({ paymentMethod: true });
 
 export async function POST(request: Request) {
   try {
+    const body = await request.json();
+    if (isDemoMode()) {
+      const result = handleDemoCheckout({ ...body, paymentMethod: "CASH" });
+      return demoJson({
+        id: result.order.id,
+        orderNumber: result.order.orderNumber,
+        order: result.order,
+        totals: result.totals,
+      });
+    }
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
-    const body = await request.json();
     const parsed = createOrderSchema.parse(body);
 
     await verifyLocationAccess(ctx, parsed.locationId);

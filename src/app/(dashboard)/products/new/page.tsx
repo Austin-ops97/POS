@@ -1,17 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getCategories } from "@/lib/queries";
 import { ProductForm } from "@/components/dashboard/product-form";
 import { Button } from "@/components/ui/button";
 
 export default async function NewProductPage() {
   const ctx = await requireAuth();
 
-  const categories = await db.category.findMany({
-    where: { businessId: ctx.business.id, isActive: true, deletedAt: null },
-    orderBy: { name: "asc" },
-  });
+  const categories = await getCategories(ctx);
 
   return (
     <div className="space-y-6">

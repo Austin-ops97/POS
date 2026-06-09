@@ -135,6 +135,10 @@ export default function OnboardingPage() {
   });
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      router.replace("/dashboard");
+      return;
+    }
     async function loadBusiness() {
       try {
         const res = await fetch("/api/business");

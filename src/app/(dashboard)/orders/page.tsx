@@ -1,40 +1,35 @@
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { OrdersTable } from "@/components/dashboard/orders-table";
+import { getOrders } from "@/lib/queries";
+import { OrdersTable, type OrderRow } from "@/components/dashboard/orders-table";
+import type { OrderStatus } from "@prisma/client";
 
 export default async function OrdersPage() {
   const ctx = await requireAuth();
-  const businessId = ctx.business.id;
-  const locationId = ctx.location?.id;
+  const orders = await getOrders(ctx);
 
-  const orders = await db.order.findMany({
-    where: {
-      businessId,
-      ...(locationId ? { locationId } : {}),
-    },
-    include: { customer: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-
-  const orderRows = orders.map((order) => ({
+  const orderRows = (orders as Array<{
+    id: string;
+    orderNumber: string;
+    customer?: { firstName: string; lastName?: string | null } | null;
+    total: unknown;
+    status: string;
+    createdAt: Date | string;
+  }>).map((order) => ({
     id: order.id,
     orderNumber: order.orderNumber,
     customerName: order.customer
       ? `${order.customer.firstName} ${order.customer.lastName ?? ""}`.trim()
       : null,
     total: Number(order.total),
-    status: order.status,
-    createdAt: order.createdAt.toISOString(),
-  }));
+    status: order.status as OrderStatus,
+    createdAt: new Date(order.createdAt).toISOString(),
+  })) as OrderRow[];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
-        <p className="text-sm text-slate-500">
-          View and manage all orders
-        </p>
+        <p className="text-sm text-slate-500">View and manage all orders</p>
       </div>
       <OrdersTable orders={orderRows} />
     </div>

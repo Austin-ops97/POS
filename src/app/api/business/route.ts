@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser, requireAuth } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo-mode";
+import { demoJson, getDemoBusiness } from "@/lib/demo-api";
 import { createBusinessSchema, posConfigSchema } from "@/lib/validations";
 import { ROLE_PERMISSIONS, PERMISSIONS } from "@/lib/permissions";
 import { STRIPE_PLANS } from "@/lib/stripe";
@@ -70,6 +72,7 @@ function buildModuleSettings(posConfig: ReturnType<typeof posConfigSchema.parse>
 
 export async function GET() {
   try {
+    if (isDemoMode()) return demoJson(getDemoBusiness());
     const ctx = await requireAuth();
 
     const business = await db.business.findFirst({

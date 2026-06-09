@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, CreditCard, Wifi, WifiOff } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getStripeSettings } from "@/lib/queries";
+import { isDemoMode } from "@/lib/demo-mode";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,16 +14,10 @@ import {
 
 export default async function PaymentsSettingsPage() {
   const ctx = await requireAuth();
-  const businessId = ctx.business.id;
-
-  const [stripeAccount, readers] = await Promise.all([
-    db.stripeAccount.findUnique({ where: { businessId } }),
-    db.terminalReader.findMany({
-      where: { businessId },
-      include: { location: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const { stripeAccount } = await getStripeSettings(ctx);
+  const readers: { id: string; name: string; status: string; serialNumber?: string | null; location?: { name: string } | null }[] = isDemoMode()
+    ? [{ id: "reader-demo", name: "Simulated Reader", status: "ONLINE", serialNumber: "SIM-001", location: { name: "Main Store" } }]
+    : [];
 
   const isConnected =
     stripeAccount?.status === "CONNECTED" || stripeAccount?.status === "READY";
@@ -53,7 +48,7 @@ export default async function PaymentsSettingsPage() {
               </CardDescription>
             </div>
             {stripeAccount && (
-              <Badge variant={getStripeStatusVariant(stripeAccount.status)}>
+              <Badge variant={getStripeStatusVariant(stripeAccount.status as Parameters<typeof getStripeStatusVariant>[0])}>
                 {stripeAccount.status.replace(/_/g, " ")}
               </Badge>
             )}
@@ -130,7 +125,7 @@ export default async function PaymentsSettingsPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={getReaderStatusVariant(reader.status)}>
+                  <Badge variant={getReaderStatusVariant(reader.status as Parameters<typeof getReaderStatusVariant>[0])}>
                     {reader.status}
                   </Badge>
                 </div>

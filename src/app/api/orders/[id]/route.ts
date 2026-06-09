@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo-mode";
+import { demoJson, demoOrders } from "@/lib/demo-api";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { serializeDecimal } from "@/lib/order-service";
@@ -10,10 +12,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    if (isDemoMode()) {
+      const order = demoOrders.find((o) => o.id === id);
+      if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      return demoJson(order);
+    }
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
-
-    const { id } = await params;
 
     const order = await db.order.findFirst({
       where: {
