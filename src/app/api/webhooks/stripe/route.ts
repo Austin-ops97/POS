@@ -6,26 +6,26 @@ import {
   deductInventoryForOrderInTransaction,
   OrderServiceError,
 } from "@/lib/order-service";
+import {
+  handleInvoicePaymentFailed,
+  handleInvoicePaymentSucceeded,
+  handleSubscriptionDeleted,
+  markWebhookEventProcessed,
+  syncSubscriptionFromCheckoutSession,
+  syncSubscriptionFromStripe,
+} from "@/lib/stripe-subscription-sync";
 import { getStripeOrThrow } from "@/lib/stripe";
+import type { Order, Payment } from "@prisma/client";
+import type Stripe from "stripe";
+
+export const runtime = "nodejs";
+
 type StripeAccountStatus =
   | "NOT_CONNECTED"
   | "PENDING"
   | "CONNECTED"
   | "RESTRICTED"
   | "READY";
-
-type SubscriptionPlan = "STARTER" | "PRO" | "MULTI_LOCATION" | "ENTERPRISE";
-type SubscriptionStatus =
-  | "ACTIVE"
-  | "TRIALING"
-  | "PAST_DUE"
-  | "CANCELED"
-  | "INCOMPLETE";
-
-import type { Order, Payment } from "@prisma/client";
-import type Stripe from "stripe";
-
-export const runtime = "nodejs";
 
 function mapStripeAccountStatus(account: Stripe.Account): StripeAccountStatus {
   if (account.requirements?.disabled_reason) {
@@ -38,37 +38,6 @@ function mapStripeAccountStatus(account: Stripe.Account): StripeAccountStatus {
     return "CONNECTED";
   }
   return "PENDING";
-}
-
-function mapSubscriptionStatus(status: string): SubscriptionStatus {
-  const map: Record<string, SubscriptionStatus> = {
-    active: "ACTIVE",
-    trialing: "TRIALING",
-    past_due: "PAST_DUE",
-    canceled: "CANCELED",
-    incomplete: "INCOMPLETE",
-    incomplete_expired: "INCOMPLETE",
-    unpaid: "PAST_DUE",
-  };
-  return map[status] ?? "INCOMPLETE";
-}
-
-function mapSubscriptionPlan(plan: string | undefined): SubscriptionPlan {
-  const valid: SubscriptionPlan[] = [
-    "STARTER",
-    "PRO",
-    "MULTI_LOCATION",
-    "ENTERPRISE",
-  ];
-  if (plan && valid.includes(plan as SubscriptionPlan)) {
-    return plan as SubscriptionPlan;
-  }
-  return "STARTER";
-}
-
-function getSubscriptionPeriodEnd(subscription: Stripe.Subscription): Date | undefined {
-  const end = (subscription as unknown as { current_period_end?: number }).current_period_end;
-  return typeof end === "number" ? new Date(end * 1000) : undefined;
 }
 
 type WebhookPayment = Payment & {
@@ -397,41 +366,64 @@ async function handleAccountUpdated(account: Stripe.Account) {
   });
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const businessId = subscription.metadata?.businessId;
-  if (!businessId) return;
+const BILLING_WEBHOOK_EVENTS = new Set([
+  "checkout.session.completed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+  "invoice.payment_succeeded",
+  "invoice.payment_failed",
+  "invoice.payment_action_required",
+]);
 
-  const plan = mapSubscriptionPlan(subscription.metadata?.plan);
-  const priceId = subscription.items.data[0]?.price?.id;
+const CONNECT_WEBHOOK_EVENTS = new Set([
+  "payment_intent.succeeded",
+  "payment_intent.payment_failed",
+  "charge.refunded",
+  "account.updated",
+]);
 
-  await db.subscription.upsert({
-    where: { businessId },
-    create: {
-      businessId,
-      plan,
-      status: mapSubscriptionStatus(subscription.status),
-      stripeCustomerId:
-        typeof subscription.customer === "string"
-          ? subscription.customer
-          : subscription.customer.id,
-      stripeSubscriptionId: subscription.id,
-      stripePriceId: priceId,
-      currentPeriodEnd: getSubscriptionPeriodEnd(subscription),
-      trialEndsAt: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000)
-        : undefined,
-    },
-    update: {
-      plan,
-      status: mapSubscriptionStatus(subscription.status),
-      stripeSubscriptionId: subscription.id,
-      stripePriceId: priceId,
-      currentPeriodEnd: getSubscriptionPeriodEnd(subscription),
-      trialEndsAt: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000)
-        : undefined,
-    },
-  });
+async function dispatchWebhookEvent(event: Stripe.Event) {
+  switch (event.type) {
+    case "payment_intent.succeeded":
+      await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+      break;
+    case "payment_intent.payment_failed":
+      await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+      break;
+    case "charge.refunded":
+      await handleChargeRefunded(event.data.object as Stripe.Charge);
+      break;
+    case "account.updated":
+      await handleAccountUpdated(event.data.object as Stripe.Account);
+      break;
+    case "checkout.session.completed":
+      await syncSubscriptionFromCheckoutSession(
+        event.data.object as Stripe.Checkout.Session
+      );
+      break;
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+      await syncSubscriptionFromStripe(event.data.object as Stripe.Subscription);
+      break;
+    case "customer.subscription.deleted":
+      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+      break;
+    case "invoice.payment_succeeded":
+      await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+      break;
+    case "invoice.payment_failed":
+      await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+      break;
+    case "invoice.payment_action_required":
+      console.info(
+        "Invoice payment action required:",
+        (event.data.object as Stripe.Invoice).id
+      );
+      break;
+    default:
+      break;
+  }
 }
 
 export async function POST(request: Request) {
@@ -463,35 +455,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 });
   }
 
+  const isBilling = BILLING_WEBHOOK_EVENTS.has(event.type);
+  const isConnect = CONNECT_WEBHOOK_EVENTS.has(event.type);
+
+  if (!isBilling && !isConnect) {
+    return NextResponse.json({ received: true, skipped: true });
+  }
+
+  const shouldProcess = await markWebhookEventProcessed(event.id, event.type);
+  if (!shouldProcess) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   try {
-    switch (event.type) {
-      case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
-        break;
-
-      case "payment_intent.payment_failed":
-        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
-        break;
-
-      case "charge.refunded":
-        await handleChargeRefunded(event.data.object as Stripe.Charge);
-        break;
-
-      case "account.updated":
-        await handleAccountUpdated(event.data.object as Stripe.Account);
-        break;
-
-      case "customer.subscription.updated":
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
-        break;
-
-      default:
-        break;
-    }
-
+    await dispatchWebhookEvent(event);
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error(`Webhook handler error for ${event.type}:`, error);
+    await db.stripeWebhookEvent.delete({ where: { id: event.id } }).catch(() => undefined);
+    console.error(`Webhook handler error for ${event.type} (${event.id}):`, error);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handleApiError, jsonError } from "@/lib/api-utils";
 import { finalizeSuccessfulCardPayment } from "@/lib/card-payment";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { OrderServiceError } from "@/lib/order-service";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -15,6 +16,7 @@ const confirmSchema = z.object({
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const { orderId } = confirmSchema.parse(await request.json());

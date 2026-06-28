@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { OrderServiceError } from "./order-service";
+import { PlanLimitError, SubscriptionRequiredError } from "./subscription-access";
 
 export function apiError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -26,6 +27,29 @@ export function handleApiError(error: unknown, context: string) {
 
   if (error instanceof OrderServiceError) {
     return apiError(error.message, error.statusCode);
+  }
+
+  if (error instanceof SubscriptionRequiredError) {
+    return NextResponse.json(
+      {
+        error: error.code,
+        message: error.message,
+        billingUrl: error.billingUrl,
+        status: error.access.status,
+      },
+      { status: 402 }
+    );
+  }
+
+  if (error instanceof PlanLimitError) {
+    return NextResponse.json(
+      {
+        error: error.code,
+        message: error.message,
+        billingUrl: "/settings/billing",
+      },
+      { status: 403 }
+    );
   }
 
   if (error instanceof Error) {

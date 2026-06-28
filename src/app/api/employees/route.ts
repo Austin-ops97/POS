@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
+import { canAddEmployee, getPlanEntitlements, PlanLimitError } from "@/lib/subscription-access";
 import { employeeSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { hashPin } from "@/lib/pin";
@@ -10,6 +12,7 @@ import { handleApiError } from "@/lib/api-utils";
 export async function GET() {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     const employees = await db.employeeProfile.findMany({
       where: {
@@ -38,9 +41,21 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
+    }
+
+    const subscription = await ensurePaidSubscription(ctx);
+    const employeeCount = await db.employeeProfile.count({
+      where: { businessId: ctx.business.id, deletedAt: null },
+    });
+    if (subscription && !canAddEmployee(subscription.plan, employeeCount)) {
+      const max = getPlanEntitlements(subscription.plan).maxEmployees;
+      throw new PlanLimitError(
+        `Your ${subscription.plan} plan allows up to ${max} employees. Upgrade to add more.`
+      );
     }
 
     const body = await request.json();

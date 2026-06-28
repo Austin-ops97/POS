@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-utils";
 import { requireAuth } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { getStripePublishableKey } from "@/lib/stripe";
 
 export async function GET() {
   try {
-    await requireAuth();
+    const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     const publishableKey = getStripePublishableKey();
     if (!publishableKey) {

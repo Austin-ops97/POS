@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { productSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -11,6 +12,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     const { id } = await params;
 
     const product = await db.product.findFirst({
@@ -42,6 +44,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_PRODUCTS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_PRODUCTS}`);
@@ -114,6 +117,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_PRODUCTS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_PRODUCTS}`);

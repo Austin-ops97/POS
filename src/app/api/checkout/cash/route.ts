@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { isDemoMode } from "@/lib/demo-mode";
 import { demoJson, handleDemoCashPayment } from "@/lib/demo-api";
 import { db } from "@/lib/db";
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       });
     }
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const settings = await db.businessSetting.findUnique({

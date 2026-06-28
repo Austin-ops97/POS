@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { isDemoMode } from "@/lib/demo-mode";
 import { demoJson, demoOrders } from "@/lib/demo-api";
 import { db } from "@/lib/db";
@@ -19,6 +20,7 @@ export async function GET(
       return demoJson(order);
     }
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const order = await db.order.findFirst({

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { isDemoMode } from "@/lib/demo-mode";
 import { handleApiError } from "@/lib/api-utils";
 import { db } from "@/lib/db";
@@ -10,6 +11,7 @@ import { taxRateSchema } from "@/lib/validations";
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     const { searchParams } = new URL(request.url);
     const locationId =
       searchParams.get("locationId") ?? ctx.location?.id ?? undefined;
@@ -52,6 +54,7 @@ export async function POST(request: Request) {
     }
 
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_LOCATIONS)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

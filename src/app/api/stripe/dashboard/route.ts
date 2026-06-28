@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -8,6 +9,7 @@ import { getStripeOrThrow, isStripeConfigured } from "@/lib/stripe";
 export async function GET() {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.MANAGE_STRIPE);
 
     const stripeAccount = await db.stripeAccount.findUnique({

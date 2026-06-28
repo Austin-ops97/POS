@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { serializeDecimal } from "@/lib/order-service";
@@ -44,6 +45,7 @@ const ordersQuerySchema = z.object({
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const { searchParams } = new URL(request.url);

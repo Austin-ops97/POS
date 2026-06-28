@@ -4,7 +4,8 @@ import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
-import { getStripeOrThrow, STRIPE_PLANS } from "@/lib/stripe";
+import { getStripeOrThrow, STRIPE_PLANS, isStripeConfigured } from "@/lib/stripe";
+import type Stripe from "stripe";
 import { z } from "zod";
 
 type SubscriptionPlan = "STARTER" | "PRO" | "MULTI_LOCATION" | "ENTERPRISE";
@@ -18,6 +19,20 @@ const billingPostSchema = z.object({
 const billingGetSchema = z.object({
   returnUrl: z.string().url(),
 });
+
+function isPlaceholderPriceId(priceId: string): boolean {
+  return priceId === "price_starter" || priceId === "price_pro" || priceId === "price_multi" || priceId === "price_enterprise";
+}
+
+function validatePlanPriceId(plan: SubscriptionPlan): string {
+  const planConfig = STRIPE_PLANS[plan];
+  if (!planConfig.priceId || isPlaceholderPriceId(planConfig.priceId)) {
+    throw new Error(
+      `Stripe price ID for ${plan} is not configured. Set STRIPE_PRICE_${plan === "MULTI_LOCATION" ? "MULTI" : plan} in your environment.`
+    );
+  }
+  return planConfig.priceId;
+}
 
 export async function GET(request: Request) {
   try {
@@ -34,7 +49,14 @@ export async function GET(request: Request) {
     });
 
     if (!subscription?.stripeCustomerId) {
-      return jsonError("No billing account found. Subscribe to a plan first.", 400);
+      return jsonError(
+        "No billing account found. Subscribe to a plan first to manage billing.",
+        400
+      );
+    }
+
+    if (!isStripeConfigured()) {
+      return jsonError("Stripe is not configured", 503);
     }
 
     const stripe = getStripeOrThrow();
@@ -54,6 +76,10 @@ export async function POST(request: Request) {
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.MANAGE_BILLING);
 
+    if (!isStripeConfigured()) {
+      return jsonError("Stripe is not configured", 503);
+    }
+
     const body = await request.json();
     const { plan, successUrl, cancelUrl } = billingPostSchema.parse(body);
 
@@ -61,12 +87,17 @@ export async function POST(request: Request) {
       return jsonError("Enterprise plans require contacting sales", 400);
     }
 
+    const priceId = validatePlanPriceId(plan);
     const planConfig = STRIPE_PLANS[plan];
     const stripe = getStripeOrThrow();
 
     let subscription = await db.subscription.findUnique({
       where: { businessId: ctx.business.id },
     });
+
+    if (subscription && subscription.businessId !== ctx.business.id) {
+      return jsonError("Business ownership validation failed", 403);
+    }
 
     let customerId = subscription?.stripeCustomerId;
 
@@ -87,34 +118,45 @@ export async function POST(request: Request) {
           plan: plan as SubscriptionPlan,
           stripeCustomerId: customerId,
           status: "INCOMPLETE",
+          stripePriceId: priceId,
         },
         update: {
           stripeCustomerId: customerId,
+          plan: plan as SubscriptionPlan,
+          stripePriceId: priceId,
         },
       });
+    }
+
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+      metadata: {
+        businessId: ctx.business.id,
+        plan,
+      },
+    };
+
+    if (
+      subscription?.status === "TRIALING" &&
+      subscription.trialEndsAt &&
+      subscription.trialEndsAt > new Date()
+    ) {
+      subscriptionData.trial_end = Math.floor(
+        subscription.trialEndsAt.getTime() / 1000
+      );
     }
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
-      line_items: [
-        {
-          price: planConfig.priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
+      client_reference_id: ctx.business.id,
       metadata: {
         businessId: ctx.business.id,
         plan,
       },
-      subscription_data: {
-        metadata: {
-          businessId: ctx.business.id,
-          plan,
-        },
-      },
+      subscription_data: subscriptionData,
     });
 
     await createAuditLog({
@@ -123,7 +165,7 @@ export async function POST(request: Request) {
       action: "SETTINGS_CHANGE",
       entity: "Subscription",
       entityId: subscription?.id,
-      details: { plan, checkoutSessionId: session.id },
+      details: { plan, checkoutSessionId: session.id, priceId: planConfig.priceId },
       ipAddress: getClientIp(request),
     });
 

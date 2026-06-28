@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { inventoryAdjustSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -9,6 +10,7 @@ import { handleApiError } from "@/lib/api-utils";
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_INVENTORY)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_INVENTORY}`);

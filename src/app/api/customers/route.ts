@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
+import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { isDemoMode } from "@/lib/demo-mode";
 import { demoJson, demoCustomers } from "@/lib/demo-api";
 import { customerSchema } from "@/lib/validations";
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
       return demoJson({ customers });
     }
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
 
@@ -75,6 +77,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_CUSTOMERS}`);
