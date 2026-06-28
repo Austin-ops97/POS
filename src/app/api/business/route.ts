@@ -63,10 +63,10 @@ async function ensureRolesAndPermissions() {
 
 function buildModuleSettings(posConfig: ReturnType<typeof posConfigSchema.parse>) {
   return [
-    { module: "physical_products", enabled: posConfig.sellPhysical },
-    { module: "services", enabled: posConfig.sellServices },
-    { module: "rentals", enabled: posConfig.rentItems },
-    { module: "inventory", enabled: posConfig.trackInventory },
+    { module: "RETAIL", enabled: posConfig.sellPhysical ?? true },
+    { module: "SERVICE", enabled: posConfig.sellServices ?? false },
+    { module: "RENTAL", enabled: posConfig.rentItems ?? false },
+    { module: "inventory", enabled: posConfig.trackInventory ?? true },
   ];
 }
 
@@ -156,7 +156,8 @@ export async function POST(request: Request) {
           email: data.email || user.email,
           website: data.website || undefined,
           primaryColor: data.primaryColor,
-          onboardingStep: "BUSINESS_PROFILE",
+          onboardingStep: "LOCATION_SETUP",
+          demoMode: false,
         },
       });
 

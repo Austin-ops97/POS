@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Printer,
   Mail,
-  RotateCcw,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getOrderById } from "@/lib/queries";
@@ -18,6 +17,7 @@ import {
   getOrderStatusVariant,
   getPaymentStatusVariant,
 } from "@/lib/status-utils";
+import { OrderRefundActions } from "@/components/dashboard/order-refund-actions";
 
 export default async function OrderDetailPage({
   params,
@@ -32,6 +32,38 @@ export default async function OrderDetailPage({
 
   const canRefund =
     order.status === "PAID" || order.status === "PARTIALLY_REFUNDED";
+
+  const priorRefunded =
+    order.refunds?.reduce(
+      (sum: number, r: { amount: unknown }) => sum + Number(r.amount),
+      0
+    ) ?? 0;
+  const remainingRefundable = Number(order.total) - priorRefunded;
+  const showRefund = canRefund && remainingRefundable > 0;
+
+  const refundItems = order.items.map(
+    (item: { id: string; name: string; quantity: number }) => {
+      const alreadyRefunded =
+        order.refunds
+          ?.flatMap(
+            (r: { items?: Array<{ orderItemId: string; quantity: number }> }) =>
+              r.items ?? []
+          )
+          .filter(
+            (ri: { orderItemId: string }) => ri.orderItemId === item.id
+          )
+          .reduce(
+            (sum: number, ri: { quantity: number }) => sum + ri.quantity,
+            0
+          ) ?? 0;
+
+      return {
+        id: item.id,
+        name: item.name,
+        availableQty: item.quantity - alreadyRefunded,
+      };
+    }
+  );
 
   return (
     <div className="space-y-6">
@@ -61,11 +93,13 @@ export default async function OrderDetailPage({
           </div>
         </div>
         <div className="flex gap-2">
-          {canRefund && (
-            <Button variant="outline">
-              <RotateCcw className="h-4 w-4" />
-              Issue Refund
-            </Button>
+          {showRefund && (
+            <OrderRefundActions
+              orderId={order.id}
+              canRefund={showRefund}
+              remainingRefundable={remainingRefundable}
+              items={refundItems}
+            />
           )}
           <Button variant="outline">
             <Printer className="h-4 w-4" />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { getEmployees } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,12 @@ export default async function EmployeesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Employees</h1>
           <p className="text-sm text-slate-500">Manage team members and roles</p>
         </div>
-        <Button><UserPlus className="h-4 w-4" />Invite Employee</Button>
+        <Button asChild>
+          <Link href="/employees/new">
+            <UserPlus className="h-4 w-4" />
+            Invite Employee
+          </Link>
+        </Button>
       </div>
       <Card>
         <CardContent className="p-0">

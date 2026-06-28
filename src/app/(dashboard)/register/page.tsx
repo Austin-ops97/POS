@@ -16,6 +16,62 @@ import { cn } from "@/lib/utils";
 type Category = { id: string; name: string };
 type Customer = { id: string; firstName: string; lastName?: string | null };
 
+type PollOrderPayload = {
+  status?: string;
+  orderNumber?: string;
+};
+
+type CheckoutOrderPayload = {
+  id?: string;
+  orderNumber?: string;
+};
+
+type TaxRateDisplay = {
+  name: string;
+  rate: number;
+  appliesToProducts: boolean;
+  appliesToServices: boolean;
+};
+
+const DEFAULT_TAX_RATES: TaxRateDisplay[] = [
+  { name: "Sales Tax", rate: 0.08, appliesToProducts: true, appliesToServices: true },
+];
+
+/** Production wraps order in `{ order }`; demo may return at top level. */
+function resolveOrderFromPollResponse(data: unknown): PollOrderPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as { order?: PollOrderPayload } & PollOrderPayload;
+  return payload.order ?? payload;
+}
+
+function resolveCheckoutOrder(data: unknown): CheckoutOrderPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const payload = data as {
+    order?: CheckoutOrderPayload;
+  } & CheckoutOrderPayload;
+  const order = payload.order ?? payload;
+  if (!order.id && !order.orderNumber) return null;
+  return order;
+}
+
+function resolveLocationFromBusiness(biz: {
+  defaultLocation?: { id: string };
+  locations?: Array<{ id: string; isDefault?: boolean }>;
+}) {
+  return (
+    biz.defaultLocation?.id ||
+    biz.locations?.find((l) => l.isDefault)?.id ||
+    biz.locations?.[0]?.id ||
+    null
+  );
+}
+
+function primaryTaxRate(rates: TaxRateDisplay[]) {
+  if (rates.length === 0) return DEFAULT_TAX_RATES[0].rate;
+  const productRate = rates.find((r) => r.appliesToProducts);
+  return productRate?.rate ?? rates[0].rate;
+}
+
 export default function RegisterPage() {
   const [search, setSearch] = useState("");
   const [barcode, setBarcode] = useState("");
@@ -24,6 +80,7 @@ export default function RegisterPage() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [loading, setLoading] = useState(true);
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [taxRates, setTaxRates] = useState<TaxRateDisplay[]>(DEFAULT_TAX_RATES);
   const [darkCart, setDarkCart] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -57,7 +114,7 @@ export default function RegisterPage() {
       modifiers: i.modifiers,
     })),
     discounts.map((d) => ({ name: d.name, type: d.type, value: d.value })),
-    [{ name: "Sales Tax", rate: 0.08, appliesToProducts: true, appliesToServices: true }]
+    taxRates
   );
 
   useEffect(() => {
@@ -66,7 +123,8 @@ export default function RegisterPage() {
         const bizRes = await fetch("/api/business");
         if (bizRes.ok) {
           const biz = await bizRes.json();
-          setLocationId(biz.defaultLocation?.id || biz.locations?.[0]?.id || null);
+          const loc = resolveLocationFromBusiness(biz);
+          setLocationId(loc);
         }
       } catch {
         /* location resolved on checkout */
@@ -74,6 +132,27 @@ export default function RegisterPage() {
     }
     init();
   }, []);
+
+  useEffect(() => {
+    if (!locationId) return;
+
+    const taxUrl = `/api/tax-rates?locationId=${encodeURIComponent(locationId)}`;
+
+    async function loadTaxRates() {
+      try {
+        const res = await fetch(taxUrl);
+        if (!res.ok) return;
+        const data = (await res.json()) as { taxRates?: TaxRateDisplay[] };
+        if (data.taxRates?.length) {
+          setTaxRates(data.taxRates);
+        }
+      } catch {
+        /* keep default display rates */
+      }
+    }
+
+    void loadTaxRates();
+  }, [locationId]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -204,26 +283,24 @@ export default function RegisterPage() {
     notes: notes || undefined,
   });
 
+  const resolveLocationId = async (): Promise<string> => {
+    if (locationId) return locationId;
+
+    const bizRes = await fetch("/api/business");
+    if (!bizRes.ok) throw new Error("No location configured");
+    const biz = await bizRes.json();
+    const loc = resolveLocationFromBusiness(biz);
+    if (!loc) throw new Error("No location configured");
+    setLocationId(loc);
+    return loc;
+  };
+
   const createOrder = async () => {
-    if (!locationId) {
-      const bizRes = await fetch("/api/business");
-      if (bizRes.ok) {
-        const biz = await bizRes.json();
-        const loc = biz.defaultLocation?.id || biz.locations?.[0]?.id;
-        if (!loc) throw new Error("No location configured");
-        setLocationId(loc);
-        return fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...buildCheckoutPayload(), locationId: loc }),
-        });
-      }
-      throw new Error("No location configured");
-    }
+    const loc = await resolveLocationId();
     return fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildCheckoutPayload()),
+      body: JSON.stringify({ ...buildCheckoutPayload(), locationId: loc }),
     });
   };
 
@@ -239,20 +316,27 @@ export default function RegisterPage() {
         const err = await checkoutRes.json();
         throw new Error(err.error || "Failed to create order");
       }
-      const order = await checkoutRes.json();
+      const checkoutData = await checkoutRes.json();
+      const checkoutOrder = resolveCheckoutOrder(checkoutData);
+      if (!checkoutOrder?.id) {
+        throw new Error("Failed to create order");
+      }
 
       const cashRes = await fetch("/api/checkout/cash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: order.id || order.order?.id }),
+        body: JSON.stringify({ orderId: checkoutOrder.id }),
       });
       if (!cashRes.ok) {
         const err = await cashRes.json();
         throw new Error(err.error || "Cash payment failed");
       }
       const result = await cashRes.json();
+      const paidOrder = resolveCheckoutOrder(result);
 
-      setOrderNumber(result.orderNumber || order.orderNumber);
+      setOrderNumber(
+        paidOrder?.orderNumber || checkoutOrder.orderNumber
+      );
       setPaymentState("success");
       clearCart();
     } catch (err) {
@@ -275,8 +359,12 @@ export default function RegisterPage() {
         const err = await checkoutRes.json();
         throw new Error(err.error || "Failed to create order");
       }
-      const order = await checkoutRes.json();
-      const orderId = order.id || order.order?.id;
+      const checkoutData = await checkoutRes.json();
+      const checkoutOrder = resolveCheckoutOrder(checkoutData);
+      if (!checkoutOrder?.id) {
+        throw new Error("Failed to create order");
+      }
+      const orderId = checkoutOrder.id;
 
       const payRes = await fetch("/api/checkout/payment", {
         method: "POST",
@@ -290,17 +378,15 @@ export default function RegisterPage() {
       const payment = await payRes.json();
 
       if (payment.status === "succeeded" || payment.paid) {
-        setOrderNumber(payment.orderNumber || order.orderNumber);
+        setOrderNumber(payment.orderNumber || checkoutOrder.orderNumber);
         setPaymentState("success");
         clearCart();
       } else if (payment.clientSecret) {
         setPaymentState("loading");
         setPaymentMessage("Complete payment on terminal or Tap to Pay device");
-        await pollPaymentStatus(orderId);
+        await pollPaymentStatus(orderId, checkoutOrder.orderNumber);
       } else {
-        setOrderNumber(payment.orderNumber || order.orderNumber);
-        setPaymentState("success");
-        clearCart();
+        throw new Error("Unable to start card payment");
       }
     } catch (err) {
       setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
@@ -310,32 +396,43 @@ export default function RegisterPage() {
     }
   };
 
-  const pollPaymentStatus = async (orderId: string) => {
+  const pollPaymentStatus = async (orderId: string, fallbackOrderNumber?: string) => {
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
       try {
         const res = await fetch(`/api/orders/${orderId}`);
-        if (res.ok) {
-          const order = await res.json();
-          if (order.status === "PAID") {
-            setOrderNumber(order.orderNumber);
-            setPaymentState("success");
-            clearCart();
-            return;
-          }
-          if (order.status === "FAILED") {
-            throw new Error("Card payment was declined");
-          }
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        const order = resolveOrderFromPollResponse(data);
+        if (!order?.status) continue;
+
+        if (order.status === "PAID") {
+          setOrderNumber(order.orderNumber || fallbackOrderNumber);
+          setPaymentState("success");
+          clearCart();
+          return;
+        }
+        if (order.status === "FAILED") {
+          throw new Error("Card payment was declined");
+        }
+        if (order.status === "CANCELED") {
+          throw new Error("Payment was canceled");
         }
       } catch (err) {
-        if (err instanceof Error && err.message.includes("declined")) {
+        if (
+          err instanceof Error &&
+          (err.message.includes("declined") || err.message.includes("canceled"))
+        ) {
           setPaymentMessage(err.message);
           setPaymentState("error");
           return;
         }
       }
     }
-    setPaymentMessage("Payment timed out. Check terminal status.");
+    setPaymentMessage(
+      "Payment is still pending. Check your orders list or Stripe for the latest status."
+    );
     setPaymentState("error");
   };
 
@@ -343,10 +440,11 @@ export default function RegisterPage() {
     if (items.length === 0) return;
     setProcessing(true);
     try {
+      const loc = await resolveLocationId();
       const res = await fetch("/api/checkout/hold", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildCheckoutPayload()),
+        body: JSON.stringify({ ...buildCheckoutPayload(), locationId: loc }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -507,6 +605,7 @@ export default function RegisterPage() {
       <div className={cn("w-[400px] shrink-0 xl:w-[440px]")}>
         <CartPanel
           dark={darkCart}
+          taxRate={primaryTaxRate(taxRates)}
           onPayCash={handlePayCash}
           onPayCard={handlePayCard}
           onHold={handleHold}

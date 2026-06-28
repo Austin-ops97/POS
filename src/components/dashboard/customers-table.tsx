@@ -55,9 +55,11 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
             className="pl-9"
           />
         </div>
-        <Button>
-          <Plus className="h-4 w-4" />
-          Add Customer
+        <Button asChild>
+          <Link href="/customers/new">
+            <Plus className="h-4 w-4" />
+            Add Customer
+          </Link>
         </Button>
       </div>
 

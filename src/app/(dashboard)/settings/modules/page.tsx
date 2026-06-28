@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getModuleSettings } from "@/lib/queries";
+import { isDemoMode } from "@/lib/demo-mode";
 import { ModulesSettings } from "@/components/dashboard/modules-settings";
 import { Button } from "@/components/ui/button";
 
@@ -18,7 +19,13 @@ export default async function ModulesSettingsPage() {
           <p className="text-sm text-slate-500">Enable features for your business type</p>
         </div>
       </div>
-      <ModulesSettings settings={modules} />
+      <ModulesSettings
+        settings={modules.map((m: { module: string; enabled: boolean }) => ({
+          module: m.module,
+          enabled: m.enabled,
+        }))}
+        demoMode={isDemoMode()}
+      />
     </div>
   );
 }

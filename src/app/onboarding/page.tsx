@@ -58,6 +58,29 @@ const STEPS = [
 
 type StepKey = (typeof STEPS)[number]["key"];
 
+const MODULE_KEY_ALIASES: Record<string, string> = {
+  retail: "RETAIL",
+  physical_products: "RETAIL",
+  service: "SERVICE",
+  services: "SERVICE",
+  rental: "RENTAL",
+  rentals: "RENTAL",
+};
+
+function resolveModuleEnabled(
+  moduleMap: Record<string, boolean>,
+  canonicalKey: string,
+  fallback: boolean
+): boolean {
+  if (canonicalKey in moduleMap) return moduleMap[canonicalKey];
+  for (const [alias, key] of Object.entries(MODULE_KEY_ALIASES)) {
+    if (key === canonicalKey && alias in moduleMap) {
+      return moduleMap[alias];
+    }
+  }
+  return fallback;
+}
+
 const onboardingProductSchema = productSchema.pick({
   name: true,
   price: true,
@@ -135,10 +158,6 @@ export default function OnboardingPage() {
   });
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
-      router.replace("/dashboard");
-      return;
-    }
     async function loadBusiness() {
       try {
         const res = await fetch("/api/business");
@@ -189,10 +208,10 @@ export default function OnboardingPage() {
               ])
             );
             posForm.reset({
-              sellPhysical: modules.sellPhysical ?? true,
-              sellServices: modules.sellServices ?? false,
-              rentItems: modules.rentItems ?? false,
-              trackInventory: modules.trackInventory ?? true,
+              sellPhysical: resolveModuleEnabled(modules, "RETAIL", true),
+              sellServices: resolveModuleEnabled(modules, "SERVICE", false),
+              rentItems: resolveModuleEnabled(modules, "RENTAL", false),
+              trackInventory: modules.inventory ?? true,
               acceptCash: biz.settings?.enableCash ?? true,
               barcodeScanning: biz.settings?.enableBarcodeScanning ?? true,
               receiptPrinting: biz.settings?.enableReceiptPrinting ?? true,
@@ -262,7 +281,7 @@ export default function OnboardingPage() {
             const data = await res.json();
             setBusinessId(data.business?.id || data.id);
           } else {
-            await patchOnboarding("BUSINESS_PROFILE", { profile: parsed });
+            await patchOnboarding("BUSINESS_PROFILE", { businessProfile: parsed });
           }
           break;
         }

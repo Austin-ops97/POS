@@ -33,6 +33,43 @@ export const posConfigSchema = z.object({
   multipleLocations: z.boolean().optional(),
 });
 
+export const receiptSettingsSchema = z.object({
+  receiptFooter: z.string().optional(),
+  showCashierOnReceipt: z.boolean(),
+  showCustomerOnReceipt: z.boolean(),
+  showSkuOnReceipt: z.boolean(),
+  enableReceiptPrinting: z.boolean(),
+});
+
+export const MODULE_SETTING_KEYS = [
+  "RETAIL",
+  "SERVICE",
+  "RENTAL",
+  "RESTAURANT",
+  "LOYALTY",
+  "GIFT_CARDS",
+] as const;
+
+export const moduleSettingsSchema = z
+  .object({
+    modules: z.array(
+      z.object({
+        module: z.enum(MODULE_SETTING_KEYS),
+        enabled: z.boolean(),
+      })
+    ),
+  })
+  .superRefine((data, ctx) => {
+    const retail = data.modules.find((m) => m.module === "RETAIL");
+    if (!retail?.enabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Retail module cannot be disabled",
+        path: ["modules"],
+      });
+    }
+  });
+
 export const productSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -47,6 +84,7 @@ export const productSchema = z.object({
   taxable: z.boolean().optional(),
   trackInventory: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  initialStock: z.number().int().min(0).optional(),
 });
 
 export const customerSchema = z.object({

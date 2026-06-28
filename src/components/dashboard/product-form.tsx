@@ -3,6 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { productSchema } from "@/lib/validations";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function ProductForm({ categories }: ProductFormProps) {
       taxable: true,
       trackInventory: true,
       isActive: true,
+      initialStock: 0,
     },
   });
 
@@ -57,9 +59,47 @@ export function ProductForm({ categories }: ProductFormProps) {
   const productType = watch("type");
 
   async function onSubmit(data: ProductFormValues) {
-    // API integration placeholder — navigate back on success
-    console.log("Create product:", data);
-    router.push("/products");
+    const trackInventory =
+      data.type === "PHYSICAL" ? (data.trackInventory ?? false) : false;
+
+    const payload = {
+      name: data.name,
+      description: data.description || undefined,
+      sku: data.sku || undefined,
+      barcode: data.barcode || undefined,
+      categoryId: data.categoryId || undefined,
+      brand: data.brand || undefined,
+      supplier: data.supplier || undefined,
+      price: data.price,
+      cost: data.cost || undefined,
+      type: data.type,
+      taxable: data.taxable,
+      trackInventory,
+      isActive: data.isActive,
+      ...(trackInventory ? { initialStock: data.initialStock ?? 0 } : {}),
+    };
+
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        toast.error(err?.error ?? "Failed to create product");
+        return;
+      }
+
+      toast.success("Product created");
+      router.push("/products");
+      router.refresh();
+    } catch {
+      toast.error("Failed to create product");
+    }
   }
 
   return (
@@ -140,9 +180,13 @@ export function ProductForm({ categories }: ProductFormProps) {
             <Label>Product Type</Label>
             <Select
               value={productType}
-              onValueChange={(v) =>
-                setValue("type", v as ProductFormValues["type"])
-              }
+              onValueChange={(v) => {
+                setValue("type", v as ProductFormValues["type"]);
+                if (v !== "PHYSICAL") {
+                  setValue("trackInventory", false);
+                  setValue("initialStock", 0);
+                }
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -176,10 +220,34 @@ export function ProductForm({ categories }: ProductFormProps) {
             <Checkbox
               id="trackInventory"
               checked={trackInventory}
-              onCheckedChange={(v) => setValue("trackInventory", v === true)}
+              disabled={productType !== "PHYSICAL"}
+              onCheckedChange={(v) => {
+                const enabled = v === true;
+                setValue("trackInventory", enabled);
+                if (!enabled) {
+                  setValue("initialStock", 0);
+                }
+              }}
             />
             <Label htmlFor="trackInventory">Track inventory</Label>
           </div>
+          {productType === "PHYSICAL" && trackInventory && (
+            <div className="space-y-2">
+              <Label htmlFor="initialStock">Initial stock</Label>
+              <Input
+                id="initialStock"
+                type="number"
+                step="1"
+                min="0"
+                {...register("initialStock", { valueAsNumber: true })}
+              />
+              {errors.initialStock && (
+                <p className="text-sm text-red-600">
+                  {errors.initialStock.message}
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Checkbox
               id="isActive"

@@ -3,7 +3,8 @@ import { createAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
 import {
   createReceiptForOrder,
-  deductInventoryForOrder,
+  deductInventoryForOrderInTransaction,
+  OrderServiceError,
 } from "@/lib/order-service";
 import { getStripeOrThrow } from "@/lib/stripe";
 type StripeAccountStatus =
@@ -21,6 +22,7 @@ type SubscriptionStatus =
   | "CANCELED"
   | "INCOMPLETE";
 
+import type { Order, Payment } from "@prisma/client";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -69,6 +71,98 @@ function getSubscriptionPeriodEnd(subscription: Stripe.Subscription): Date | und
   return typeof end === "number" ? new Date(end * 1000) : undefined;
 }
 
+type WebhookPayment = Payment & {
+  order: Pick<Order, "id" | "status" | "employeeId">;
+};
+
+async function handleInventoryFailureOnCardPayment(params: {
+  payment: WebhookPayment;
+  paymentIntent: Stripe.PaymentIntent;
+  businessId: string;
+  orderId: string;
+  chargeId?: string;
+  cardLast4?: string;
+  cardBrand?: string;
+  errorMessage: string;
+}) {
+  let stripeRefundId: string | undefined;
+  let autoRefundError: string | undefined;
+
+  const stripeAccount = await db.stripeAccount.findUnique({
+    where: { businessId: params.businessId },
+  });
+
+  if (stripeAccount?.stripeAccountId) {
+    try {
+      const stripe = getStripeOrThrow();
+      const refund = await stripe.refunds.create(
+        {
+          payment_intent: params.paymentIntent.id,
+          metadata: {
+            orderId: params.orderId,
+            businessId: params.businessId,
+            reason: "inventory_unavailable",
+          },
+        },
+        { stripeAccount: stripeAccount.stripeAccountId }
+      );
+      stripeRefundId = refund.id;
+    } catch (err) {
+      autoRefundError = err instanceof Error ? err.message : "Auto-refund failed";
+      console.error("Auto-refund failed after inventory failure:", err);
+    }
+  } else {
+    autoRefundError = "Stripe Connect account not configured";
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { id: params.payment.id },
+      data: {
+        status: "FAILED",
+        stripeChargeId: params.chargeId,
+        cardLast4: params.cardLast4,
+        cardBrand: params.cardBrand,
+      },
+    });
+
+    await tx.order.update({
+      where: { id: params.orderId },
+      data: { status: "FAILED" },
+    });
+
+    if (stripeRefundId) {
+      await tx.refund.create({
+        data: {
+          businessId: params.businessId,
+          orderId: params.orderId,
+          amount: params.payment.amount,
+          reason: "OTHER",
+          reasonNote: `Auto-refund after inventory failure: ${params.errorMessage}`,
+          stripeRefundId,
+        },
+      });
+    }
+  });
+
+  await createAuditLog({
+    businessId: params.businessId,
+    employeeId: params.payment.order.employeeId ?? undefined,
+    action: "PAYMENT",
+    entity: "Order",
+    entityId: params.orderId,
+    details: {
+      paymentIntentId: params.paymentIntent.id,
+      source: "webhook",
+      outcome: "inventory_failure",
+      inventoryError: params.errorMessage,
+      autoRefundId: stripeRefundId,
+      autoRefundError,
+      requiresManualReview: !stripeRefundId,
+    },
+  });
+}
+
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   const orderId = paymentIntent.metadata?.orderId;
   const businessId = paymentIntent.metadata?.businessId;
@@ -92,6 +186,10 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     return;
   }
 
+  if (payment.order.status === "FAILED" && payment.status === "FAILED") {
+    return;
+  }
+
   if (payment.status === "SUCCEEDED" && payment.order.status === "PAID") {
     return;
   }
@@ -109,43 +207,68 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     cardBrand = charge.payment_method_details?.card?.brand ?? undefined;
   }
 
-  await db.$transaction(async (tx) => {
-    await tx.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: "SUCCEEDED",
-        stripeChargeId: chargeId,
-        cardLast4,
-        cardBrand,
-      },
-    });
+  try {
+    await db.$transaction(async (tx) => {
+      if (payment.order.status !== "PAID") {
+        await deductInventoryForOrderInTransaction(
+          tx,
+          businessId,
+          orderId,
+          payment.order.employeeId ?? undefined
+        );
+      }
 
-    if (payment.order.status !== "PAID") {
-      await tx.order.update({
-        where: { id: orderId },
+      await tx.payment.update({
+        where: { id: payment.id },
         data: {
-          status: "PAID",
-          paidAt: new Date(),
-          heldAt: null,
+          status: "SUCCEEDED",
+          stripeChargeId: chargeId,
+          cardLast4,
+          cardBrand,
         },
       });
+
+      if (payment.order.status !== "PAID") {
+        await tx.order.update({
+          where: { id: orderId },
+          data: {
+            status: "PAID",
+            paidAt: new Date(),
+            heldAt: null,
+          },
+        });
+      }
+    });
+
+    await createReceiptForOrder(businessId, orderId);
+
+    await createAuditLog({
+      businessId,
+      employeeId: payment.order.employeeId ?? undefined,
+      action: "PAYMENT",
+      entity: "Order",
+      entityId: orderId,
+      details: {
+        paymentIntentId: paymentIntent.id,
+        source: "webhook",
+      },
+    });
+  } catch (error) {
+    if (error instanceof OrderServiceError) {
+      await handleInventoryFailureOnCardPayment({
+        payment,
+        paymentIntent,
+        businessId,
+        orderId,
+        chargeId,
+        cardLast4,
+        cardBrand,
+        errorMessage: error.message,
+      });
+      return;
     }
-  });
-
-  await deductInventoryForOrder(businessId, orderId, payment.order.employeeId ?? undefined);
-  await createReceiptForOrder(businessId, orderId);
-
-  await createAuditLog({
-    businessId,
-    employeeId: payment.order.employeeId ?? undefined,
-    action: "PAYMENT",
-    entity: "Order",
-    entityId: orderId,
-    details: {
-      paymentIntentId: paymentIntent.id,
-      source: "webhook",
-    },
-  });
+    throw error;
+  }
 }
 
 async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {

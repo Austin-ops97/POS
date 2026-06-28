@@ -1,22 +1,37 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { receiptSettingsSchema } from "@/lib/validations";
+import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type ReceiptSettings = {
-  receiptFooter: string | null;
-  showCashierOnReceipt: boolean;
-  showCustomerOnReceipt: boolean;
-  showSkuOnReceipt: boolean;
-  enableReceiptPrinting: boolean;
+type ReceiptSettings = z.infer<typeof receiptSettingsSchema>;
+
+type ReceiptSettingsFormProps = {
+  settings: ReceiptSettings;
+  demoMode?: boolean;
 };
 
-export function ReceiptSettingsForm({ settings }: { settings: ReceiptSettings }) {
-  const { register, handleSubmit, setValue, watch } = useForm({
+export function ReceiptSettingsForm({
+  settings,
+  demoMode = false,
+}: ReceiptSettingsFormProps) {
+  const router = useRouter();
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<ReceiptSettings>({
+    resolver: zodResolver(receiptSettingsSchema),
     defaultValues: {
       receiptFooter: settings.receiptFooter ?? "",
       showCashierOnReceipt: settings.showCashierOnReceipt,
@@ -31,8 +46,38 @@ export function ReceiptSettingsForm({ settings }: { settings: ReceiptSettings })
   const showSku = watch("showSkuOnReceipt");
   const enablePrinting = watch("enableReceiptPrinting");
 
-  function onSubmit(data: Record<string, unknown>) {
-    console.log("Save receipt settings:", data);
+  async function onSubmit(data: ReceiptSettings) {
+    if (demoMode) {
+      toast.success("Receipt settings saved (demo mode)");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/business/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiptFooter: data.receiptFooter || undefined,
+          showCashierOnReceipt: data.showCashierOnReceipt,
+          showCustomerOnReceipt: data.showCustomerOnReceipt,
+          showSkuOnReceipt: data.showSkuOnReceipt,
+          enableReceiptPrinting: data.enableReceiptPrinting,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        toast.error(err?.error ?? "Failed to save receipt settings");
+        return;
+      }
+
+      toast.success("Receipt settings saved");
+      router.refresh();
+    } catch {
+      toast.error("Failed to save receipt settings");
+    }
   }
 
   return (
@@ -96,7 +141,9 @@ export function ReceiptSettingsForm({ settings }: { settings: ReceiptSettings })
         </CardContent>
       </Card>
 
-      <Button type="submit">Save Changes</Button>
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Saving..." : "Save Changes"}
+      </Button>
     </form>
   );
 }

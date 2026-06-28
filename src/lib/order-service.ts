@@ -271,58 +271,203 @@ export async function createOrderRecord(input: CreateOrderInput) {
   return { order, totals };
 }
 
-export async function deductInventoryForOrder(
+type InventoryOrderItem = {
+  productId: string | null;
+  quantity: number;
+  name: string;
+  product: { trackInventory: boolean; name: string } | null;
+};
+
+async function loadInventoryOrderItems(
   businessId: string,
   orderId: string,
-  employeeId?: string
+  tx: Prisma.TransactionClient | typeof db
 ) {
-  const order = await db.order.findFirst({
+  return tx.order.findFirst({
     where: { id: orderId, businessId },
     include: {
       items: {
-        include: { product: true },
+        include: {
+          product: { select: { trackInventory: true, name: true } },
+        },
       },
     },
   });
+}
 
-  if (!order) return;
-
-  for (const item of order.items) {
+async function assertSufficientInventory(
+  tx: Prisma.TransactionClient,
+  locationId: string,
+  items: InventoryOrderItem[]
+) {
+  for (const item of items) {
     if (!item.productId || !item.product?.trackInventory) continue;
 
-    const inventoryItem = await db.inventoryItem.findUnique({
+    const inventoryItem = await tx.inventoryItem.findUnique({
       where: {
         locationId_productId: {
-          locationId: order.locationId,
+          locationId,
           productId: item.productId,
         },
       },
     });
 
-    if (!inventoryItem) continue;
+    const available = inventoryItem?.quantityOnHand ?? 0;
+    const productName = item.product.name || item.name;
+
+    if (available < item.quantity) {
+      throw new OrderServiceError(
+        `Insufficient stock for ${productName}: ${available} available, ${item.quantity} requested`,
+        400
+      );
+    }
+  }
+}
+
+async function deductInventoryItems(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  locationId: string,
+  orderId: string,
+  items: InventoryOrderItem[],
+  employeeId?: string
+) {
+  for (const item of items) {
+    if (!item.productId || !item.product?.trackInventory) continue;
+
+    const productName = item.product.name || item.name;
+
+    const inventoryItem = await tx.inventoryItem.findUnique({
+      where: {
+        locationId_productId: {
+          locationId,
+          productId: item.productId,
+        },
+      },
+    });
+
+    if (!inventoryItem) {
+      throw new OrderServiceError(
+        `Insufficient stock for ${productName}: 0 available, ${item.quantity} requested`,
+        400
+      );
+    }
 
     const previousQty = inventoryItem.quantityOnHand;
+    const updated = await tx.inventoryItem.updateMany({
+      where: {
+        id: inventoryItem.id,
+        quantityOnHand: { gte: item.quantity },
+      },
+      data: {
+        quantityOnHand: { decrement: item.quantity },
+      },
+    });
+
+    if (updated.count === 0) {
+      const current = await tx.inventoryItem.findUnique({
+        where: { id: inventoryItem.id },
+      });
+      const available = current?.quantityOnHand ?? 0;
+      throw new OrderServiceError(
+        `Insufficient stock for ${productName}: ${available} available, ${item.quantity} requested`,
+        400
+      );
+    }
+
     const newQty = previousQty - item.quantity;
 
-    await db.$transaction([
-      db.inventoryItem.update({
-        where: { id: inventoryItem.id },
-        data: { quantityOnHand: newQty },
-      }),
-      db.inventoryMovement.create({
-        data: {
-          businessId,
-          inventoryItemId: inventoryItem.id,
-          type: "SALE",
-          quantity: -item.quantity,
-          previousQty,
-          newQty,
-          referenceId: orderId,
-          employeeId,
-        },
-      }),
-    ]);
+    await tx.inventoryMovement.create({
+      data: {
+        businessId,
+        inventoryItemId: inventoryItem.id,
+        type: "SALE",
+        quantity: -item.quantity,
+        previousQty,
+        newQty,
+        referenceId: orderId,
+        employeeId,
+      },
+    });
   }
+}
+
+export async function assertOrderInventoryInTransaction(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  orderId: string
+) {
+  const order = await loadInventoryOrderItems(businessId, orderId, tx);
+  if (!order) {
+    throw new OrderServiceError("Order not found", 404);
+  }
+  await assertSufficientInventory(tx, order.locationId, order.items);
+  return order;
+}
+
+export async function validateOrderInventoryAvailability(
+  businessId: string,
+  orderId: string
+) {
+  await db.$transaction(async (tx) => {
+    const order = await loadInventoryOrderItems(businessId, orderId, tx);
+    if (!order) {
+      throw new OrderServiceError("Order not found", 404);
+    }
+    await assertSufficientInventory(tx, order.locationId, order.items);
+  });
+}
+
+export async function deductInventoryForOrder(
+  businessId: string,
+  orderId: string,
+  employeeId?: string
+) {
+  await db.$transaction(async (tx) => {
+    const order = await loadInventoryOrderItems(businessId, orderId, tx);
+    if (!order) return;
+
+    await assertSufficientInventory(tx, order.locationId, order.items);
+    await deductInventoryItems(
+      tx,
+      businessId,
+      order.locationId,
+      orderId,
+      order.items,
+      employeeId
+    );
+  });
+}
+
+export async function deductOrderInventoryInTransaction(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  orderId: string,
+  employeeId?: string
+) {
+  const order = await loadInventoryOrderItems(businessId, orderId, tx);
+  if (!order) {
+    throw new OrderServiceError("Order not found", 404);
+  }
+
+  await deductInventoryItems(
+    tx,
+    businessId,
+    order.locationId,
+    orderId,
+    order.items,
+    employeeId
+  );
+}
+
+export async function deductInventoryForOrderInTransaction(
+  tx: Prisma.TransactionClient,
+  businessId: string,
+  orderId: string,
+  employeeId?: string
+) {
+  await assertOrderInventoryInTransaction(tx, businessId, orderId);
+  await deductOrderInventoryInTransaction(tx, businessId, orderId, employeeId);
 }
 
 export async function returnInventoryForRefund(

@@ -6,7 +6,7 @@ import { isDemoMode } from "@/lib/demo-mode";
 import { demoJson, demoOrders } from "@/lib/demo-api";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
-import { serializeDecimal } from "@/lib/order-service";
+import { serializeDecimal, validateOrderInventoryAvailability } from "@/lib/order-service";
 import { getStripeOrThrow } from "@/lib/stripe";
 import { toDecimal } from "@/lib/order-service";
 import { z } from "zod";
@@ -55,6 +55,8 @@ export async function POST(request: Request) {
     if (order.status !== "PENDING_PAYMENT") {
       return jsonError(`Order is not pending payment (status: ${order.status})`, 400);
     }
+
+    await validateOrderInventoryAvailability(ctx.business.id, orderId);
 
     const stripeAccount = await db.stripeAccount.findUnique({
       where: { businessId: ctx.business.id },

@@ -7,8 +7,9 @@ import { demoJson, handleDemoCashPayment } from "@/lib/demo-api";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
+  assertOrderInventoryInTransaction,
   createReceiptForOrder,
-  deductInventoryForOrder,
+  deductOrderInventoryInTransaction,
   serializeDecimal,
   updateRegisterSessionCashSales,
 } from "@/lib/order-service";
@@ -76,6 +77,8 @@ export async function POST(request: Request) {
     }
 
     const result = await db.$transaction(async (tx) => {
+      await assertOrderInventoryInTransaction(tx, ctx.business.id, order.id);
+
       const payment = await tx.payment.create({
         data: {
           businessId: ctx.business.id,
@@ -95,10 +98,15 @@ export async function POST(request: Request) {
         },
       });
 
+      await deductOrderInventoryInTransaction(
+        tx,
+        ctx.business.id,
+        order.id,
+        ctx.employee.id
+      );
+
       return { payment, updatedOrder };
     });
-
-    await deductInventoryForOrder(ctx.business.id, order.id, ctx.employee.id);
     const receipt = await createReceiptForOrder(
       ctx.business.id,
       order.id,

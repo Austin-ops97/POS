@@ -26,19 +26,22 @@ export async function getAuthUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
-  let user = await db.user.findUnique({ where: { clerkId } });
-
-  if (!user) {
-    user = await db.user.create({
-      data: {
-        clerkId,
-        email: clerkUser.emailAddresses[0]?.emailAddress || "",
-        firstName: clerkUser.firstName,
-        lastName: clerkUser.lastName,
-        imageUrl: clerkUser.imageUrl,
-      },
-    });
-  }
+  const user = await db.user.upsert({
+    where: { clerkId },
+    create: {
+      clerkId,
+      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      firstName: clerkUser.firstName,
+      lastName: clerkUser.lastName,
+      imageUrl: clerkUser.imageUrl,
+    },
+    update: {
+      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      firstName: clerkUser.firstName,
+      lastName: clerkUser.lastName,
+      imageUrl: clerkUser.imageUrl,
+    },
+  });
 
   return user;
 }

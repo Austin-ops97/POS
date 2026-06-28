@@ -1,30 +1,28 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { isDemoMode } from "@/lib/demo-mode";
+import { CustomerForm } from "@/components/dashboard/customer-form";
 import { Button } from "@/components/ui/button";
-import { PaymentsSettings } from "@/components/dashboard/payments-settings";
 
-export default async function PaymentsSettingsPage() {
+export default async function NewCustomerPage() {
   await requireAuth();
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/settings">
+        <Link href="/customers">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Add Customer</h1>
           <p className="text-sm text-slate-500">
-            Stripe Connect and terminal reader configuration
+            Create a new customer profile
           </p>
         </div>
       </div>
-
-      <PaymentsSettings demoMode={isDemoMode()} />
+      <CustomerForm />
     </div>
   );
 }

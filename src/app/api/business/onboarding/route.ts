@@ -6,12 +6,35 @@ import { STRIPE_PLANS } from "@/lib/stripe";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
 
+const MODULE_KEY_ALIASES: Record<string, string> = {
+  retail: "RETAIL",
+  physical_products: "RETAIL",
+  service: "SERVICE",
+  services: "SERVICE",
+  rental: "RENTAL",
+  rentals: "RENTAL",
+};
+
+function resolveModuleEnabled(
+  moduleMap: Record<string, boolean>,
+  canonicalKey: string,
+  fallback: boolean
+): boolean {
+  if (canonicalKey in moduleMap) return moduleMap[canonicalKey];
+  for (const [alias, key] of Object.entries(MODULE_KEY_ALIASES)) {
+    if (key === canonicalKey && alias in moduleMap) {
+      return moduleMap[alias];
+    }
+  }
+  return fallback;
+}
+
 function buildModuleSettings(posConfig: ReturnType<typeof posConfigSchema.parse>) {
   return [
-    { module: "physical_products", enabled: posConfig.sellPhysical },
-    { module: "services", enabled: posConfig.sellServices },
-    { module: "rentals", enabled: posConfig.rentItems },
-    { module: "inventory", enabled: posConfig.trackInventory },
+    { module: "RETAIL", enabled: posConfig.sellPhysical ?? true },
+    { module: "SERVICE", enabled: posConfig.sellServices ?? false },
+    { module: "RENTAL", enabled: posConfig.rentItems ?? false },
+    { module: "inventory", enabled: posConfig.trackInventory ?? true },
   ];
 }
 
@@ -89,9 +112,9 @@ export async function PATCH(request: Request) {
         );
 
         const posConfig = posConfigSchema.parse({
-          sellPhysical: moduleMap.physical_products ?? true,
-          sellServices: moduleMap.services ?? false,
-          rentItems: moduleMap.rentals ?? false,
+          sellPhysical: resolveModuleEnabled(moduleMap, "RETAIL", true),
+          sellServices: resolveModuleEnabled(moduleMap, "SERVICE", false),
+          rentItems: resolveModuleEnabled(moduleMap, "RENTAL", false),
           trackInventory: moduleMap.inventory ?? true,
           acceptCash: existingSettings?.enableCash ?? true,
           barcodeScanning: existingSettings?.enableBarcodeScanning ?? true,

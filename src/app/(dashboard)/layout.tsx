@@ -15,6 +15,10 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
+  if (!isDemoMode() && !ctx.business.onboardingComplete) {
+    redirect("/onboarding");
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

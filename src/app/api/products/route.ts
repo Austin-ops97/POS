@@ -110,6 +110,11 @@ export async function POST(request: Request) {
       }
     }
 
+    const initialStock =
+      data.type === "PHYSICAL" && data.trackInventory
+        ? (data.initialStock ?? 0)
+        : 0;
+
     const product = await db.$transaction(async (tx) => {
       const created = await tx.product.create({
         data: {
@@ -144,16 +149,32 @@ export async function POST(request: Request) {
               : [];
 
         if (targetLocations.length > 0) {
-          await tx.inventoryItem.createMany({
-            data: targetLocations.map((location) => ({
-              businessId: ctx.business.id,
-              locationId: location.id,
-              productId: created.id,
-              quantityOnHand: 0,
-              costPerUnit: data.cost,
-            })),
-            skipDuplicates: true,
-          });
+          for (const location of targetLocations) {
+            const inventoryItem = await tx.inventoryItem.create({
+              data: {
+                businessId: ctx.business.id,
+                locationId: location.id,
+                productId: created.id,
+                quantityOnHand: initialStock,
+                costPerUnit: data.cost,
+              },
+            });
+
+            if (initialStock > 0) {
+              await tx.inventoryMovement.create({
+                data: {
+                  businessId: ctx.business.id,
+                  inventoryItemId: inventoryItem.id,
+                  type: "RECEIVED",
+                  quantity: initialStock,
+                  previousQty: 0,
+                  newQty: initialStock,
+                  reason: "Initial stock on product creation",
+                  employeeId: ctx.employee.id,
+                },
+              });
+            }
+          }
         }
       }
 
