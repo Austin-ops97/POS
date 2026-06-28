@@ -16,12 +16,10 @@ type ReceiptSettings = z.infer<typeof receiptSettingsSchema>;
 
 type ReceiptSettingsFormProps = {
   settings: ReceiptSettings;
-  demoMode?: boolean;
 };
 
 export function ReceiptSettingsForm({
   settings,
-  demoMode = false,
 }: ReceiptSettingsFormProps) {
   const router = useRouter();
   const {
@@ -47,11 +45,6 @@ export function ReceiptSettingsForm({
   const enablePrinting = watch("enableReceiptPrinting");
 
   async function onSubmit(data: ReceiptSettings) {
-    if (demoMode) {
-      toast.success("Receipt settings saved (demo mode)");
-      return;
-    }
-
     try {
       const res = await fetch("/api/business/settings", {
         method: "PATCH",

@@ -1,19 +1,16 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { MapPin, Plus, User } from "lucide-react";
+import { MapPin, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 type TopbarProps = {
   businessName?: string;
   locationName?: string;
-  isDemo?: boolean;
 };
 
-export function Topbar({ businessName, locationName, isDemo }: TopbarProps) {
-  const demoMode = isDemo || process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-
+export function Topbar({ businessName, locationName }: TopbarProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-4">
@@ -34,13 +31,7 @@ export function Topbar({ businessName, locationName, isDemo }: TopbarProps) {
             Open Register
           </Button>
         </Link>
-        {demoMode ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white">
-            <User className="h-4 w-4" />
-          </div>
-        ) : (
-          <UserButton />
-        )}
+        <UserButton />
       </div>
     </header>
   );

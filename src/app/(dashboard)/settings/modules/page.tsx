@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getModuleSettings } from "@/lib/queries";
-import { isDemoMode } from "@/lib/demo-mode";
 import { ModulesSettings } from "@/components/dashboard/modules-settings";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +23,6 @@ export default async function ModulesSettingsPage() {
           module: m.module,
           enabled: m.enabled,
         }))}
-        demoMode={isDemoMode()}
       />
     </div>
   );

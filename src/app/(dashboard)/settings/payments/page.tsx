@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
-import { isDemoMode } from "@/lib/demo-mode";
 import { Button } from "@/components/ui/button";
 import { PaymentsSettings } from "@/components/dashboard/payments-settings";
 
@@ -24,7 +23,7 @@ export default async function PaymentsSettingsPage() {
         </div>
       </div>
 
-      <PaymentsSettings demoMode={isDemoMode()} />
+      <PaymentsSettings />
     </div>
   );
 }

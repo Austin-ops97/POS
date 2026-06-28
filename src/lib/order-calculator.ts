@@ -48,8 +48,7 @@ function round2(n: number): number {
 export function calculateOrderTotals(
   items: CartItemInput[],
   discounts: DiscountInput[] = [],
-  taxRates: TaxRateInput[] = [],
-  productTypes: Record<string, "PHYSICAL" | "SERVICE" | "RENTAL" | "DIGITAL" | "CUSTOM"> = {}
+  taxRates: TaxRateInput[] = []
 ): OrderTotals {
   const calculatedItems = items.map((item) => {
     const modifierTotal = (item.modifiers || []).reduce(
@@ -66,7 +65,7 @@ export function calculateOrderTotals(
     };
   });
 
-  let subtotal = round2(
+  const subtotal = round2(
     calculatedItems.reduce((sum, item) => sum + item.lineSubtotal, 0)
   );
 

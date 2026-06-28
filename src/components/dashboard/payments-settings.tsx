@@ -30,42 +30,14 @@ type TerminalReader = {
   location?: { name: string } | null;
 };
 
-type PaymentsSettingsProps = {
-  demoMode: boolean;
-};
-
-const DEMO_STRIPE: StripeConnectStatus = {
-  status: "NOT_CONNECTED",
-  chargesEnabled: false,
-  payoutsEnabled: false,
-  detailsSubmitted: false,
-  connected: false,
-};
-
-const DEMO_READERS: TerminalReader[] = [
-  {
-    id: "reader-demo",
-    name: "Simulated Reader",
-    status: "ONLINE",
-    serialNumber: "SIM-001",
-    location: { name: "Main Store" },
-  },
-];
-
-export function PaymentsSettings({ demoMode }: PaymentsSettingsProps) {
+export function PaymentsSettings() {
   const router = useRouter();
-  const [loading, setLoading] = useState(!demoMode);
+  const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
-  const [stripeAccount, setStripeAccount] = useState<StripeConnectStatus | null>(
-    demoMode ? DEMO_STRIPE : null
-  );
-  const [readers, setReaders] = useState<TerminalReader[]>(
-    demoMode ? DEMO_READERS : []
-  );
+  const [stripeAccount, setStripeAccount] = useState<StripeConnectStatus | null>(null);
+  const [readers, setReaders] = useState<TerminalReader[]>([]);
 
   const loadData = useCallback(async () => {
-    if (demoMode) return;
-
     setLoading(true);
     try {
       const [connectRes, terminalRes] = await Promise.all([
@@ -97,7 +69,7 @@ export function PaymentsSettings({ demoMode }: PaymentsSettingsProps) {
     } finally {
       setLoading(false);
     }
-  }, [demoMode]);
+  }, []);
 
   useEffect(() => {
     void loadData();
@@ -213,7 +185,7 @@ export function PaymentsSettings({ demoMode }: PaymentsSettingsProps) {
               Stripe Connect has not been set up yet.
             </p>
           )}
-          {showConnectButton && !demoMode && (
+          {showConnectButton && (
             <Button disabled={connecting || loading} onClick={handleConnectStripe}>
               <CreditCard className="h-4 w-4" />
               {connecting
@@ -222,11 +194,6 @@ export function PaymentsSettings({ demoMode }: PaymentsSettingsProps) {
                   ? "Continue Stripe Setup"
                   : "Connect with Stripe"}
             </Button>
-          )}
-          {demoMode && (
-            <p className="text-sm text-slate-500">
-              Stripe Connect is simulated in demo mode.
-            </p>
           )}
         </CardContent>
       </Card>
@@ -239,7 +206,7 @@ export function PaymentsSettings({ demoMode }: PaymentsSettingsProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading && !demoMode ? (
+          {loading ? (
             <p className="text-sm text-slate-500">Loading readers...</p>
           ) : readers.length === 0 ? (
             <EmptyState

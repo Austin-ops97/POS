@@ -16,7 +16,6 @@ type SubscriptionInfo = {
 };
 
 type BillingSettingsProps = {
-  demoMode: boolean;
   subscription: SubscriptionInfo | null;
 };
 
@@ -35,18 +34,13 @@ function formatDate(iso: string) {
   });
 }
 
-export function BillingSettings({ demoMode, subscription }: BillingSettingsProps) {
+export function BillingSettings({ subscription }: BillingSettingsProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [upgradingPlan, setUpgradingPlan] = useState<PlanKey | null>(null);
 
   const currentPlan = subscription?.plan ?? "STARTER";
 
   async function handleOpenPortal() {
-    if (demoMode) {
-      toast.info("Billing is simulated in demo mode");
-      return;
-    }
-
     setPortalLoading(true);
     try {
       const returnUrl = `${window.location.origin}/settings/billing`;
@@ -76,11 +70,6 @@ export function BillingSettings({ demoMode, subscription }: BillingSettingsProps
   }
 
   async function handlePlanCheckout(plan: PlanKey) {
-    if (demoMode) {
-      toast.info("Billing is simulated in demo mode");
-      return;
-    }
-
     setUpgradingPlan(plan);
     try {
       const baseUrl = `${window.location.origin}/settings/billing`;
@@ -138,17 +127,12 @@ export function BillingSettings({ demoMode, subscription }: BillingSettingsProps
                 Trial ends {formatDate(subscription.trialEndsAt)}
               </span>
             )}
-            {demoMode && (
-              <span className="block text-slate-500">
-                Billing is simulated in demo mode.
-              </span>
-            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button
             variant="outline"
-            disabled={portalLoading || demoMode}
+            disabled={portalLoading}
             onClick={handleOpenPortal}
           >
             {portalLoading ? "Opening..." : "Open Billing Portal"}
@@ -180,7 +164,7 @@ export function BillingSettings({ demoMode, subscription }: BillingSettingsProps
                   <Button
                     className="mt-4 w-full"
                     variant="outline"
-                    disabled={upgradingPlan !== null || demoMode}
+                    disabled={upgradingPlan !== null}
                     onClick={() => handlePlanCheckout(planKey)}
                   >
                     {upgradingPlan === planKey ? "Starting checkout..." : "Upgrade"}

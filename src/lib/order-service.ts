@@ -139,20 +139,6 @@ export async function getTaxRatesForLocation(
   }));
 }
 
-export async function getProductTypesMap(
-  businessId: string,
-  productIds: string[]
-) {
-  if (productIds.length === 0) return {};
-
-  const products = await db.product.findMany({
-    where: { businessId, id: { in: productIds } },
-    select: { id: true, type: true },
-  });
-
-  return Object.fromEntries(products.map((p) => [p.id, p.type]));
-}
-
 type CreateOrderInput = {
   businessId: string;
   locationId: string;
@@ -182,17 +168,10 @@ export async function createOrderRecord(input: CreateOrderInput) {
     input.locationId
   );
 
-  const productIds = resolvedItems
-    .map((i) => i.productId)
-    .filter((id): id is string => Boolean(id));
-
-  const productTypes = await getProductTypesMap(input.businessId, productIds);
-
   const totals = calculateOrderTotals(
     resolvedItems,
     input.discounts ?? [],
-    taxRates,
-    productTypes
+    taxRates
   );
 
   if (input.customerId) {

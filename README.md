@@ -63,9 +63,10 @@ Required variables:
 ### 3. Database Setup
 
 ```bash
-npx prisma migrate dev --name init
-npx prisma db seed
+npx prisma migrate dev
 ```
+
+For production, use `npx prisma migrate deploy`. Do not seed production data.
 
 ### 4. Stripe Webhook (Development)
 
@@ -90,29 +91,17 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 src/
 ├── app/
-│   ├── (marketing)/     # Public website
+│   ├── (marketing)/     # Legacy public URLs that redirect to the register
 │   ├── (dashboard)/     # Authenticated app
 │   ├── onboarding/      # Business setup wizard
 │   └── api/             # API routes
 ├── components/
 │   ├── ui/              # UI primitives
-│   ├── marketing/       # Marketing components
 │   ├── dashboard/       # Dashboard components
 │   └── register/        # Checkout components
 ├── lib/                 # Utilities, auth, stripe, validations
 └── stores/              # Zustand stores
 ```
-
-## Demo Data
-
-After seeding, the database includes:
-
-- **Business:** Demo Market & Services
-- **Location:** Main Store
-- **Employees:** Owner, Manager, Cashier (PIN: `1234`)
-- **Products:** T-Shirt, Hat, Coffee, Phone Charger, Service Labor, Equipment Rental, Custom Fee
-- **Orders:** Paid card, paid cash, refunded, and held orders
-- **Customers:** John Smith, Sarah Johnson, Business Account Customer
 
 ## Stripe Integration
 
@@ -123,7 +112,7 @@ Merchants connect their Stripe account via Settings → Payments. Uses Stripe Co
 Card payments use PaymentIntents created server-side. Webhooks confirm payment success — the frontend never marks orders as paid.
 
 ### Terminal
-Register card readers in Settings → Payments → Stripe Terminal. Supports simulated readers in development.
+Register card readers in Settings → Payments → Stripe Terminal. Use Stripe test readers only in development.
 
 ### Billing
 SaaS subscriptions managed via Stripe Billing. Plans: Starter ($29), Pro ($79), Multi-Location ($149), Enterprise (custom).
@@ -150,6 +139,8 @@ Designed for deployment on:
 ```bash
 npm run build
 ```
+
+See [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md) for the Vercel, database, Clerk, and Stripe checklist.
 
 ## License
 

@@ -243,7 +243,7 @@ export default function OnboardingPage() {
         setStripeStatus(data);
       }
     } catch {
-      setStripeStatus({ status: "NOT_CONNECTED", demoMode: true });
+      setStripeStatus({ status: "NOT_CONNECTED" });
     }
   }
 
@@ -686,10 +686,10 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-medium text-amber-800">Demo Mode</p>
+                  <p className="text-sm font-medium text-amber-800">Card payments are optional during setup</p>
                   <p className="mt-1 text-sm text-amber-700">
-                    You can skip Stripe setup and continue in demo mode. Card payments
-                    will be simulated until you connect a live Stripe account.
+                    You can finish setup before connecting Stripe. Cash checkout works
+                    immediately; card and Terminal payments require Stripe Connect.
                   </p>
                 </div>
               </div>

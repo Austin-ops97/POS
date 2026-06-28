@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getStripeSettings } from "@/lib/queries";
-import { isDemoMode } from "@/lib/demo-mode";
 import { Button } from "@/components/ui/button";
 import { BillingSettings } from "@/components/dashboard/billing-settings";
 
@@ -41,10 +40,7 @@ export default async function BillingSettingsPage() {
         </div>
       </div>
 
-      <BillingSettings
-        demoMode={isDemoMode()}
-        subscription={subscriptionInfo}
-      />
+      <BillingSettings subscription={subscriptionInfo} />
     </div>
   );
 }

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   try {
     if (isDemoMode()) {
       return NextResponse.json(
-        { error: "Tax rates cannot be modified in demo mode" },
+        { error: "Tax rates cannot be modified while sample data mode is disabled" },
         { status: 400 }
       );
     }

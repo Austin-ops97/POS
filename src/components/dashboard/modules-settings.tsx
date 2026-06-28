@@ -63,10 +63,9 @@ type ModuleSettingsFormValues = z.infer<typeof moduleSettingsSchema>;
 
 type ModulesSettingsProps = {
   settings: Array<{ module: string; enabled: boolean }>;
-  demoMode?: boolean;
 };
 
-export function ModulesSettings({ settings, demoMode = false }: ModulesSettingsProps) {
+export function ModulesSettings({ settings }: ModulesSettingsProps) {
   const router = useRouter();
   const {
     handleSubmit,
@@ -83,11 +82,6 @@ export function ModulesSettings({ settings, demoMode = false }: ModulesSettingsP
   const modules = watch("modules");
 
   async function onSubmit(data: ModuleSettingsFormValues) {
-    if (demoMode) {
-      toast.success("Module settings saved (demo mode)");
-      return;
-    }
-
     try {
       const res = await fetch("/api/business/modules", {
         method: "PATCH",

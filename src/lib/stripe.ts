@@ -1,15 +1,6 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn("STRIPE_SECRET_KEY is not set. Stripe features will be disabled.");
-}
-
-export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2026-05-27.dahlia",
-      typescript: true,
-    })
-  : null;
+let stripeClient: Stripe | null = null;
 
 export const STRIPE_PLANS = {
   STARTER: {
@@ -50,8 +41,15 @@ export const STRIPE_PLANS = {
 } as const;
 
 export function getStripeOrThrow(): Stripe {
-  if (!stripe) {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
     throw new Error("Stripe is not configured. Set STRIPE_SECRET_KEY.");
   }
-  return stripe;
+
+  stripeClient ??= new Stripe(secretKey, {
+    apiVersion: "2026-05-27.dahlia",
+    typescript: true,
+  });
+
+  return stripeClient;
 }

@@ -1,36 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
-  "/features(.*)",
-  "/pricing(.*)",
-  "/industries(.*)",
-  "/hardware(.*)",
-  "/contact(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)",
-  "/dashboard(.*)",
-  "/register(.*)",
-  "/products(.*)",
-  "/inventory(.*)",
-  "/orders(.*)",
-  "/customers(.*)",
-  "/employees(.*)",
-  "/reports(.*)",
-  "/settings(.*)",
-  "/onboarding(.*)",
-  "/api(.*)",
 ]);
-
-function isDemoMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
-    !process.env.CLERK_SECRET_KEY
-  );
-}
 
 const clerkHandler = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
@@ -39,9 +15,6 @@ const clerkHandler = clerkMiddleware(async (auth, request) => {
 });
 
 export default function middleware(req: NextRequest) {
-  if (isDemoMode()) {
-    return NextResponse.next();
-  }
   return clerkHandler(req, {} as never);
 }
 

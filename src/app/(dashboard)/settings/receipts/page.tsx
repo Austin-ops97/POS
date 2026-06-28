@@ -2,14 +2,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getBusinessSettings } from "@/lib/queries";
-import { isDemoMode } from "@/lib/demo-mode";
 import { ReceiptSettingsForm } from "@/components/dashboard/receipt-settings-form";
 import { Button } from "@/components/ui/button";
 
 export default async function ReceiptsSettingsPage() {
   const ctx = await requireAuth();
   const settings = await getBusinessSettings(ctx);
-  const demoMode = isDemoMode();
 
   const receiptSettings = {
     receiptFooter: settings?.receiptFooter ?? "",
@@ -28,7 +26,7 @@ export default async function ReceiptsSettingsPage() {
           <p className="text-sm text-slate-500">Customize receipt appearance and content</p>
         </div>
       </div>
-      <ReceiptSettingsForm settings={receiptSettings} demoMode={demoMode} />
+      <ReceiptSettingsForm settings={receiptSettings} />
     </div>
   );
 }
