@@ -10,7 +10,7 @@ import {
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getStripePublishableKey } from "@/lib/stripe-client";
+import { useStripeClientConfig } from "@/lib/stripe-client";
 import { formatCurrency } from "@/lib/utils";
 
 type CardPaymentCheckoutProps = {
@@ -114,14 +114,14 @@ export function CardPaymentCheckout({
   onError,
   onCancel,
 }: CardPaymentCheckoutProps) {
-  const publishableKey = getStripePublishableKey();
+  const { config, error, loading } = useStripeClientConfig();
 
   const stripePromise = useMemo(() => {
-    if (!publishableKey) return null;
-    return loadStripe(publishableKey, {
+    if (!config?.publishableKey) return null;
+    return loadStripe(config.publishableKey, {
       stripeAccount: stripeAccountId,
     });
-  }, [publishableKey, stripeAccountId]);
+  }, [config?.publishableKey, stripeAccountId]);
 
   const options: StripeElementsOptions = useMemo(
     () => ({
@@ -136,12 +136,20 @@ export function CardPaymentCheckout({
     [clientSecret]
   );
 
-  if (!publishableKey || !stripePromise) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-sm text-slate-500">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Loading payment form...
+      </div>
+    );
+  }
+
+  if (error || !config?.publishableKey || !stripePromise) {
     return (
       <p className="text-sm text-red-600">
-        Card payments are not configured. Set{" "}
-        <code className="text-xs">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> in
-        your environment.
+        {error ??
+          "Card payments are not configured. Set STRIPE_PUBLISHABLE_KEY in your environment."}
       </p>
     );
   }
