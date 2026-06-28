@@ -47,6 +47,9 @@ export function handleApiError(error: unknown, context: string) {
         503
       );
     }
+    if ("type" in error && typeof error.type === "string" && error.type.startsWith("Stripe")) {
+      return apiError(error.message, 502);
+    }
   }
 
   console.error(`${context}:`, error);
