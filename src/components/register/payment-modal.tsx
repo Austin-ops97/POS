@@ -11,8 +11,23 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { CardPaymentCheckout } from "@/components/register/card-payment-form";
 
-export type PaymentModalState = "idle" | "loading" | "success" | "error";
+export type PaymentModalState =
+  | "idle"
+  | "loading"
+  | "card_entry"
+  | "success"
+  | "error";
+
+type CardCheckoutProps = {
+  clientSecret: string;
+  stripeAccountId: string;
+  orderId: string;
+  onSuccess: (orderNumber?: string) => void;
+  onError: (message: string) => void;
+  onCancel: () => void;
+};
 
 type PaymentModalProps = {
   open: boolean;
@@ -22,6 +37,7 @@ type PaymentModalProps = {
   state: PaymentModalState;
   message?: string;
   orderNumber?: string;
+  cardCheckout?: CardCheckoutProps | null;
 };
 
 export function PaymentModal({
@@ -32,11 +48,12 @@ export function PaymentModal({
   state,
   message,
   orderNumber,
+  cardCheckout,
 }: PaymentModalProps) {
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && state !== "loading") onClose();
+      if (e.key === "Escape" && state !== "loading" && state !== "card_entry") onClose();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -48,7 +65,7 @@ export function PaymentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={state !== "loading" ? onClose : undefined}
+        onClick={state !== "loading" && state !== "card_entry" ? onClose : undefined}
       />
       <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl">
         {state !== "loading" && (
@@ -62,6 +79,28 @@ export function PaymentModal({
         )}
 
         <div className="flex flex-col items-center text-center">
+          {state === "card_entry" && method === "CARD" && cardCheckout && (
+            <>
+              <h2 className="mb-2 text-xl font-semibold text-slate-900">
+                Enter Card Details
+              </h2>
+              <p className="mb-6 text-3xl font-bold text-slate-900">
+                {formatCurrency(amount)}
+              </p>
+              <CardPaymentCheckout
+                clientSecret={cardCheckout.clientSecret}
+                stripeAccountId={cardCheckout.stripeAccountId}
+                amount={amount}
+                orderId={cardCheckout.orderId}
+                onSuccess={(confirmedOrderNumber) => {
+                  cardCheckout.onSuccess(confirmedOrderNumber);
+                }}
+                onError={cardCheckout.onError}
+                onCancel={cardCheckout.onCancel}
+              />
+            </>
+          )}
+
           {state === "loading" && (
             <>
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100">
@@ -75,7 +114,7 @@ export function PaymentModal({
               </p>
               <p className="mt-4 text-sm text-slate-500">
                 {method === "CARD"
-                  ? "Waiting for payment confirmation..."
+                  ? message || "Preparing card payment..."
                   : "Recording cash payment..."}
               </p>
             </>

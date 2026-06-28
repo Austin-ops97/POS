@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         paymentIntentId: existingIntent.id,
         clientSecret: existingIntent.client_secret,
+        stripeAccountId: stripeAccount.stripeAccountId,
         amount: serializeDecimal(order.total),
         paymentId: existingPayment.id,
       });
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
+      stripeAccountId: stripeAccount.stripeAccountId,
       amount: serializeDecimal(order.total),
       paymentId: payment.id,
     });

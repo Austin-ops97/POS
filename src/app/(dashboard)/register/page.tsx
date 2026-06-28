@@ -16,11 +16,6 @@ import { cn } from "@/lib/utils";
 type Category = { id: string; name: string };
 type Customer = { id: string; firstName: string; lastName?: string | null };
 
-type PollOrderPayload = {
-  status?: string;
-  orderNumber?: string;
-};
-
 type CheckoutOrderPayload = {
   id?: string;
   orderNumber?: string;
@@ -39,12 +34,6 @@ function primaryTaxRate(rates: TaxRateDisplay[]) {
   if (rates.length === 0) return 0;
   const productRate = rates.find((r) => r.appliesToProducts);
   return productRate?.rate ?? rates[0].rate;
-}
-
-function resolveOrderFromPollResponse(data: unknown): PollOrderPayload | null {
-  if (!data || typeof data !== "object") return null;
-  const payload = data as { order?: PollOrderPayload } & PollOrderPayload;
-  return payload.order ?? payload;
 }
 
 function resolveCheckoutOrder(data: unknown): CheckoutOrderPayload | null {
@@ -86,6 +75,11 @@ export default function RegisterPage() {
   const [paymentState, setPaymentState] = useState<PaymentModalState>("idle");
   const [paymentMessage, setPaymentMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState<string>();
+  const [cardCheckout, setCardCheckout] = useState<{
+    clientSecret: string;
+    stripeAccountId: string;
+    orderId: string;
+  } | null>(null);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   const {
@@ -384,6 +378,7 @@ export default function RegisterPage() {
     setPaymentOpen(true);
     setPaymentState("loading");
     setProcessing(true);
+    setCardCheckout(null);
 
     try {
       const checkoutOrder = await resolveOrderForPayment();
@@ -404,59 +399,26 @@ export default function RegisterPage() {
         setOrderNumber(payment.orderNumber || checkoutOrder.orderNumber);
         setPaymentState("success");
         clearCart();
-      } else if (payment.clientSecret) {
-        setPaymentState("loading");
-        setPaymentMessage("Complete payment on terminal or Tap to Pay device");
-        await pollPaymentStatus(orderId, checkoutOrder.orderNumber);
-      } else {
-        throw new Error("Unable to start card payment");
+        return;
       }
+
+      if (payment.clientSecret && payment.stripeAccountId) {
+        setCardCheckout({
+          clientSecret: payment.clientSecret,
+          stripeAccountId: payment.stripeAccountId,
+          orderId,
+        });
+        setPaymentState("card_entry");
+        return;
+      }
+
+      throw new Error("Unable to start card payment");
     } catch (err) {
       setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
       setPaymentState("error");
     } finally {
       setProcessing(false);
     }
-  };
-
-  const pollPaymentStatus = async (orderId: string, fallbackOrderNumber?: string) => {
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const res = await fetch(`/api/orders/${orderId}`);
-        if (!res.ok) continue;
-
-        const data = await res.json();
-        const order = resolveOrderFromPollResponse(data);
-        if (!order?.status) continue;
-
-        if (order.status === "PAID") {
-          setOrderNumber(order.orderNumber || fallbackOrderNumber);
-          setPaymentState("success");
-          clearCart();
-          return;
-        }
-        if (order.status === "FAILED") {
-          throw new Error("Card payment was declined");
-        }
-        if (order.status === "CANCELED") {
-          throw new Error("Payment was canceled");
-        }
-      } catch (err) {
-        if (
-          err instanceof Error &&
-          (err.message.includes("declined") || err.message.includes("canceled"))
-        ) {
-          setPaymentMessage(err.message);
-          setPaymentState("error");
-          return;
-        }
-      }
-    }
-    setPaymentMessage(
-      "Payment is still pending. Check your orders list or Stripe for the latest status."
-    );
-    setPaymentState("error");
   };
 
   const handleHold = async () => {
@@ -631,6 +593,7 @@ export default function RegisterPage() {
     setPaymentState("idle");
     setPaymentMessage("");
     setOrderNumber(undefined);
+    setCardCheckout(null);
   };
 
   const filteredProducts =
@@ -730,6 +693,25 @@ export default function RegisterPage() {
         state={paymentState}
         message={paymentMessage}
         orderNumber={orderNumber}
+        cardCheckout={
+          cardCheckout
+            ? {
+                ...cardCheckout,
+                onSuccess: (confirmedOrderNumber) => {
+                  setOrderNumber(confirmedOrderNumber);
+                  setPaymentState("success");
+                  setCardCheckout(null);
+                  clearCart();
+                },
+                onError: (message) => {
+                  setPaymentMessage(message);
+                  setPaymentState("error");
+                  setCardCheckout(null);
+                },
+                onCancel: handleClosePayment,
+              }
+            : null
+        }
       />
     </div>
   );
