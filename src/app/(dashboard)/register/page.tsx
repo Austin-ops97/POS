@@ -9,9 +9,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductGrid, type ProductGridItem } from "@/components/register/product-grid";
 import { CartPanel } from "@/components/register/cart-panel";
 import { PaymentModal, type PaymentModalState } from "@/components/register/payment-modal";
+import { CashTenderModal } from "@/components/register/cash-tender-modal";
 import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
 import { cn } from "@/lib/utils";
+import { isValidReceiptEmail } from "@/lib/register/receipt-email";
 
 type Category = { id: string; name: string };
 type Customer = { id: string; firstName: string; lastName?: string | null; email?: string | null };
@@ -69,7 +71,11 @@ export default function RegisterPage() {
   const [taxRates, setTaxRates] = useState<TaxRateDisplay[]>(DEFAULT_TAX_RATES);
   const [darkCart, setDarkCart] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const checkoutInFlightRef = useRef(false);
+  const receiptEmailRef = useRef("");
+  const skipReceiptRef = useRef(false);
 
+  const [cashTenderOpen, setCashTenderOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CARD" | "CASH">("CASH");
   const [paymentState, setPaymentState] = useState<PaymentModalState>("idle");
@@ -78,6 +84,8 @@ export default function RegisterPage() {
   const [paidOrderId, setPaidOrderId] = useState<string>();
   const [changeDue, setChangeDue] = useState<number>();
   const [customerEmail, setCustomerEmail] = useState<string>();
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [skipReceiptEmail, setSkipReceiptEmail] = useState(false);
   const [cardCheckout, setCardCheckout] = useState<{
     clientSecret: string;
     stripeAccountId: string;
@@ -89,6 +97,7 @@ export default function RegisterPage() {
     items,
     discounts,
     customerId,
+    customerName,
     notes,
     heldOrderId,
     addItem,
@@ -96,6 +105,7 @@ export default function RegisterPage() {
     setCustomer,
     setNotes,
     clearCart,
+    startNewSale,
     loadHeldOrder,
   } = useCartStore();
 
@@ -342,8 +352,75 @@ export default function RegisterPage() {
     return { id: checkoutOrder.id, orderNumber: checkoutOrder.orderNumber };
   };
 
-  const handlePayCash = async () => {
+  const sendReceiptEmailSafe = (orderId: string, email: string) => {
+    if (!email.trim() || !isValidReceiptEmail(email)) return;
+    fetch(`/api/orders/${orderId}/receipt/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim() }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(err?.error ?? "Failed to email receipt");
+        }
+        toast.success(`Receipt emailed to ${email.trim()}`);
+      })
+      .catch(() => {
+        toast.error("Payment succeeded but receipt email failed");
+      });
+  };
+
+  const resetCheckoutUi = () => {
+    setPaymentOpen(false);
+    setCashTenderOpen(false);
+    setPaymentState("idle");
+    setPaymentMessage("");
+    setOrderNumber(undefined);
+    setPaidOrderId(undefined);
+    setChangeDue(undefined);
+    setCardCheckout(null);
+    setReceiptEmail("");
+    setSkipReceiptEmail(false);
+    setCustomerEmail(undefined);
+    setProcessing(false);
+    checkoutInFlightRef.current = false;
+  };
+
+  const handleNewSale = () => {
+    startNewSale();
+    resetCheckoutUi();
+  };
+
+  const handleClosePayment = () => {
+    if (paymentState === "success") {
+      handleNewSale();
+      return;
+    }
+    resetCheckoutUi();
+  };
+
+  const handlePayCash = () => {
+    if (items.length === 0) {
+      toast.error("Add items before checkout");
+      return;
+    }
+    if (checkoutInFlightRef.current || processing) return;
     setPaymentMethod("CASH");
+    setReceiptEmail(customerEmail ?? "");
+    setSkipReceiptEmail(false);
+    setCashTenderOpen(true);
+  };
+
+  const handleCashTenderConfirm = async (data: {
+    amountTendered: number;
+    changeDue: number;
+    receiptEmail?: string;
+    skipReceipt: boolean;
+  }) => {
+    if (checkoutInFlightRef.current) return;
+    checkoutInFlightRef.current = true;
+    setCashTenderOpen(false);
     setPaymentOpen(true);
     setPaymentState("loading");
     setProcessing(true);
@@ -353,31 +430,12 @@ export default function RegisterPage() {
     try {
       const checkoutOrder = await resolveOrderForPayment();
 
-      const tenderStr = window.prompt(
-        `Cash total: $${totals.total.toFixed(2)}\nEnter amount tendered (optional):`
-      );
-      let amountTendered: number | undefined;
-      if (tenderStr && tenderStr.trim()) {
-        amountTendered = parseFloat(tenderStr);
-        if (isNaN(amountTendered) || amountTendered < 0) {
-          throw new Error("Invalid amount tendered");
-        }
-      }
-
-      const emailStr = window.prompt(
-        "Email receipt to (optional):",
-        customerEmail ?? ""
-      );
-      const emailedTo =
-        emailStr && emailStr.trim() ? emailStr.trim() : undefined;
-
       const cashRes = await fetch("/api/checkout/cash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: checkoutOrder.id,
-          ...(amountTendered !== undefined ? { amountTendered } : {}),
-          ...(emailedTo ? { emailedTo } : {}),
+          amountTendered: data.amountTendered,
         }),
       });
       if (!cashRes.ok) {
@@ -388,39 +446,47 @@ export default function RegisterPage() {
       const paidOrder = resolveCheckoutOrder(result);
 
       setPaidOrderId(checkoutOrder.id);
-      setOrderNumber(
-        paidOrder?.orderNumber || checkoutOrder.orderNumber
+      setOrderNumber(paidOrder?.orderNumber || checkoutOrder.orderNumber);
+      setChangeDue(
+        typeof result.change === "number" ? result.change : data.changeDue
       );
-      if (typeof result.change === "number") {
-        setChangeDue(result.change);
+      if (data.receiptEmail) {
+        setCustomerEmail(data.receiptEmail);
       }
       setPaymentState("success");
       clearCart();
 
-      if (emailedTo) {
-        fetch(`/api/orders/${checkoutOrder.id}/receipt/email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailedTo }),
-        }).catch(() => {
-          toast.error("Payment succeeded but receipt email failed");
-        });
+      if (!data.skipReceipt && data.receiptEmail) {
+        sendReceiptEmailSafe(checkoutOrder.id, data.receiptEmail);
       }
     } catch (err) {
       setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
       setPaymentState("error");
     } finally {
       setProcessing(false);
+      checkoutInFlightRef.current = false;
     }
   };
 
   const handlePayCard = async () => {
+    if (items.length === 0) {
+      toast.error("Add items before checkout");
+      return;
+    }
+    if (checkoutInFlightRef.current || processing) return;
+    checkoutInFlightRef.current = true;
     setPaymentMethod("CARD");
     setPaymentOpen(true);
     setPaymentState("loading");
     setProcessing(true);
     setCardCheckout(null);
+    const emailForReceipt = customerEmail ?? "";
+    setReceiptEmail(emailForReceipt);
+    receiptEmailRef.current = emailForReceipt;
+    setSkipReceiptEmail(false);
+    skipReceiptRef.current = false;
 
+    let enteredCardEntry = false;
     try {
       const checkoutOrder = await resolveOrderForPayment();
       const orderId = checkoutOrder.id;
@@ -441,10 +507,14 @@ export default function RegisterPage() {
         setOrderNumber(payment.orderNumber || checkoutOrder.orderNumber);
         setPaymentState("success");
         clearCart();
+        if (!skipReceiptRef.current && receiptEmailRef.current.trim()) {
+          sendReceiptEmailSafe(orderId, receiptEmailRef.current);
+        }
         return;
       }
 
       if (payment.clientSecret && payment.stripeAccountId) {
+        enteredCardEntry = true;
         setCardCheckout({
           clientSecret: payment.clientSecret,
           stripeAccountId: payment.stripeAccountId,
@@ -460,6 +530,9 @@ export default function RegisterPage() {
       setPaymentState("error");
     } finally {
       setProcessing(false);
+      if (!enteredCardEntry) {
+        checkoutInFlightRef.current = false;
+      }
     }
   };
 
@@ -633,16 +706,6 @@ export default function RegisterPage() {
     }
   };
 
-  const handleClosePayment = () => {
-    setPaymentOpen(false);
-    setPaymentState("idle");
-    setPaymentMessage("");
-    setOrderNumber(undefined);
-    setPaidOrderId(undefined);
-    setChangeDue(undefined);
-    setCardCheckout(null);
-  };
-
   const filteredProducts =
     activeCategory === "all"
       ? products
@@ -728,13 +791,23 @@ export default function RegisterPage() {
           onAddCustom={handleAddCustom}
           onSelectCustomer={handleSelectCustomer}
           onAddDiscount={handleAddDiscount}
-          disabled={processing}
+          disabled={processing || paymentOpen || cashTenderOpen}
         />
       </div>
+
+      <CashTenderModal
+        open={cashTenderOpen}
+        total={totals.total}
+        defaultReceiptEmail={customerEmail}
+        processing={processing}
+        onConfirm={handleCashTenderConfirm}
+        onCancel={() => setCashTenderOpen(false)}
+      />
 
       <PaymentModal
         open={paymentOpen}
         onClose={handleClosePayment}
+        onNewSale={handleNewSale}
         method={paymentMethod}
         amount={totals.total}
         state={paymentState}
@@ -742,22 +815,41 @@ export default function RegisterPage() {
         orderNumber={orderNumber}
         orderId={paidOrderId}
         changeDue={changeDue}
+        customerName={customerName ?? undefined}
         defaultReceiptEmail={customerEmail}
+        receiptEmail={receiptEmail}
+        onReceiptEmailChange={(email) => {
+          setReceiptEmail(email);
+          receiptEmailRef.current = email;
+        }}
+        skipReceiptEmail={skipReceiptEmail}
+        onSkipReceiptEmailChange={(skip) => {
+          setSkipReceiptEmail(skip);
+          skipReceiptRef.current = skip;
+        }}
         cardCheckout={
           cardCheckout
             ? {
                 ...cardCheckout,
                 onSuccess: (confirmedOrderNumber) => {
-                  setPaidOrderId(cardCheckout.orderId);
+                  const orderId = cardCheckout.orderId;
+                  setPaidOrderId(orderId);
                   setOrderNumber(confirmedOrderNumber);
                   setPaymentState("success");
                   setCardCheckout(null);
                   clearCart();
+                  checkoutInFlightRef.current = false;
+                  setProcessing(false);
+                  if (!skipReceiptRef.current && receiptEmailRef.current.trim()) {
+                    sendReceiptEmailSafe(orderId, receiptEmailRef.current);
+                  }
                 },
                 onError: (message) => {
                   setPaymentMessage(message);
                   setPaymentState("error");
                   setCardCheckout(null);
+                  checkoutInFlightRef.current = false;
+                  setProcessing(false);
                 },
                 onCancel: handleClosePayment,
               }

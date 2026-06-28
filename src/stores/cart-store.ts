@@ -38,6 +38,7 @@ type CartState = {
   setCustomer: (id: string | null, name: string | null) => void;
   setNotes: (notes: string) => void;
   clearCart: () => void;
+  startNewSale: () => void;
   loadHeldOrder: (orderId: string, items: CartItem[]) => void;
 };
 
@@ -102,6 +103,10 @@ export const useCartStore = create<CartState>((set, get) => ({
       notes: "",
       heldOrderId: null,
     }),
+
+  startNewSale: () => {
+    get().clearCart();
+  },
 
   loadHeldOrder: (orderId, items) =>
     set({ heldOrderId: orderId, items }),
