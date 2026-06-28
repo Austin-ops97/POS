@@ -5,11 +5,13 @@ import {
   canAccessPaidApp,
   canAddEmployee,
   canAddLocation,
+  canAccessAdvancedReports,
   canUseTerminal,
   getSubscriptionAccessStatus,
   isBillingExemptPath,
   PAST_DUE_GRACE_DAYS,
 } from "./subscription-access";
+import { getBillingDisplayState } from "./billing-states";
 
 function makeSubscription(
   overrides: Partial<Subscription> & Pick<Subscription, "status">
@@ -24,6 +26,7 @@ function makeSubscription(
     currentPeriodEnd: null,
     trialEndsAt: null,
     pastDueSince: null,
+    paymentActionRequiredAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -56,14 +59,15 @@ describe("getSubscriptionAccessStatus", () => {
     assert.equal(canAccessPaidApp(access), true);
   });
 
-  it("allows past due within grace period", () => {
+  it("allows past due within grace period with days remaining", () => {
     const pastDueSince = new Date();
     pastDueSince.setDate(pastDueSince.getDate() - 2);
     const access = getSubscriptionAccessStatus(
       makeSubscription({ status: "PAST_DUE", pastDueSince })
     );
     assert.equal(access.canAccessPaidApp, true);
-    assert.ok(access.gracePeriodEndsAt);
+    assert.equal(access.isPastDueInGrace, true);
+    assert.ok(access.graceDaysRemaining && access.graceDaysRemaining > 0);
   });
 
   it("blocks past due after grace period", () => {
@@ -73,6 +77,7 @@ describe("getSubscriptionAccessStatus", () => {
       makeSubscription({ status: "PAST_DUE", pastDueSince })
     );
     assert.equal(access.canAccessPaidApp, false);
+    assert.equal(access.isPastDueInGrace, false);
   });
 
   it("blocks canceled subscriptions", () => {
@@ -88,6 +93,17 @@ describe("getSubscriptionAccessStatus", () => {
   it("blocks incomplete subscriptions", () => {
     const access = getSubscriptionAccessStatus(makeSubscription({ status: "INCOMPLETE" }));
     assert.equal(access.canAccessPaidApp, false);
+  });
+
+  it("flags payment action required on active subscription", () => {
+    const access = getSubscriptionAccessStatus(
+      makeSubscription({
+        status: "ACTIVE",
+        paymentActionRequiredAt: new Date(),
+      })
+    );
+    assert.equal(access.isPaymentActionRequired, true);
+    assert.equal(access.canAccessPaidApp, true);
   });
 });
 
@@ -115,5 +131,32 @@ describe("plan entitlements", () => {
   it("allows terminal on pro plan", () => {
     assert.equal(canUseTerminal("STARTER"), false);
     assert.equal(canUseTerminal("PRO"), true);
+  });
+
+  it("gates advanced reports by plan", () => {
+    assert.equal(canAccessAdvancedReports("STARTER"), false);
+    assert.equal(canAccessAdvancedReports("PRO"), true);
+    assert.equal(canAccessAdvancedReports("MULTI_LOCATION"), true);
+  });
+});
+
+describe("getBillingDisplayState", () => {
+  it("returns past_due_grace during grace window", () => {
+    const pastDueSince = new Date();
+    pastDueSince.setDate(pastDueSince.getDate() - 1);
+    const access = getSubscriptionAccessStatus(
+      makeSubscription({ status: "PAST_DUE", pastDueSince })
+    );
+    assert.equal(getBillingDisplayState(access), "past_due_grace");
+  });
+
+  it("returns payment_action_required when flagged", () => {
+    const access = getSubscriptionAccessStatus(
+      makeSubscription({
+        status: "ACTIVE",
+        paymentActionRequiredAt: new Date(),
+      })
+    );
+    assert.equal(getBillingDisplayState(access), "payment_action_required");
   });
 });

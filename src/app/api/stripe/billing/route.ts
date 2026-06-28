@@ -3,6 +3,7 @@ import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { captureMonitoringEvent } from "@/lib/monitoring";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getStripeOrThrow, STRIPE_PLANS, isStripeConfigured } from "@/lib/stripe";
 import type Stripe from "stripe";
@@ -35,8 +36,10 @@ function validatePlanPriceId(plan: SubscriptionPlan): string {
 }
 
 export async function GET(request: Request) {
+  let businessId: string | undefined;
   try {
     const ctx = await requireAuth();
+    businessId = ctx.business.id;
     await requirePermission(ctx, PERMISSIONS.MANAGE_BILLING);
 
     const { searchParams } = new URL(request.url);
@@ -67,13 +70,23 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
+    if (businessId) {
+      captureMonitoringEvent({
+        type: "billing_portal_failure",
+        businessId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return handleApiError(error, "GET /api/stripe/billing");
   }
 }
 
 export async function POST(request: Request) {
+  let businessId: string | undefined;
+  let plan: string | undefined;
   try {
     const ctx = await requireAuth();
+    businessId = ctx.business.id;
     await requirePermission(ctx, PERMISSIONS.MANAGE_BILLING);
 
     if (!isStripeConfigured()) {
@@ -81,14 +94,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { plan, successUrl, cancelUrl } = billingPostSchema.parse(body);
+    const parsed = billingPostSchema.parse(body);
+    const { plan: selectedPlan, successUrl, cancelUrl } = parsed;
+    plan = selectedPlan;
 
-    if (plan === "ENTERPRISE") {
+    if (selectedPlan === "ENTERPRISE") {
       return jsonError("Enterprise plans require contacting sales", 400);
     }
 
-    const priceId = validatePlanPriceId(plan);
-    const planConfig = STRIPE_PLANS[plan];
+    const priceId = validatePlanPriceId(selectedPlan);
+    const planConfig = STRIPE_PLANS[selectedPlan];
     const stripe = getStripeOrThrow();
 
     let subscription = await db.subscription.findUnique({
@@ -115,14 +130,14 @@ export async function POST(request: Request) {
         where: { businessId: ctx.business.id },
         create: {
           businessId: ctx.business.id,
-          plan: plan as SubscriptionPlan,
+          plan: selectedPlan as SubscriptionPlan,
           stripeCustomerId: customerId,
           status: "INCOMPLETE",
           stripePriceId: priceId,
         },
         update: {
           stripeCustomerId: customerId,
-          plan: plan as SubscriptionPlan,
+          plan: selectedPlan as SubscriptionPlan,
           stripePriceId: priceId,
         },
       });
@@ -131,7 +146,7 @@ export async function POST(request: Request) {
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         businessId: ctx.business.id,
-        plan,
+        plan: selectedPlan,
       },
     };
 
@@ -154,7 +169,7 @@ export async function POST(request: Request) {
       client_reference_id: ctx.business.id,
       metadata: {
         businessId: ctx.business.id,
-        plan,
+        plan: selectedPlan,
       },
       subscription_data: subscriptionData,
     });
@@ -174,6 +189,14 @@ export async function POST(request: Request) {
       sessionId: session.id,
     });
   } catch (error) {
+    if (businessId) {
+      captureMonitoringEvent({
+        type: "billing_checkout_failure",
+        businessId,
+        plan,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return handleApiError(error, "POST /api/stripe/billing");
   }
 }

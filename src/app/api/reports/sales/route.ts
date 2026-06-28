@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { handleApiError } from "@/lib/api-utils";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
+import { ensurePaidSubscription, ensureAdvancedReports } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 
@@ -14,6 +15,12 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = request.nextUrl;
+    const scope = searchParams.get("scope") ?? "basic";
+
+    if (scope === "advanced") {
+      await ensureAdvancedReports(ctx);
+    }
+
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const locationId = searchParams.get("locationId");
@@ -54,6 +61,12 @@ export async function GET(request: NextRequest) {
         refunds: {
           select: { amount: true },
         },
+        ...(scope === "advanced"
+          ? {
+              items: { select: { name: true, quantity: true, total: true } },
+              employee: { select: { name: true } },
+            }
+          : {}),
       },
     });
 
@@ -67,6 +80,9 @@ export async function GET(request: NextRequest) {
     let refundsTotal = 0;
 
     const dailyMap = new Map<string, { date: string; sales: number; orders: number }>();
+    const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
+    const employeeMap = new Map<string, { name: string; sales: number; orders: number }>();
+    const paymentMap = new Map<string, number>();
 
     for (const order of orders) {
       const orderTotal = Number(order.total);
@@ -102,6 +118,47 @@ export async function GET(request: NextRequest) {
         existing.orders += 1;
         dailyMap.set(dateKey, existing);
       }
+
+      if (scope === "advanced" && "items" in order && "employee" in order) {
+        const advancedOrder = order as typeof order & {
+          items: Array<{ name: string; quantity: number; total: unknown }>;
+          employee: { name: string } | null;
+        };
+
+        const employeeName = advancedOrder.employee?.name ?? "Unknown";
+        const employeeStats = employeeMap.get(employeeName) || {
+          name: employeeName,
+          sales: 0,
+          orders: 0,
+        };
+        employeeStats.sales += orderTotal;
+        employeeStats.orders += 1;
+        employeeMap.set(employeeName, employeeStats);
+
+        for (const item of advancedOrder.items) {
+          const existing = productMap.get(item.name) || {
+            name: item.name,
+            revenue: 0,
+            quantity: 0,
+          };
+          existing.revenue += Number(item.total);
+          existing.quantity += item.quantity;
+          productMap.set(item.name, existing);
+        }
+
+        for (const payment of order.payments) {
+          const method =
+            payment.method === "CARD"
+              ? "Card"
+              : payment.method === "CASH"
+                ? "Cash"
+                : payment.method;
+          paymentMap.set(
+            method,
+            (paymentMap.get(method) ?? 0) + Number(payment.amount)
+          );
+        }
+      }
     }
 
     const orderCount = orders.length;
@@ -112,7 +169,7 @@ export async function GET(request: NextRequest) {
       a.date.localeCompare(b.date)
     );
 
-    return NextResponse.json({
+    const response: Record<string, unknown> = {
       summary: {
         grossSales: round2(grossSales),
         netSales: round2(netSales),
@@ -131,17 +188,28 @@ export async function GET(request: NextRequest) {
         startDate: start.toISOString(),
         endDate: end.toISOString(),
         locationId: locationId || null,
+        scope,
       },
-    });
+    };
+
+    if (scope === "advanced") {
+      response.topProducts = Array.from(productMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
+      response.employeeSales = Array.from(employeeMap.values()).sort(
+        (a, b) => b.sales - a.sales
+      );
+      response.paymentMethods = Array.from(paymentMap.entries()).map(
+        ([method, amount]) => ({ method, amount: round2(amount) })
+      );
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.error("Sales report error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate sales report" },
-      { status: 500 }
-    );
+    return handleApiError(error, "GET /api/reports/sales");
   }
 }
 

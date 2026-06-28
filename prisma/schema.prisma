@@ -766,7 +766,8 @@ model Subscription {
   stripePriceId         String?
   currentPeriodEnd      DateTime?
   trialEndsAt           DateTime?
-  pastDueSince          DateTime?
+  pastDueSince              DateTime?
+  paymentActionRequiredAt   DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 

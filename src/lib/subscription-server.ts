@@ -3,17 +3,27 @@ import type { AuthContext } from "./auth";
 import { requireAuth } from "./auth";
 import { isDemoMode } from "./demo-mode";
 import { db } from "./db";
+import { captureMonitoringEvent } from "./monitoring";
 import {
+  AdvancedReportsRequiredError,
+  canAccessAdvancedReports,
   canAccessPaidApp,
   getSubscriptionAccessStatus,
+  SubscriptionLoadError,
   SubscriptionRequiredError,
   type SubscriptionAccessStatus,
 } from "./subscription-access";
 
 export {
   SubscriptionRequiredError,
+  SubscriptionLoadError,
+  AdvancedReportsRequiredError,
   PlanLimitError,
 } from "./subscription-access";
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
 
 export async function getSubscriptionForBusiness(
   businessId: string
@@ -21,10 +31,13 @@ export async function getSubscriptionForBusiness(
   try {
     return await db.subscription.findUnique({ where: { businessId } });
   } catch (error) {
-    console.error(
-      "[subscription] Failed to load subscription — run `npx prisma migrate deploy` if schema changed:",
-      error
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    captureMonitoringEvent({
+      type: "subscription_load_fallback",
+      businessId,
+      error: message,
+      environment: process.env.NODE_ENV ?? "unknown",
+    });
     return null;
   }
 }
@@ -36,12 +49,12 @@ export type SubscriptionLoadResult = {
   loadFailed: boolean;
 };
 
-/** Full access fallback when subscription row cannot be read (schema mismatch, DB outage). */
-function fullAccessFallback(): SubscriptionAccessStatus {
+/** Dev-only fallback — grants full access when subscription cannot be read. */
+function devFullAccessFallback(): SubscriptionAccessStatus {
   return {
     level: "full",
     canAccessPaidApp: true,
-    reason: "Subscription status could not be verified.",
+    reason: "Subscription status could not be verified (development fallback).",
     status: "TRIALING",
     plan: "STARTER",
     trialEndsAt: null,
@@ -49,8 +62,49 @@ function fullAccessFallback(): SubscriptionAccessStatus {
     isTrialEndingSoon: false,
     isTrialExpired: false,
     gracePeriodEndsAt: null,
+    graceDaysRemaining: null,
+    isPastDueInGrace: false,
+    isPaymentActionRequired: false,
+    isSubscriptionLoadFailed: true,
     billingUrl: "/settings/billing",
   };
+}
+
+/** Production fallback — billing-only, no paid app access. */
+function productionLoadFailedAccess(): SubscriptionAccessStatus {
+  return {
+    level: "billing_only",
+    canAccessPaidApp: false,
+    reason:
+      "We could not verify your subscription status. Billing and account settings remain available.",
+    status: "INCOMPLETE",
+    plan: "STARTER",
+    trialEndsAt: null,
+    trialDaysRemaining: null,
+    isTrialEndingSoon: false,
+    isTrialExpired: false,
+    gracePeriodEndsAt: null,
+    graceDaysRemaining: null,
+    isPastDueInGrace: false,
+    isPaymentActionRequired: false,
+    isSubscriptionLoadFailed: true,
+    billingUrl: "/settings/billing",
+  };
+}
+
+function subscriptionLoadFallback(businessId: string, error: unknown): SubscriptionAccessStatus {
+  const message = error instanceof Error ? error.message : String(error);
+  captureMonitoringEvent({
+    type: "subscription_load_fallback",
+    businessId,
+    error: message,
+    environment: process.env.NODE_ENV ?? "unknown",
+  });
+
+  if (!isProduction()) {
+    return devFullAccessFallback();
+  }
+  return productionLoadFailedAccess();
 }
 
 export async function loadSubscriptionAccess(
@@ -72,7 +126,7 @@ export async function loadSubscriptionAccess(
     );
     return {
       subscription: null,
-      access: fullAccessFallback(),
+      access: subscriptionLoadFallback(businessId, error),
       loadFailed: true,
     };
   }
@@ -107,9 +161,22 @@ export async function ensurePaidSubscription(
   const { subscription, access, loadFailed } = await loadSubscriptionAccess(
     ctx.business.id
   );
+  if (loadFailed && isProduction()) {
+    throw new SubscriptionLoadError(access.reason);
+  }
   if (loadFailed) return null;
   if (!canAccessPaidApp(access)) {
     throw new SubscriptionRequiredError(access);
+  }
+  return subscription;
+}
+
+export async function ensureAdvancedReports(
+  ctx: AuthContext
+): Promise<Subscription | null> {
+  const subscription = await ensurePaidSubscription(ctx);
+  if (subscription && !canAccessAdvancedReports(subscription.plan)) {
+    throw new AdvancedReportsRequiredError();
   }
   return subscription;
 }

@@ -22,7 +22,7 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
-  const { access } = await loadSubscriptionAccess(ctx.business.id);
+  const { access, loadFailed } = await loadSubscriptionAccess(ctx.business.id);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -33,7 +33,7 @@ export default async function DashboardLayout({
           locationName={ctx.location?.name}
           authEnabled={isClerkConfigured()}
         />
-        <SubscriptionGate access={access}>
+        <SubscriptionGate access={access} loadFailed={loadFailed}>
           <main className="flex-1 overflow-y-auto bg-slate-50 p-6">{children}</main>
         </SubscriptionGate>
       </div>

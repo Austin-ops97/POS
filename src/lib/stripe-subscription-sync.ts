@@ -2,6 +2,11 @@ import type { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { db } from "./db";
 import type Stripe from "stripe";
 
+export type SubscriptionDbClient = Pick<
+  typeof db,
+  "subscription" | "stripeWebhookEvent"
+>;
+
 export function mapStripeSubscriptionStatus(status: string): SubscriptionStatus {
   const map: Record<string, SubscriptionStatus> = {
     active: "ACTIVE",
@@ -40,7 +45,8 @@ export function getStripeSubscriptionPeriodEnd(
 }
 
 export async function syncSubscriptionFromStripe(
-  subscription: Stripe.Subscription
+  subscription: Stripe.Subscription,
+  client: SubscriptionDbClient = db
 ) {
   const businessId = subscription.metadata?.businessId;
   if (!businessId) return;
@@ -53,7 +59,7 @@ export async function syncSubscriptionFromStripe(
       ? subscription.customer
       : subscription.customer?.id;
 
-  const existing = await db.subscription.findUnique({ where: { businessId } });
+  const existing = await client.subscription.findUnique({ where: { businessId } });
 
   const pastDueSince =
     status === "PAST_DUE"
@@ -62,7 +68,10 @@ export async function syncSubscriptionFromStripe(
         ? null
         : existing?.pastDueSince;
 
-  await db.subscription.upsert({
+  const clearPaymentAction =
+    status === "ACTIVE" || status === "TRIALING";
+
+  await client.subscription.upsert({
     where: { businessId },
     create: {
       businessId,
@@ -76,6 +85,7 @@ export async function syncSubscriptionFromStripe(
         ? new Date(subscription.trial_end * 1000)
         : undefined,
       pastDueSince,
+      paymentActionRequiredAt: null,
     },
     update: {
       plan,
@@ -88,27 +98,30 @@ export async function syncSubscriptionFromStripe(
         ? new Date(subscription.trial_end * 1000)
         : null,
       pastDueSince,
+      ...(clearPaymentAction ? { paymentActionRequiredAt: null } : {}),
     },
   });
 }
 
 export async function markWebhookEventProcessed(
   eventId: string,
-  eventType: string
+  eventType: string,
+  client: SubscriptionDbClient = db
 ): Promise<boolean> {
-  const existing = await db.stripeWebhookEvent.findUnique({
+  const existing = await client.stripeWebhookEvent.findUnique({
     where: { id: eventId },
   });
   if (existing) return false;
 
-  await db.stripeWebhookEvent.create({
+  await client.stripeWebhookEvent.create({
     data: { id: eventId, type: eventType },
   });
   return true;
 }
 
 export async function syncSubscriptionFromCheckoutSession(
-  session: Stripe.Checkout.Session
+  session: Stripe.Checkout.Session,
+  client: SubscriptionDbClient = db
 ) {
   const businessId = session.metadata?.businessId;
   if (!businessId) return;
@@ -118,7 +131,7 @@ export async function syncSubscriptionFromCheckoutSession(
     typeof session.customer === "string" ? session.customer : session.customer?.id;
 
   if (customerId) {
-    await db.subscription.upsert({
+    await client.subscription.upsert({
       where: { businessId },
       create: {
         businessId,
@@ -138,40 +151,50 @@ export async function syncSubscriptionFromCheckoutSession(
       typeof session.subscription === "string"
         ? session.subscription
         : session.subscription.id;
-    await db.subscription.update({
+    await client.subscription.update({
       where: { businessId },
       data: { stripeSubscriptionId: subscriptionId },
     });
   }
 }
 
-export async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+export async function handleInvoicePaymentSucceeded(
+  invoice: Stripe.Invoice,
+  client: SubscriptionDbClient = db
+) {
   const customerId =
     typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
   if (customerId) {
-    await db.subscription.updateMany({
+    await client.subscription.updateMany({
       where: {
         stripeCustomerId: customerId,
         status: { in: ["PAST_DUE", "UNPAID"] },
       },
-      data: { status: "ACTIVE", pastDueSince: null },
+      data: {
+        status: "ACTIVE",
+        pastDueSince: null,
+        paymentActionRequiredAt: null,
+      },
     });
   }
 }
 
-export async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+export async function handleInvoicePaymentFailed(
+  invoice: Stripe.Invoice,
+  client: SubscriptionDbClient = db
+) {
   const customerId =
     typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
 
   if (!customerId) return;
 
-  const existing = await db.subscription.findFirst({
+  const existing = await client.subscription.findFirst({
     where: { stripeCustomerId: customerId },
   });
   if (!existing) return;
 
-  await db.subscription.update({
+  await client.subscription.update({
     where: { id: existing.id },
     data: {
       status: "PAST_DUE",
@@ -180,16 +203,35 @@ export async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   });
 }
 
-export async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+export async function handleInvoicePaymentActionRequired(
+  invoice: Stripe.Invoice,
+  client: SubscriptionDbClient = db
+) {
+  const customerId =
+    typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+
+  if (!customerId) return;
+
+  await client.subscription.updateMany({
+    where: { stripeCustomerId: customerId },
+    data: { paymentActionRequiredAt: new Date() },
+  });
+}
+
+export async function handleSubscriptionDeleted(
+  subscription: Stripe.Subscription,
+  client: SubscriptionDbClient = db
+) {
   const businessId = subscription.metadata?.businessId;
   if (!businessId) return;
 
-  await db.subscription.update({
+  await client.subscription.update({
     where: { businessId },
     data: {
       status: "CANCELED",
       stripeSubscriptionId: null,
       pastDueSince: null,
+      paymentActionRequiredAt: null,
     },
   });
 }

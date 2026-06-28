@@ -17,6 +17,10 @@ export type SubscriptionAccessStatus = {
   isTrialEndingSoon: boolean;
   isTrialExpired: boolean;
   gracePeriodEndsAt: Date | null;
+  graceDaysRemaining: number | null;
+  isPastDueInGrace: boolean;
+  isPaymentActionRequired: boolean;
+  isSubscriptionLoadFailed: boolean;
   billingUrl: string;
 };
 
@@ -77,6 +81,30 @@ export class SubscriptionRequiredError extends Error {
   }
 }
 
+export class SubscriptionLoadError extends Error {
+  readonly code = "SUBSCRIPTION_LOAD_FAILED" as const;
+  readonly billingUrl: string;
+
+  constructor(message: string, billingUrl = BILLING_URL) {
+    super(message);
+    this.name = "SubscriptionLoadError";
+    this.billingUrl = billingUrl;
+  }
+}
+
+export class AdvancedReportsRequiredError extends Error {
+  readonly code = "ADVANCED_REPORTS_REQUIRED" as const;
+  readonly billingUrl: string;
+
+  constructor(billingUrl = BILLING_URL) {
+    super(
+      "Advanced reports require a Pro, Multi-Location, or Enterprise plan. Upgrade to access product, employee, and payment breakdowns."
+    );
+    this.name = "AdvancedReportsRequiredError";
+    this.billingUrl = billingUrl;
+  }
+}
+
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -94,6 +122,24 @@ function addDays(date: Date, days: number): Date {
   return d;
 }
 
+function graceFields(
+  graceStart: Date,
+  now: Date
+): { gracePeriodEndsAt: Date; graceDaysRemaining: number; inGrace: boolean } {
+  const gracePeriodEndsAt = addDays(graceStart, PAST_DUE_GRACE_DAYS);
+  const inGrace = now <= gracePeriodEndsAt;
+  const graceDaysRemaining = inGrace ? daysBetween(now, gracePeriodEndsAt) : 0;
+  return { gracePeriodEndsAt, graceDaysRemaining, inGrace };
+}
+
+function emptyGrace() {
+  return {
+    gracePeriodEndsAt: null as Date | null,
+    graceDaysRemaining: null as number | null,
+    isPastDueInGrace: false,
+  };
+}
+
 export function isBillingExemptPath(pathname: string): boolean {
   return BILLING_EXEMPT_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -105,23 +151,34 @@ export function getPlanEntitlements(plan: SubscriptionPlan): PlanEntitlements {
 }
 
 export function getSubscriptionAccessStatus(
-  subscription: Subscription | null
+  subscription: Subscription | null,
+  options?: { loadFailed?: boolean }
 ): SubscriptionAccessStatus {
   const now = new Date();
   const billingUrl = BILLING_URL;
+  const loadFailed = options?.loadFailed ?? false;
+
+  const paymentActionRequired = Boolean(
+    subscription?.paymentActionRequiredAt &&
+      subscription.paymentActionRequiredAt <= now
+  );
 
   if (!subscription) {
     return {
       level: "billing_only",
       canAccessPaidApp: false,
-      reason: "No subscription found. Choose a plan to continue using NexaPOS.",
+      reason: loadFailed
+        ? "We could not verify your subscription status. Billing and account settings remain available."
+        : "No subscription found. Choose a plan to continue using NexaPOS.",
       status: "INCOMPLETE",
       plan: "STARTER",
       trialEndsAt: null,
       trialDaysRemaining: null,
       isTrialEndingSoon: false,
       isTrialExpired: true,
-      gracePeriodEndsAt: null,
+      ...emptyGrace(),
+      isPaymentActionRequired: false,
+      isSubscriptionLoadFailed: loadFailed,
       billingUrl,
     };
   }
@@ -145,6 +202,8 @@ export function getSubscriptionAccessStatus(
     trialDaysRemaining,
     isTrialEndingSoon,
     isTrialExpired,
+    isPaymentActionRequired: paymentActionRequired,
+    isSubscriptionLoadFailed: loadFailed,
     billingUrl,
   };
 
@@ -153,8 +212,10 @@ export function getSubscriptionAccessStatus(
       ...base,
       level: "full",
       canAccessPaidApp: true,
-      reason: "Subscription is active.",
-      gracePeriodEndsAt: null,
+      reason: paymentActionRequired
+        ? "Additional payment authentication is required."
+        : "Subscription is active.",
+      ...emptyGrace(),
     };
   }
 
@@ -165,7 +226,7 @@ export function getSubscriptionAccessStatus(
         level: "full",
         canAccessPaidApp: true,
         reason: "Trial is active.",
-        gracePeriodEndsAt: null,
+        ...emptyGrace(),
       };
     }
     return {
@@ -173,28 +234,40 @@ export function getSubscriptionAccessStatus(
       level: "billing_only",
       canAccessPaidApp: false,
       reason: "Your free trial has ended. Subscribe to continue using NexaPOS.",
-      gracePeriodEndsAt: null,
+      ...emptyGrace(),
     };
   }
 
   if (subscription.status === "PAST_DUE") {
-    const graceStart = subscription.pastDueSince ?? subscription.currentPeriodEnd ?? subscription.updatedAt;
-    const gracePeriodEndsAt = addDays(graceStart, PAST_DUE_GRACE_DAYS);
-    if (now <= gracePeriodEndsAt) {
+    const graceStart =
+      subscription.pastDueSince ??
+      subscription.currentPeriodEnd ??
+      subscription.updatedAt;
+    const { gracePeriodEndsAt, graceDaysRemaining, inGrace } = graceFields(
+      graceStart,
+      now
+    );
+    if (inGrace) {
       return {
         ...base,
         level: "full",
         canAccessPaidApp: true,
-        reason: "Subscription is past due. Update your payment method to avoid interruption.",
+        reason:
+          "Subscription is past due. Update your payment method to avoid interruption.",
         gracePeriodEndsAt,
+        graceDaysRemaining,
+        isPastDueInGrace: true,
       };
     }
     return {
       ...base,
       level: "billing_only",
       canAccessPaidApp: false,
-      reason: "Your subscription is past due. Update your payment method to restore access.",
+      reason:
+        "Your subscription is past due. Update your payment method to restore access.",
       gracePeriodEndsAt,
+      graceDaysRemaining: 0,
+      isPastDueInGrace: false,
     };
   }
 
@@ -203,8 +276,9 @@ export function getSubscriptionAccessStatus(
       ...base,
       level: "billing_only",
       canAccessPaidApp: false,
-      reason: "Your subscription has been canceled. Choose a plan to restore access.",
-      gracePeriodEndsAt: null,
+      reason:
+        "Your subscription has been canceled. Choose a plan to restore access.",
+      ...emptyGrace(),
     };
   }
 
@@ -213,8 +287,9 @@ export function getSubscriptionAccessStatus(
       ...base,
       level: "billing_only",
       canAccessPaidApp: false,
-      reason: "Your subscription is unpaid. Update your payment method to restore access.",
-      gracePeriodEndsAt: null,
+      reason:
+        "Your subscription is unpaid. Update your payment method to restore access.",
+      ...emptyGrace(),
     };
   }
 
@@ -224,7 +299,7 @@ export function getSubscriptionAccessStatus(
     level: "billing_only",
     canAccessPaidApp: false,
     reason: "Complete your subscription setup to access NexaPOS.",
-    gracePeriodEndsAt: null,
+    ...emptyGrace(),
   };
 }
 

@@ -9,11 +9,13 @@ import {
 import {
   handleInvoicePaymentFailed,
   handleInvoicePaymentSucceeded,
+  handleInvoicePaymentActionRequired,
   handleSubscriptionDeleted,
   markWebhookEventProcessed,
   syncSubscriptionFromCheckoutSession,
   syncSubscriptionFromStripe,
 } from "@/lib/stripe-subscription-sync";
+import { captureMonitoringEvent } from "@/lib/monitoring";
 import { getStripeOrThrow } from "@/lib/stripe";
 import type { Order, Payment } from "@prisma/client";
 import type Stripe from "stripe";
@@ -416,10 +418,7 @@ async function dispatchWebhookEvent(event: Stripe.Event) {
       await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
       break;
     case "invoice.payment_action_required":
-      console.info(
-        "Invoice payment action required:",
-        (event.data.object as Stripe.Invoice).id
-      );
+      await handleInvoicePaymentActionRequired(event.data.object as Stripe.Invoice);
       break;
     default:
       break;
@@ -464,6 +463,14 @@ export async function POST(request: Request) {
 
   const shouldProcess = await markWebhookEventProcessed(event.id, event.type);
   if (!shouldProcess) {
+    captureMonitoringEvent(
+      {
+        type: "webhook_duplicate",
+        eventId: event.id,
+        eventType: event.type,
+      },
+      "warning"
+    );
     return NextResponse.json({ received: true, duplicate: true });
   }
 
@@ -472,6 +479,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   } catch (error) {
     await db.stripeWebhookEvent.delete({ where: { id: event.id } }).catch(() => undefined);
+    const message = error instanceof Error ? error.message : String(error);
+    captureMonitoringEvent({
+      type: "webhook_failure",
+      eventId: event.id,
+      eventType: event.type,
+      error: message,
+    });
     console.error(`Webhook handler error for ${event.type} (${event.id}):`, error);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }

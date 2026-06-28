@@ -9,8 +9,11 @@ import {
   AlertTriangle,
   ExternalLink,
   CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 import { STRIPE_PLANS } from "@/lib/stripe";
+import { getBillingStateInfo } from "@/lib/billing-states";
+import type { SubscriptionAccessStatus } from "@/lib/subscription-access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,10 +26,12 @@ type SubscriptionInfo = {
   stripeCustomerId?: string | null;
   gracePeriodEndsAt?: string | null;
   trialDaysRemaining?: number | null;
+  paymentActionRequiredAt?: string | null;
 };
 
 type BillingSettingsProps = {
   subscription: SubscriptionInfo | null;
+  access: SubscriptionAccessStatus;
 };
 
 const PLAN_KEYS = ["STARTER", "PRO", "MULTI_LOCATION"] as const;
@@ -44,21 +49,20 @@ function formatDate(iso: string) {
   });
 }
 
-function statusBadgeVariant(status: string): "success" | "warning" | "destructive" | "secondary" {
-  if (status === "ACTIVE" || status === "TRIALING") return "success";
-  if (status === "PAST_DUE") return "warning";
-  if (status === "CANCELED" || status === "UNPAID") return "destructive";
-  return "secondary";
+function statusBadgeVariant(
+  variant: "success" | "warning" | "destructive" | "secondary"
+): "success" | "warning" | "destructive" | "secondary" {
+  return variant;
 }
 
-export function BillingSettings({ subscription }: BillingSettingsProps) {
+export function BillingSettings({ subscription, access }: BillingSettingsProps) {
   const searchParams = useSearchParams();
   const [portalLoading, setPortalLoading] = useState(false);
   const [upgradingPlan, setUpgradingPlan] = useState<PlanKey | null>(null);
 
   const currentPlan = subscription?.plan ?? "STARTER";
-  const status = subscription?.status ?? "TRIALING";
   const hasStripeCustomer = Boolean(subscription?.stripeCustomerId);
+  const stateInfo = getBillingStateInfo(access);
 
   useEffect(() => {
     if (searchParams.get("checkout") === "success") {
@@ -126,37 +130,65 @@ export function BillingSettings({ subscription }: BillingSettingsProps) {
     }
   }
 
-  const showPastDueWarning = status === "PAST_DUE";
-  const showCanceledWarning = status === "CANCELED" || status === "UNPAID";
-  const showTrialExpired =
-    status === "TRIALING" &&
-    subscription?.trialEndsAt &&
-    new Date(subscription.trialEndsAt) <= new Date();
+  const showWarningCard =
+    stateInfo.variant === "warning" || stateInfo.variant === "destructive";
+
+  const primaryAction =
+    stateInfo.state === "payment_action_required" ||
+    stateInfo.state === "past_due_grace" ||
+    stateInfo.state === "past_due_expired" ||
+    stateInfo.state === "unpaid" ||
+    stateInfo.state === "active"
+      ? handleOpenPortal
+      : () => {
+          const firstNonCurrent = PLAN_KEYS.find((k) => k !== currentPlan);
+          if (firstNonCurrent) handlePlanCheckout(firstNonCurrent);
+        };
 
   return (
     <>
-      {(showPastDueWarning || showCanceledWarning || showTrialExpired) && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="flex items-start gap-3 py-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
-            <div className="text-sm text-amber-900">
-              {showTrialExpired && (
-                <p className="font-medium">Your free trial has ended.</p>
-              )}
-              {showPastDueWarning && (
-                <p className="font-medium">Your payment is past due.</p>
-              )}
-              {showCanceledWarning && (
-                <p className="font-medium">Your subscription is not active.</p>
-              )}
-              <p className="mt-1">
-                Choose a plan or update your payment method to restore full access to
-                NexaPOS.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card
+        className={
+          showWarningCard
+            ? stateInfo.variant === "destructive"
+              ? "border-red-200 bg-red-50"
+              : "border-amber-200 bg-amber-50"
+            : "border-slate-200"
+        }
+      >
+        <CardContent className="flex items-start gap-3 py-4">
+          {access.isPaymentActionRequired ? (
+            <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-600" />
+          ) : (
+            <AlertTriangle
+              className={`mt-0.5 h-5 w-5 ${
+                stateInfo.variant === "destructive" ? "text-red-600" : "text-amber-600"
+              }`}
+            />
+          )}
+          <div className="flex-1 text-sm">
+            <p className="font-medium text-slate-900">{stateInfo.title}</p>
+            <p className="mt-1 text-slate-600">{stateInfo.description}</p>
+            <p className="mt-2 text-slate-700">{stateInfo.nextAction}</p>
+            <Button
+              className="mt-3"
+              size="sm"
+              variant={showWarningCard ? "default" : "outline"}
+              disabled={
+                (stateInfo.state === "active" ||
+                  stateInfo.state === "payment_action_required" ||
+                  stateInfo.state === "past_due_grace" ||
+                  stateInfo.state === "past_due_expired" ||
+                  stateInfo.state === "unpaid") &&
+                (!hasStripeCustomer || portalLoading)
+              }
+              onClick={primaryAction}
+            >
+              {portalLoading ? "Opening..." : stateInfo.actionLabel}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -165,36 +197,40 @@ export function BillingSettings({ subscription }: BillingSettingsProps) {
             Current Plan
           </CardTitle>
           <div className="space-y-2 text-sm text-slate-500">
-              <div className="flex flex-wrap items-center gap-2">
-                <span>
-                  {STRIPE_PLANS[currentPlan as PlanKey]?.name ?? currentPlan}
-                </span>
-                <Badge variant={statusBadgeVariant(status)}>
-                  {status.replace(/_/g, " ")}
-                </Badge>
-              </div>
-              {subscription?.trialEndsAt && status === "TRIALING" && !showTrialExpired && (
-                <p className="text-slate-500">
-                  Trial ends {formatDate(subscription.trialEndsAt)}
-                  {subscription.trialDaysRemaining != null &&
-                    ` (${subscription.trialDaysRemaining} day${subscription.trialDaysRemaining === 1 ? "" : "s"} left)`}
-                </p>
-              )}
-              {subscription?.currentPeriodEnd && status === "ACTIVE" && (
-                <p className="text-slate-500">
-                  Next billing date {formatDate(subscription.currentPeriodEnd)}
-                </p>
-              )}
-              {subscription?.gracePeriodEndsAt && status === "PAST_DUE" && (
-                <p className="text-slate-500">
-                  Grace period ends {formatDate(subscription.gracePeriodEndsAt)}
-                </p>
-              )}
-              {!hasStripeCustomer && (
-                <p className="text-slate-500">
-                  No payment method on file. Choose a plan to add billing details.
-                </p>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span>
+                {STRIPE_PLANS[currentPlan as PlanKey]?.name ?? currentPlan}
+              </span>
+              <Badge variant={statusBadgeVariant(stateInfo.variant)}>
+                {access.status.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            {subscription?.trialEndsAt && access.status === "TRIALING" && !access.isTrialExpired && (
+              <p>
+                Trial ends {formatDate(subscription.trialEndsAt)}
+                {access.trialDaysRemaining != null &&
+                  ` (${access.trialDaysRemaining} day${access.trialDaysRemaining === 1 ? "" : "s"} left)`}
+              </p>
+            )}
+            {subscription?.currentPeriodEnd && access.status === "ACTIVE" && (
+              <p>Next billing date {formatDate(subscription.currentPeriodEnd)}</p>
+            )}
+            {access.gracePeriodEndsAt && access.isPastDueInGrace && (
+              <p>
+                Grace period ends {formatDate(access.gracePeriodEndsAt.toISOString())}
+                {access.graceDaysRemaining != null &&
+                  ` (${access.graceDaysRemaining} day${access.graceDaysRemaining === 1 ? "" : "s"} left)`}
+              </p>
+            )}
+            {access.isPaymentActionRequired && subscription?.paymentActionRequiredAt && (
+              <p>
+                Payment action requested{" "}
+                {formatDate(subscription.paymentActionRequiredAt)}
+              </p>
+            )}
+            {!hasStripeCustomer && (
+              <p>No payment method on file. Choose a plan to add billing details.</p>
+            )}
           </div>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
@@ -208,7 +244,7 @@ export function BillingSettings({ subscription }: BillingSettingsProps) {
           </Button>
           <Button
             variant="outline"
-            disabled={!hasStripeCustomer}
+            disabled={!hasStripeCustomer || portalLoading}
             onClick={handleOpenPortal}
           >
             <CreditCard className="mr-2 h-4 w-4" />

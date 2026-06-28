@@ -11,9 +11,8 @@ import { BillingSettings } from "@/components/dashboard/billing-settings";
 export default async function BillingSettingsPage() {
   const ctx = await requireAuth();
   const { subscription: dbSubscription } = await getStripeSettings(ctx);
-  const access = getSubscriptionAccessStatus(dbSubscription as Subscription | null);
-
   const sub = dbSubscription as Subscription | null;
+  const access = getSubscriptionAccessStatus(sub);
 
   const subscriptionInfo = sub
     ? {
@@ -30,6 +29,9 @@ export default async function BillingSettingsPage() {
           ? access.gracePeriodEndsAt.toISOString()
           : null,
         trialDaysRemaining: access.trialDaysRemaining,
+        paymentActionRequiredAt: sub.paymentActionRequiredAt
+          ? new Date(sub.paymentActionRequiredAt).toISOString()
+          : null,
       }
     : null;
 
@@ -50,7 +52,7 @@ export default async function BillingSettingsPage() {
       </div>
 
       <Suspense fallback={null}>
-        <BillingSettings subscription={subscriptionInfo} />
+        <BillingSettings subscription={subscriptionInfo} access={access} />
       </Suspense>
     </div>
   );

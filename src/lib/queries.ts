@@ -417,7 +417,11 @@ export async function getBusinessSettings(ctx: AuthContext) {
   return db.businessSetting.findUnique({ where: { businessId: ctx.business.id } });
 }
 
-export async function getReportsData(ctx: AuthContext) {
+export async function getReportsData(
+  ctx: AuthContext,
+  options?: { includeAdvanced?: boolean }
+) {
+  const includeAdvanced = options?.includeAdvanced ?? true;
   if (isDemoMode()) {
     return {
       salesByDay: [
@@ -429,19 +433,25 @@ export async function getReportsData(ctx: AuthContext) {
         { date: "Sat", sales: 120, orders: 5 },
         { date: "Sun", sales: 75, orders: 3 },
       ],
-      topProducts: demoDashboardStats.topProducts.map((p) => ({
-        name: p.name,
-        revenue: p.revenue,
-        quantity: p.quantity,
-      })),
-      employeeSales: [
-        { name: "Chris Cashier", sales: 58.97, orders: 2 },
-        { name: "Maria Manager", sales: 32.46, orders: 1 },
-      ],
-      paymentMethods: [
-        { method: "Card", amount: 64.38 },
-        { method: "Cash", amount: 27.05 },
-      ],
+      topProducts: includeAdvanced
+        ? demoDashboardStats.topProducts.map((p) => ({
+            name: p.name,
+            revenue: p.revenue,
+            quantity: p.quantity,
+          }))
+        : [],
+      employeeSales: includeAdvanced
+        ? [
+            { name: "Chris Cashier", sales: 58.97, orders: 2 },
+            { name: "Maria Manager", sales: 32.46, orders: 1 },
+          ]
+        : [],
+      paymentMethods: includeAdvanced
+        ? [
+            { method: "Card", amount: 64.38 },
+            { method: "Cash", amount: 27.05 },
+          ]
+        : [],
     };
   }
 
@@ -519,15 +529,19 @@ export async function getReportsData(ctx: AuthContext) {
     salesByDay: Array.from(dailyMap.values()).sort((a, b) =>
       a.date.localeCompare(b.date)
     ),
-    topProducts: Array.from(productMap.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10),
-    employeeSales: Array.from(employeeMap.values()).sort(
-      (a, b) => b.sales - a.sales
-    ),
-    paymentMethods: Array.from(paymentMap.entries()).map(([method, amount]) => ({
-      method,
-      amount,
-    })),
+    topProducts: includeAdvanced
+      ? Array.from(productMap.values())
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 10)
+      : [],
+    employeeSales: includeAdvanced
+      ? Array.from(employeeMap.values()).sort((a, b) => b.sales - a.sales)
+      : [],
+    paymentMethods: includeAdvanced
+      ? Array.from(paymentMap.entries()).map(([method, amount]) => ({
+          method,
+          amount,
+        }))
+      : [],
   };
 }
