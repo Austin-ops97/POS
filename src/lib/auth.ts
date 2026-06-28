@@ -4,6 +4,9 @@ import { isDemoMode } from "./demo-mode";
 import { demoAuthContext } from "./demo-data";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
 
+const SINGLE_USER_CLERK_ID = "single-user-pos";
+const SINGLE_USER_EMAIL = "owner@pos.local";
+
 export type AuthContext = {
   clerkId: string;
   userId: string;
@@ -17,8 +20,29 @@ export type AuthContext = {
   location: Location | null;
 };
 
+export function isClerkConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+      process.env.CLERK_SECRET_KEY
+  );
+}
+
+async function getSingleUser() {
+  return db.user.upsert({
+    where: { clerkId: SINGLE_USER_CLERK_ID },
+    create: {
+      clerkId: SINGLE_USER_CLERK_ID,
+      email: SINGLE_USER_EMAIL,
+      firstName: "POS",
+      lastName: "Owner",
+    },
+    update: {},
+  });
+}
+
 export async function getAuthUser() {
   if (isDemoMode()) return null;
+  if (!isClerkConfigured()) return getSingleUser();
 
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
@@ -56,7 +80,7 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
 
   const employee = await db.employeeProfile.findFirst({
     where: {
-      userId: user.id,
+      ...(isClerkConfigured() ? { userId: user.id } : {}),
       ...(businessId ? { businessId } : {}),
       status: "ACTIVE",
       deletedAt: null,

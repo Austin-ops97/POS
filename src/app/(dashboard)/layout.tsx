@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/auth";
+import { getAuthContext, isClerkConfigured } from "@/lib/auth";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({
   children,
@@ -25,6 +27,7 @@ export default async function DashboardLayout({
         <Topbar
           businessName={ctx.business.name}
           locationName={ctx.location?.name}
+          authEnabled={isClerkConfigured()}
         />
         <main className="flex-1 overflow-y-auto bg-slate-50 p-6">{children}</main>
       </div>

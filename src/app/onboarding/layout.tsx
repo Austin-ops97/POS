@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { isDemoMode } from "@/lib/demo-mode";
+import { isClerkConfigured } from "@/lib/auth";
 
 export default async function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  if (isDemoMode()) {
-    redirect("/dashboard");
+  if (!isClerkConfigured()) {
+    return children;
   }
 
   const { userId } = await auth();

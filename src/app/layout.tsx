@@ -20,13 +20,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const content = (
+    <>
+      {children}
+      <Toaster position="top-right" richColors />
+    </>
+  );
+  const clerkEnabled = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+      process.env.CLERK_SECRET_KEY
+  );
+
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <ClerkProvider>
-          {children}
-          <Toaster position="top-right" richColors />
-        </ClerkProvider>
+        {clerkEnabled ? <ClerkProvider>{content}</ClerkProvider> : content}
       </body>
     </html>
   );
