@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
-import { getClientIp, handleApiError } from "@/lib/api-utils";
+import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
-import { getStripeOrThrow } from "@/lib/stripe";
+import { getStripeOrThrow, isStripeConfigured } from "@/lib/stripe";
 import { z } from "zod";
 
 const connectPostSchema = z.object({
@@ -95,6 +95,13 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.MANAGE_STRIPE);
+
+    if (!isStripeConfigured()) {
+      return jsonError(
+        "Stripe is not configured. Set STRIPE_SECRET_KEY in your environment and enable Connect in the Stripe Dashboard.",
+        503
+      );
+    }
 
     const body = await request.json();
     const { returnUrl, refreshUrl } = connectPostSchema.parse(body);

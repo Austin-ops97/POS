@@ -40,10 +40,16 @@ export const STRIPE_PLANS = {
   },
 } as const;
 
+export function isStripeConfigured(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+}
+
 export function getStripeOrThrow(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) {
-    throw new Error("Stripe is not configured. Set STRIPE_SECRET_KEY.");
+    throw new Error(
+      "Stripe is not configured. Set STRIPE_SECRET_KEY in your environment."
+    );
   }
 
   stripeClient ??= new Stripe(secretKey, {

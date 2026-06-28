@@ -35,6 +35,18 @@ export function handleApiError(error: unknown, context: string) {
     if (error.message.startsWith("Missing permission:")) {
       return apiError(error.message, 403);
     }
+    if (error.message.includes("Stripe is not configured")) {
+      return apiError(error.message, 503);
+    }
+    if (
+      error.name === "PrismaClientInitializationError" ||
+      error.message.includes("DATABASE_URL")
+    ) {
+      return apiError(
+        "Database is not configured. Set DATABASE_URL in your environment.",
+        503
+      );
+    }
   }
 
   console.error(`${context}:`, error);

@@ -358,7 +358,15 @@ export default function OnboardingPage() {
   async function handleConnectStripe() {
     setSubmitting(true);
     try {
-      const res = await fetch("/api/stripe/connect", { method: "POST" });
+      const baseUrl = window.location.origin;
+      const res = await fetch("/api/stripe/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          returnUrl: `${baseUrl}/onboarding`,
+          refreshUrl: `${baseUrl}/onboarding`,
+        }),
+      });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to start Stripe onboarding");
