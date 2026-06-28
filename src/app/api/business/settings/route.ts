@@ -15,15 +15,21 @@ export async function PATCH(request: Request) {
       create: {
         businessId: ctx.business.id,
         receiptFooter: data.receiptFooter || null,
+        returnPolicy: data.returnPolicy || null,
         showCashierOnReceipt: data.showCashierOnReceipt,
         showCustomerOnReceipt: data.showCustomerOnReceipt,
+        showBusinessEmailOnReceipt: data.showBusinessEmailOnReceipt,
+        showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
         showSkuOnReceipt: data.showSkuOnReceipt,
         enableReceiptPrinting: data.enableReceiptPrinting,
       },
       update: {
         receiptFooter: data.receiptFooter || null,
+        returnPolicy: data.returnPolicy || null,
         showCashierOnReceipt: data.showCashierOnReceipt,
         showCustomerOnReceipt: data.showCustomerOnReceipt,
+        showBusinessEmailOnReceipt: data.showBusinessEmailOnReceipt,
+        showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
         showSkuOnReceipt: data.showSkuOnReceipt,
         enableReceiptPrinting: data.enableReceiptPrinting,
       },
@@ -31,8 +37,11 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       receiptFooter: settings.receiptFooter,
+      returnPolicy: settings.returnPolicy,
       showCashierOnReceipt: settings.showCashierOnReceipt,
       showCustomerOnReceipt: settings.showCustomerOnReceipt,
+      showBusinessEmailOnReceipt: settings.showBusinessEmailOnReceipt,
+      showBusinessPhoneOnReceipt: settings.showBusinessPhoneOnReceipt,
       showSkuOnReceipt: settings.showSkuOnReceipt,
       enableReceiptPrinting: settings.enableReceiptPrinting,
     });

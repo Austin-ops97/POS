@@ -1,10 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  Printer,
-  Mail,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getOrderById } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -18,6 +14,7 @@ import {
   getPaymentStatusVariant,
 } from "@/lib/status-utils";
 import { OrderRefundActions } from "@/components/dashboard/order-refund-actions";
+import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions";
 
 export default async function OrderDetailPage({
   params,
@@ -65,6 +62,12 @@ export default async function OrderDetailPage({
     }
   );
 
+  const latestReceipt = order.receipts?.[0];
+  const customerEmail =
+    order.customer && "email" in order.customer
+      ? (order.customer.email as string | undefined)
+      : undefined;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -92,7 +95,7 @@ export default async function OrderDetailPage({
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-3 lg:flex-row lg:items-start">
           {showRefund && (
             <OrderRefundActions
               orderId={order.id}
@@ -101,14 +104,19 @@ export default async function OrderDetailPage({
               items={refundItems}
             />
           )}
-          <Button variant="outline">
-            <Printer className="h-4 w-4" />
-            Print Receipt
-          </Button>
-          <Button variant="outline">
-            <Mail className="h-4 w-4" />
-            Email Receipt
-          </Button>
+          <div className="min-w-[280px]">
+            <OrderReceiptActions
+              orderId={order.id}
+              defaultEmail={customerEmail}
+              emailedTo={latestReceipt?.emailedTo}
+              lastEmailedAt={
+                latestReceipt?.lastEmailedAt
+                  ? new Date(latestReceipt.lastEmailedAt).toISOString()
+                  : undefined
+              }
+              printed={latestReceipt?.printed}
+            />
+          </div>
         </div>
       </div>
 
@@ -280,20 +288,38 @@ export default async function OrderDetailPage({
             </Card>
           )}
 
-          {Array.isArray((order as unknown as { receipts?: unknown[] }).receipts) && (order as unknown as { receipts: unknown[] }).receipts.length > 0 && (
+          {order.receipts && order.receipts.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Receipts</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-sm">
-                  {(order as unknown as { receipts: Array<{ id: string; receiptNumber: string; printed?: boolean; emailedTo?: string }> }).receipts.map((receipt) => (
-                    <li key={receipt.id} className="text-slate-600">
-                      {receipt.receiptNumber}
-                      {receipt.printed && " · Printed"}
-                      {receipt.emailedTo && ` · Emailed to ${receipt.emailedTo}`}
-                    </li>
-                  ))}
+                  {order.receipts.map(
+                    (receipt: {
+                      id: string;
+                      receiptNumber: string;
+                      printed?: boolean;
+                      printedAt?: Date | string | null;
+                      emailedTo?: string | null;
+                      lastEmailedAt?: Date | string | null;
+                    }) => (
+                      <li key={receipt.id} className="text-slate-600">
+                        <span className="font-medium text-slate-900">
+                          {receipt.receiptNumber}
+                        </span>
+                        {receipt.printed && " · Printed"}
+                        {receipt.emailedTo
+                          ? ` · Emailed to ${receipt.emailedTo}`
+                          : " · Not emailed"}
+                        {receipt.lastEmailedAt && (
+                          <span className="block text-xs text-slate-500">
+                            Last emailed {formatDate(receipt.lastEmailedAt)}
+                          </span>
+                        )}
+                      </li>
+                    )
+                  )}
                 </ul>
               </CardContent>
             </Card>

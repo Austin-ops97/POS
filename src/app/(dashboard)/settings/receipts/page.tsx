@@ -11,8 +11,11 @@ export default async function ReceiptsSettingsPage() {
 
   const receiptSettings = {
     receiptFooter: settings?.receiptFooter ?? "",
+    returnPolicy: settings?.returnPolicy ?? "",
     showCashierOnReceipt: settings?.showCashierOnReceipt ?? true,
     showCustomerOnReceipt: settings?.showCustomerOnReceipt ?? true,
+    showBusinessEmailOnReceipt: settings?.showBusinessEmailOnReceipt ?? true,
+    showBusinessPhoneOnReceipt: settings?.showBusinessPhoneOnReceipt ?? true,
     showSkuOnReceipt: settings?.showSkuOnReceipt ?? false,
     enableReceiptPrinting: settings?.enableReceiptPrinting ?? true,
   };

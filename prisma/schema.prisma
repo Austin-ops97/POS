@@ -565,6 +565,8 @@ model Payment {
   method                PaymentMethod
   status                PaymentStatus @default(PENDING)
   amount                Decimal       @db.Decimal(10, 2)
+  amountTendered        Decimal?      @db.Decimal(10, 2)
+  changeDue             Decimal?      @db.Decimal(10, 2)
   stripePaymentIntentId String?
   stripeChargeId        String?
   cardLast4             String?
@@ -672,9 +674,11 @@ model Receipt {
   businessId  String
   orderId     String
   receiptNumber String
-  emailedTo   String?
-  printed     Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  emailedTo       String?
+  lastEmailedAt   DateTime?
+  printed         Boolean  @default(false)
+  printedAt       DateTime?
+  createdAt       DateTime @default(now())
 
   order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -798,8 +802,11 @@ model BusinessSetting {
   managerPinDiscountThreshold Decimal? @db.Decimal(5, 2)
   sessionTimeoutMinutes     Int     @default(30)
   receiptFooter             String?
+  returnPolicy              String?
   showCashierOnReceipt      Boolean @default(true)
   showCustomerOnReceipt     Boolean @default(true)
+  showBusinessEmailOnReceipt Boolean @default(true)
+  showBusinessPhoneOnReceipt Boolean @default(true)
   showSkuOnReceipt          Boolean @default(false)
   enableBarcodeScanning     Boolean @default(true)
   enableReceiptPrinting     Boolean @default(true)

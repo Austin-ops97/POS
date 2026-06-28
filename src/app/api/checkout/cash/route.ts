@@ -78,6 +78,11 @@ export async function POST(request: Request) {
       return jsonError("Amount tendered is less than order total", 400);
     }
 
+    const changeDue =
+      amountTendered !== undefined
+        ? Math.round((amountTendered - orderTotal) * 100) / 100
+        : undefined;
+
     const result = await db.$transaction(async (tx) => {
       await assertOrderInventoryInTransaction(tx, ctx.business.id, order.id);
 
@@ -88,6 +93,12 @@ export async function POST(request: Request) {
           method: "CASH",
           status: "SUCCEEDED",
           amount: toDecimal(orderTotal),
+          ...(amountTendered !== undefined
+            ? {
+                amountTendered: toDecimal(amountTendered),
+                changeDue: toDecimal(changeDue ?? 0),
+              }
+            : {}),
         },
       });
 
@@ -155,10 +166,7 @@ export async function POST(request: Request) {
         id: receipt.id,
         receiptNumber: receipt.receiptNumber,
       },
-      change:
-        amountTendered !== undefined
-          ? Math.round((amountTendered - orderTotal) * 100) / 100
-          : undefined,
+      change: changeDue,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

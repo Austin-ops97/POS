@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CardPaymentCheckout } from "@/components/register/card-payment-form";
+import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions";
 
 export type PaymentModalState =
   | "idle"
@@ -37,6 +38,9 @@ type PaymentModalProps = {
   state: PaymentModalState;
   message?: string;
   orderNumber?: string;
+  orderId?: string;
+  changeDue?: number;
+  defaultReceiptEmail?: string;
   cardCheckout?: CardCheckoutProps | null;
 };
 
@@ -48,6 +52,9 @@ export function PaymentModal({
   state,
   message,
   orderNumber,
+  orderId,
+  changeDue,
+  defaultReceiptEmail,
   cardCheckout,
 }: PaymentModalProps) {
   useEffect(() => {
@@ -136,13 +143,27 @@ export function PaymentModal({
                   Order {orderNumber}
                 </p>
               )}
+              {changeDue != null && changeDue > 0 && (
+                <p className="mt-1 text-sm font-medium text-slate-700">
+                  Change due: {formatCurrency(changeDue)}
+                </p>
+              )}
+              {orderId && (
+                <div className="mt-6 w-full">
+                  <OrderReceiptActions
+                    orderId={orderId}
+                    defaultEmail={defaultReceiptEmail}
+                    variant="compact"
+                  />
+                </div>
+              )}
               <Button
                 size="lg"
-                className="mt-8 w-full"
+                className="mt-4 w-full"
                 variant="success"
                 onClick={onClose}
               >
-                Done
+                Start new sale
               </Button>
             </>
           )}

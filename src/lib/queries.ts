@@ -339,7 +339,9 @@ export async function getOrderById(ctx: AuthContext, id: string) {
       items: true,
       customer: true,
       employee: true,
+      location: true,
       payments: true,
+      receipts: { orderBy: { createdAt: "desc" } },
       refunds: { include: { items: true } },
     },
   });

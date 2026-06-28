@@ -32,8 +32,11 @@ export function ReceiptSettingsForm({
     resolver: zodResolver(receiptSettingsSchema),
     defaultValues: {
       receiptFooter: settings.receiptFooter ?? "",
+      returnPolicy: settings.returnPolicy ?? "",
       showCashierOnReceipt: settings.showCashierOnReceipt,
       showCustomerOnReceipt: settings.showCustomerOnReceipt,
+      showBusinessEmailOnReceipt: settings.showBusinessEmailOnReceipt,
+      showBusinessPhoneOnReceipt: settings.showBusinessPhoneOnReceipt,
       showSkuOnReceipt: settings.showSkuOnReceipt,
       enableReceiptPrinting: settings.enableReceiptPrinting,
     },
@@ -41,6 +44,8 @@ export function ReceiptSettingsForm({
 
   const showCashier = watch("showCashierOnReceipt");
   const showCustomer = watch("showCustomerOnReceipt");
+  const showBusinessEmail = watch("showBusinessEmailOnReceipt");
+  const showBusinessPhone = watch("showBusinessPhoneOnReceipt");
   const showSku = watch("showSkuOnReceipt");
   const enablePrinting = watch("enableReceiptPrinting");
 
@@ -51,8 +56,11 @@ export function ReceiptSettingsForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           receiptFooter: data.receiptFooter || undefined,
+          returnPolicy: data.returnPolicy || undefined,
           showCashierOnReceipt: data.showCashierOnReceipt,
           showCustomerOnReceipt: data.showCustomerOnReceipt,
+          showBusinessEmailOnReceipt: data.showBusinessEmailOnReceipt,
+          showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
           showSkuOnReceipt: data.showSkuOnReceipt,
           enableReceiptPrinting: data.enableReceiptPrinting,
         }),
@@ -89,6 +97,15 @@ export function ReceiptSettingsForm({
               rows={3}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="returnPolicy">Return / Refund Policy</Label>
+            <Textarea
+              id="returnPolicy"
+              {...register("returnPolicy")}
+              placeholder="Returns accepted within 30 days with receipt."
+              rows={3}
+            />
+          </div>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Checkbox
@@ -105,6 +122,26 @@ export function ReceiptSettingsForm({
                 onCheckedChange={(v) => setValue("showCustomerOnReceipt", v === true)}
               />
               <Label htmlFor="showCustomer">Show customer name on receipt</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="showBusinessEmail"
+                checked={showBusinessEmail}
+                onCheckedChange={(v) =>
+                  setValue("showBusinessEmailOnReceipt", v === true)
+                }
+              />
+              <Label htmlFor="showBusinessEmail">Show business email on receipt</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="showBusinessPhone"
+                checked={showBusinessPhone}
+                onCheckedChange={(v) =>
+                  setValue("showBusinessPhoneOnReceipt", v === true)
+                }
+              />
+              <Label htmlFor="showBusinessPhone">Show business phone on receipt</Label>
             </div>
             <div className="flex items-center gap-3">
               <Checkbox

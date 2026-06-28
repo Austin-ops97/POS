@@ -276,8 +276,11 @@ export const demoSettings = {
   enableCash: true,
   enableCard: true,
   receiptFooter: "Thank you for shopping at Demo Market & Services!",
+  returnPolicy: "Returns accepted within 30 days with receipt.",
   showCashierOnReceipt: true,
   showCustomerOnReceipt: true,
+  showBusinessEmailOnReceipt: true,
+  showBusinessPhoneOnReceipt: true,
   showSkuOnReceipt: false,
   enableReceiptPrinting: true,
 };

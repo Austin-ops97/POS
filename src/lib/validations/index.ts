@@ -44,8 +44,11 @@ export const taxRateSchema = z.object({
 
 export const receiptSettingsSchema = z.object({
   receiptFooter: z.string().optional(),
+  returnPolicy: z.string().optional(),
   showCashierOnReceipt: z.boolean(),
   showCustomerOnReceipt: z.boolean(),
+  showBusinessEmailOnReceipt: z.boolean(),
+  showBusinessPhoneOnReceipt: z.boolean(),
   showSkuOnReceipt: z.boolean(),
   enableReceiptPrinting: z.boolean(),
 });

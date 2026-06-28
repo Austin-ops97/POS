@@ -14,7 +14,7 @@ import { calculateOrderTotals } from "@/lib/order-calculator";
 import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string };
-type Customer = { id: string; firstName: string; lastName?: string | null };
+type Customer = { id: string; firstName: string; lastName?: string | null; email?: string | null };
 
 type CheckoutOrderPayload = {
   id?: string;
@@ -75,6 +75,9 @@ export default function RegisterPage() {
   const [paymentState, setPaymentState] = useState<PaymentModalState>("idle");
   const [paymentMessage, setPaymentMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState<string>();
+  const [paidOrderId, setPaidOrderId] = useState<string>();
+  const [changeDue, setChangeDue] = useState<number>();
+  const [customerEmail, setCustomerEmail] = useState<string>();
   const [cardCheckout, setCardCheckout] = useState<{
     clientSecret: string;
     stripeAccountId: string;
@@ -344,14 +347,38 @@ export default function RegisterPage() {
     setPaymentOpen(true);
     setPaymentState("loading");
     setProcessing(true);
+    setChangeDue(undefined);
+    setPaidOrderId(undefined);
 
     try {
       const checkoutOrder = await resolveOrderForPayment();
 
+      const tenderStr = window.prompt(
+        `Cash total: $${totals.total.toFixed(2)}\nEnter amount tendered (optional):`
+      );
+      let amountTendered: number | undefined;
+      if (tenderStr && tenderStr.trim()) {
+        amountTendered = parseFloat(tenderStr);
+        if (isNaN(amountTendered) || amountTendered < 0) {
+          throw new Error("Invalid amount tendered");
+        }
+      }
+
+      const emailStr = window.prompt(
+        "Email receipt to (optional):",
+        customerEmail ?? ""
+      );
+      const emailedTo =
+        emailStr && emailStr.trim() ? emailStr.trim() : undefined;
+
       const cashRes = await fetch("/api/checkout/cash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: checkoutOrder.id }),
+        body: JSON.stringify({
+          orderId: checkoutOrder.id,
+          ...(amountTendered !== undefined ? { amountTendered } : {}),
+          ...(emailedTo ? { emailedTo } : {}),
+        }),
       });
       if (!cashRes.ok) {
         const err = await cashRes.json();
@@ -360,11 +387,25 @@ export default function RegisterPage() {
       const result = await cashRes.json();
       const paidOrder = resolveCheckoutOrder(result);
 
+      setPaidOrderId(checkoutOrder.id);
       setOrderNumber(
         paidOrder?.orderNumber || checkoutOrder.orderNumber
       );
+      if (typeof result.change === "number") {
+        setChangeDue(result.change);
+      }
       setPaymentState("success");
       clearCart();
+
+      if (emailedTo) {
+        fetch(`/api/orders/${checkoutOrder.id}/receipt/email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailedTo }),
+        }).catch(() => {
+          toast.error("Payment succeeded but receipt email failed");
+        });
+      }
     } catch (err) {
       setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
       setPaymentState("error");
@@ -396,6 +437,7 @@ export default function RegisterPage() {
       const payment = await payRes.json();
 
       if (payment.status === "succeeded" || payment.paid) {
+        setPaidOrderId(orderId);
         setOrderNumber(payment.orderNumber || checkoutOrder.orderNumber);
         setPaymentState("success");
         clearCart();
@@ -582,6 +624,9 @@ export default function RegisterPage() {
         c.id,
         `${c.firstName}${c.lastName ? ` ${c.lastName}` : ""}`
       );
+      if (c.email) {
+        setCustomerEmail(c.email);
+      }
       toast.success("Customer selected");
     } catch {
       toast.error("Failed to search customers");
@@ -593,6 +638,8 @@ export default function RegisterPage() {
     setPaymentState("idle");
     setPaymentMessage("");
     setOrderNumber(undefined);
+    setPaidOrderId(undefined);
+    setChangeDue(undefined);
     setCardCheckout(null);
   };
 
@@ -693,11 +740,15 @@ export default function RegisterPage() {
         state={paymentState}
         message={paymentMessage}
         orderNumber={orderNumber}
+        orderId={paidOrderId}
+        changeDue={changeDue}
+        defaultReceiptEmail={customerEmail}
         cardCheckout={
           cardCheckout
             ? {
                 ...cardCheckout,
                 onSuccess: (confirmedOrderNumber) => {
+                  setPaidOrderId(cardCheckout.orderId);
                   setOrderNumber(confirmedOrderNumber);
                   setPaymentState("success");
                   setCardCheckout(null);

@@ -31,6 +31,12 @@ export type MonitoringEvent =
       type: "billing_portal_failure";
       businessId: string;
       error: string;
+    }
+  | {
+      type: "receipt_email_failure";
+      businessId: string;
+      orderId: string;
+      error: string;
     };
 
 function toLogPayload(event: MonitoringEvent): Record<string, unknown> {
