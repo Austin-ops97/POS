@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { onboardingPatchSchema, posConfigSchema } from "@/lib/validations";
+import {
+  onboardingPatchSchema,
+  posConfigSchema,
+  receiptSettingsSchema,
+} from "@/lib/validations";
 import { STRIPE_PLANS } from "@/lib/stripe";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
@@ -38,6 +42,20 @@ function buildModuleSettings(posConfig: ReturnType<typeof posConfigSchema.parse>
   ];
 }
 
+function moduleSettingsForBusinessType(type: string) {
+  switch (type) {
+    case "SERVICE":
+      return { RETAIL: false, SERVICE: true, RENTAL: false };
+    case "RENTAL":
+      return { RETAIL: false, SERVICE: false, RENTAL: true };
+    case "RESTAURANT":
+    case "HYBRID":
+      return { RETAIL: true, SERVICE: true, RENTAL: false };
+    default:
+      return { RETAIL: true, SERVICE: false, RENTAL: false };
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const ctx = await requireAuth();
@@ -51,6 +69,7 @@ export async function PATCH(request: Request) {
           where: { deletedAt: null, isDefault: true },
           take: 1,
         },
+        taxRates: { where: { isActive: true }, take: 1 },
       },
     });
 
@@ -59,19 +78,48 @@ export async function PATCH(request: Request) {
     }
 
     await db.$transaction(async (tx) => {
-      if (data.businessProfile) {
+      const profileData = data.businessProfile ?? data.businessInfo;
+      if (profileData) {
         await tx.business.update({
           where: { id: ctx.business.id },
           data: {
-            name: data.businessProfile.name,
-            type: data.businessProfile.type,
-            legalName: data.businessProfile.legalName,
-            phone: data.businessProfile.phone,
-            email: data.businessProfile.email || undefined,
-            website: data.businessProfile.website || undefined,
-            primaryColor: data.businessProfile.primaryColor,
+            name: profileData.name,
+            legalName: profileData.legalName,
+            phone: profileData.phone,
+            email: profileData.email || undefined,
+            website: profileData.website || undefined,
+            primaryColor: profileData.primaryColor,
+            ...(data.businessProfile?.type
+              ? { type: data.businessProfile.type }
+              : {}),
           },
         });
+      }
+
+      if (data.businessType?.type) {
+        const type = data.businessType.type;
+        await tx.business.update({
+          where: { id: ctx.business.id },
+          data: { type },
+        });
+
+        const modules = moduleSettingsForBusinessType(type);
+        for (const [module, enabled] of Object.entries(modules)) {
+          await tx.moduleSetting.upsert({
+            where: {
+              businessId_module: {
+                businessId: ctx.business.id,
+                module,
+              },
+            },
+            create: {
+              businessId: ctx.business.id,
+              module,
+              enabled,
+            },
+            update: { enabled },
+          });
+        }
       }
 
       if (data.location) {
@@ -97,6 +145,72 @@ export async function PATCH(request: Request) {
             },
           });
         }
+      }
+
+      if (data.taxSettings) {
+        const defaultLocation = business.locations[0];
+        const existingTax = business.taxRates[0];
+        if (existingTax) {
+          await tx.taxRate.update({
+            where: { id: existingTax.id },
+            data: {
+              name: data.taxSettings.name ?? existingTax.name,
+              rate: data.taxSettings.rate ?? existingTax.rate,
+              appliesToProducts:
+                data.taxSettings.appliesToProducts ?? existingTax.appliesToProducts,
+              appliesToServices:
+                data.taxSettings.appliesToServices ?? existingTax.appliesToServices,
+            },
+          });
+        } else if (defaultLocation) {
+          await tx.taxRate.create({
+            data: {
+              businessId: ctx.business.id,
+              locationId: defaultLocation.id,
+              name: data.taxSettings.name ?? "Sales Tax",
+              rate: data.taxSettings.rate ?? 0,
+              appliesToProducts: data.taxSettings.appliesToProducts ?? true,
+              appliesToServices: data.taxSettings.appliesToServices ?? true,
+              isActive: true,
+            },
+          });
+        }
+      }
+
+      if (data.receiptSettings) {
+        const receipt = receiptSettingsSchema.partial().parse(data.receiptSettings);
+        const existingSettings = await tx.businessSetting.findUnique({
+          where: { businessId: ctx.business.id },
+        });
+        await tx.businessSetting.upsert({
+          where: { businessId: ctx.business.id },
+          create: {
+            businessId: ctx.business.id,
+            receiptFooter: receipt.receiptFooter || null,
+            showCashierOnReceipt: receipt.showCashierOnReceipt ?? true,
+            showCustomerOnReceipt: receipt.showCustomerOnReceipt ?? true,
+            showSkuOnReceipt: receipt.showSkuOnReceipt ?? false,
+            enableReceiptPrinting: receipt.enableReceiptPrinting ?? true,
+          },
+          update: {
+            ...(receipt.receiptFooter !== undefined
+              ? { receiptFooter: receipt.receiptFooter || null }
+              : {}),
+            ...(receipt.showCashierOnReceipt !== undefined
+              ? { showCashierOnReceipt: receipt.showCashierOnReceipt }
+              : {}),
+            ...(receipt.showCustomerOnReceipt !== undefined
+              ? { showCustomerOnReceipt: receipt.showCustomerOnReceipt }
+              : {}),
+            ...(receipt.showSkuOnReceipt !== undefined
+              ? { showSkuOnReceipt: receipt.showSkuOnReceipt }
+              : {}),
+            ...(receipt.enableReceiptPrinting !== undefined
+              ? { enableReceiptPrinting: receipt.enableReceiptPrinting }
+              : {}),
+          },
+        });
+        void existingSettings;
       }
 
       if (data.posConfig) {
@@ -191,17 +305,20 @@ export async function PATCH(request: Request) {
         locations: { where: { deletedAt: null } },
         subscription: true,
         stripeAccount: true,
+        taxRates: { where: { isActive: true } },
       },
     });
 
-    await createAuditLog({
-      businessId: ctx.business.id,
-      employeeId: ctx.employee.id,
-      action: "SETTINGS_CHANGE",
-      entity: "Business",
-      entityId: ctx.business.id,
-      details: { onboardingStep: data.step, complete: data.complete },
-    });
+    if (!data.autoSave) {
+      await createAuditLog({
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+        action: "SETTINGS_CHANGE",
+        entity: "Business",
+        entityId: ctx.business.id,
+        details: { onboardingStep: data.step, complete: data.complete },
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

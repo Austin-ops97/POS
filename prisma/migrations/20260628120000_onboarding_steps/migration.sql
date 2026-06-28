@@ -1,0 +1,34 @@
+-- Migrate onboarding steps to the new 10-step wizard flow
+CREATE TYPE "OnboardingStep_new" AS ENUM (
+  'WELCOME',
+  'BUSINESS_INFO',
+  'BUSINESS_TYPE',
+  'BUSINESS_ADDRESS',
+  'TAX_SETTINGS',
+  'RECEIPT_SETTINGS',
+  'STRIPE_CONNECT',
+  'IMPORT_PRODUCTS',
+  'INVITE_EMPLOYEES',
+  'COMPLETED'
+);
+
+ALTER TABLE "Business" ALTER COLUMN "onboardingStep" DROP DEFAULT;
+
+ALTER TABLE "Business"
+  ALTER COLUMN "onboardingStep" TYPE "OnboardingStep_new"
+  USING (
+    CASE "onboardingStep"::text
+      WHEN 'BUSINESS_PROFILE' THEN 'BUSINESS_INFO'
+      WHEN 'LOCATION_SETUP' THEN 'BUSINESS_ADDRESS'
+      WHEN 'POS_CONFIG' THEN 'TAX_SETTINGS'
+      WHEN 'STRIPE_CONNECT' THEN 'STRIPE_CONNECT'
+      WHEN 'FIRST_PRODUCTS' THEN 'IMPORT_PRODUCTS'
+      WHEN 'CHOOSE_PLAN' THEN 'INVITE_EMPLOYEES'
+      WHEN 'COMPLETED' THEN 'COMPLETED'
+      ELSE 'WELCOME'
+    END::"OnboardingStep_new"
+  );
+
+DROP TYPE "OnboardingStep";
+ALTER TYPE "OnboardingStep_new" RENAME TO "OnboardingStep";
+ALTER TABLE "Business" ALTER COLUMN "onboardingStep" SET DEFAULT 'WELCOME';

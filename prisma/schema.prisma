@@ -18,12 +18,15 @@ enum BusinessType {
 }
 
 enum OnboardingStep {
-  BUSINESS_PROFILE
-  LOCATION_SETUP
-  POS_CONFIG
+  WELCOME
+  BUSINESS_INFO
+  BUSINESS_TYPE
+  BUSINESS_ADDRESS
+  TAX_SETTINGS
+  RECEIPT_SETTINGS
   STRIPE_CONNECT
-  FIRST_PRODUCTS
-  CHOOSE_PLAN
+  IMPORT_PRODUCTS
+  INVITE_EMPLOYEES
   COMPLETED
 }
 
@@ -164,7 +167,7 @@ model Business {
   website         String?
   logoUrl         String?
   primaryColor    String       @default("#1e3a5f")
-  onboardingStep  OnboardingStep @default(BUSINESS_PROFILE)
+  onboardingStep  OnboardingStep @default(WELCOME)
   onboardingComplete Boolean   @default(false)
   demoMode        Boolean      @default(true)
   createdAt       DateTime     @default(now())

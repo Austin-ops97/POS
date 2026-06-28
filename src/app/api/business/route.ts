@@ -89,6 +89,7 @@ export async function GET() {
         },
         stripeAccount: true,
         subscription: true,
+        taxRates: { where: { isActive: true }, take: 5 },
       },
     });
 
@@ -150,13 +151,13 @@ export async function POST(request: Request) {
       const created = await tx.business.create({
         data: {
           name: data.name,
-          type: data.type,
+          type: data.type ?? "RETAIL",
           legalName: data.legalName,
           phone: data.phone,
           email: data.email || user.email,
           website: data.website || undefined,
           primaryColor: data.primaryColor,
-          onboardingStep: "LOCATION_SETUP",
+          onboardingStep: "BUSINESS_TYPE",
           demoMode: false,
         },
       });

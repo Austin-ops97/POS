@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/register", label: "Register", icon: ShoppingCart },
+  { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/products", label: "Products", icon: Package },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
   { href: "/orders", label: "Orders", icon: ClipboardList },
@@ -61,15 +62,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-slate-200 p-4">
-        <Link
-          href="/settings/payments"
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
-        >
-          <CreditCard className="h-5 w-5" />
-          Stripe Payments
-        </Link>
-      </div>
     </aside>
   );
 }

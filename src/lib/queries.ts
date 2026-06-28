@@ -15,56 +15,292 @@ import {
 } from "./demo-data";
 import { db } from "./db";
 import type { AuthContext } from "./auth";
+import { isStripeConfigured, getStripeOrThrow } from "./stripe";
+
+type DateRange = { start: Date; end: Date };
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function getDateRanges(): {
+  today: DateRange;
+  yesterday: DateRange;
+  week: DateRange;
+  month: DateRange;
+} {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const weekStart = new Date(now);
+  weekStart.setDate(weekStart.getDate() - 6);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return {
+    today: { start: todayStart, end: todayEnd },
+    yesterday: { start: startOfDay(yesterday), end: endOfDay(yesterday) },
+    week: { start: startOfDay(weekStart), end: todayEnd },
+    month: { start: startOfDay(monthStart), end: todayEnd },
+  };
+}
+
+async function aggregateSales(
+  businessId: string,
+  locationId: string | undefined,
+  range: DateRange
+) {
+  const orders = await db.order.findMany({
+    where: {
+      businessId,
+      ...(locationId ? { locationId } : {}),
+      paidAt: { gte: range.start, lte: range.end },
+      status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
+    },
+    include: {
+      payments: { where: { status: "SUCCEEDED" } },
+      refunds: { select: { amount: true } },
+    },
+  });
+
+  let sales = 0;
+  let cardSales = 0;
+  let cashSales = 0;
+  let refundTotal = 0;
+
+  for (const order of orders) {
+    sales += Number(order.total);
+    refundTotal += order.refunds.reduce((s, r) => s + Number(r.amount), 0);
+    for (const payment of order.payments) {
+      const amount = Number(payment.amount);
+      if (payment.method === "CARD") cardSales += amount;
+      else if (payment.method === "CASH") cashSales += amount;
+    }
+  }
+
+  return {
+    sales,
+    transactions: orders.length,
+    aov: orders.length > 0 ? sales / orders.length : 0,
+    cardSales,
+    cashSales,
+    refundTotal,
+  };
+}
+
+async function getStripeBalanceSummary(businessId: string) {
+  if (!isStripeConfigured()) {
+    return {
+      available: 0,
+      pending: 0,
+      upcomingDeposit: null as { amount: number; arrivalDate: string | null } | null,
+      connected: false,
+      status: "NOT_CONNECTED" as const,
+    };
+  }
+
+  const stripeAccount = await db.stripeAccount.findUnique({
+    where: { businessId },
+  });
+
+  if (!stripeAccount?.stripeAccountId) {
+    return {
+      available: 0,
+      pending: 0,
+      upcomingDeposit: null,
+      connected: false,
+      status: stripeAccount?.status ?? "NOT_CONNECTED",
+    };
+  }
+
+  try {
+    const stripe = getStripeOrThrow();
+    const stripeOpts = { stripeAccount: stripeAccount.stripeAccountId };
+    const [balance, payouts] = await Promise.all([
+      stripe.balance.retrieve({}, stripeOpts),
+      stripe.payouts.list({ limit: 5, status: "pending" }, stripeOpts),
+    ]);
+
+    const available =
+      balance.available.find((b) => b.currency === "usd")?.amount ?? 0;
+    const pending =
+      balance.pending.find((b) => b.currency === "usd")?.amount ?? 0;
+
+    const upcoming = payouts.data[0];
+
+    return {
+      available: available / 100,
+      pending: pending / 100,
+      upcomingDeposit: upcoming
+        ? {
+            amount: upcoming.amount / 100,
+            arrivalDate: upcoming.arrival_date
+              ? new Date(upcoming.arrival_date * 1000).toISOString()
+              : null,
+          }
+        : null,
+      connected: true,
+      status: stripeAccount.status,
+    };
+  } catch {
+    return {
+      available: 0,
+      pending: 0,
+      upcomingDeposit: null,
+      connected: true,
+      status: stripeAccount.status,
+    };
+  }
+}
 
 export async function getDashboardData(ctx: AuthContext) {
   if (isDemoMode()) {
     return {
-      stats: demoDashboardStats,
-      recentOrders: demoOrders.slice(0, 5),
+      stats: {
+        ...demoDashboardStats,
+        yesterdaySales: 312.5,
+        weekSales: 1842.75,
+        monthSales: 6240.0,
+      },
+      recentOrders: demoOrders.slice(0, 10),
       lowStock: demoDashboardStats.lowStock,
       topProducts: demoDashboardStats.topProducts,
-      salesByHour: demoDashboardStats.salesByHour,
+      salesByDay: [
+        { date: "Mon", sales: 45 },
+        { date: "Tue", sales: 62 },
+        { date: "Wed", sales: 58 },
+        { date: "Thu", sales: 91 },
+        { date: "Fri", sales: 90 },
+        { date: "Sat", sales: 120 },
+        { date: "Sun", sales: 75 },
+      ],
+      stripe: {
+        available: 1240.5,
+        pending: 380.25,
+        upcomingDeposit: { amount: 380.25, arrivalDate: new Date().toISOString() },
+        connected: true,
+        status: "READY",
+      },
     };
   }
 
   const businessId = ctx.business.id;
   const locationId = ctx.location?.id;
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
+  const ranges = getDateRanges();
 
-  const todayOrders = await db.order.findMany({
-    where: {
-      businessId,
-      ...(locationId ? { locationId } : {}),
-      paidAt: { gte: todayStart, lte: todayEnd },
-      status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
-    },
-    include: { payments: true, customer: true, employee: true, items: true },
-    orderBy: { paidAt: "desc" },
-    take: 10,
-  });
+  const [
+    today,
+    yesterday,
+    week,
+    month,
+    recentOrders,
+    weekOrders,
+    lowStockItems,
+    stripe,
+  ] = await Promise.all([
+    aggregateSales(businessId, locationId, ranges.today),
+    aggregateSales(businessId, locationId, ranges.yesterday),
+    aggregateSales(businessId, locationId, ranges.week),
+    aggregateSales(businessId, locationId, ranges.month),
+    db.order.findMany({
+      where: {
+        businessId,
+        ...(locationId ? { locationId } : {}),
+        status: { in: ["PAID", "PARTIALLY_REFUNDED", "PENDING_PAYMENT", "HELD"] },
+      },
+      include: { payments: true, customer: true, employee: true },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.order.findMany({
+      where: {
+        businessId,
+        ...(locationId ? { locationId } : {}),
+        paidAt: { gte: ranges.week.start, lte: ranges.week.end },
+        status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
+      },
+      include: {
+        items: { select: { name: true, quantity: true, total: true } },
+      },
+    }),
+    db.inventoryItem.findMany({
+      where: {
+        businessId,
+        ...(locationId ? { locationId } : {}),
+        product: { trackInventory: true, isActive: true, deletedAt: null },
+      },
+      include: { product: { select: { name: true } } },
+    }),
+    getStripeBalanceSummary(businessId),
+  ]);
 
-  const todaySales = todayOrders.reduce((sum, o) => sum + Number(o.total), 0);
-  const transactionCount = todayOrders.length;
+  const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
+  const dailyMap = new Map<string, { date: string; sales: number; orders: number }>();
+
+  for (const order of weekOrders) {
+    const orderTotal = Number(order.total);
+    if (order.paidAt) {
+      const dateKey = order.paidAt.toISOString().split("T")[0];
+      const day = dailyMap.get(dateKey) || { date: dateKey, sales: 0, orders: 0 };
+      day.sales += orderTotal;
+      day.orders += 1;
+      dailyMap.set(dateKey, day);
+    }
+    for (const item of order.items) {
+      const existing = productMap.get(item.name) || {
+        name: item.name,
+        revenue: 0,
+        quantity: 0,
+      };
+      existing.revenue += Number(item.total);
+      existing.quantity += item.quantity;
+      productMap.set(item.name, existing);
+    }
+  }
+
+  const topProducts = Array.from(productMap.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
+
+  const lowStock = lowStockItems
+    .filter((item) => item.quantityOnHand <= item.reorderPoint)
+    .sort((a, b) => a.quantityOnHand - b.quantityOnHand)
+    .slice(0, 5);
+
+  const salesByDay = Array.from(dailyMap.values()).sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
 
   return {
     stats: {
-      todaySales,
-      transactionCount,
-      aov: transactionCount > 0 ? todaySales / transactionCount : 0,
-      refundTotal: 0,
-      cardSales: 0,
-      cashSales: 0,
-      salesByHour: [],
-      topProducts: [],
-      lowStock: [],
+      todaySales: today.sales,
+      yesterdaySales: yesterday.sales,
+      weekSales: week.sales,
+      monthSales: month.sales,
+      transactionCount: today.transactions,
+      weekTransactions: week.transactions,
+      aov: today.aov,
+      refundTotal: today.refundTotal,
+      cardSales: today.cardSales,
+      cashSales: today.cashSales,
     },
-    recentOrders: todayOrders,
-    lowStock: [],
-    topProducts: [],
-    salesByHour: [],
+    recentOrders,
+    lowStock,
+    topProducts,
+    salesByDay,
+    stripe,
   };
 }
 

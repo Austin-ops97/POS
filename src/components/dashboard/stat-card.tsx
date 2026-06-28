@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, type LucideIcon } from "lucide-react";
 
 type StatCardProps = {
   title: string;
@@ -8,13 +8,15 @@ type StatCardProps = {
   change?: number;
   subtitle?: string;
   className?: string;
+  icon?: LucideIcon;
 };
 
-export function StatCard({ title, value, change, subtitle, className }: StatCardProps) {
+export function StatCard({ title, value, change, subtitle, className, icon: Icon }: StatCardProps) {
   return (
     <Card className={cn("", className)}>
-      <CardHeader className="pb-2">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
+        {Icon && <Icon className="h-4 w-4 text-slate-400" />}
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold text-slate-900">{value}</div>
