@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { Show, UserButton } from "@clerk/nextjs";
 import { MapPin, Plus, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -33,7 +33,9 @@ export function Topbar({ businessName, locationName, authEnabled = true }: Topba
           </Button>
         </Link>
         {authEnabled ? (
-          <UserButton />
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white">
             <User className="h-4 w-4" />
