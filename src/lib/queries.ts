@@ -208,10 +208,90 @@ export async function getReportsData(ctx: AuthContext) {
       ],
     };
   }
+
+  const businessId = ctx.business.id;
+  const start = new Date();
+  start.setDate(start.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+
+  const orders = await db.order.findMany({
+    where: {
+      businessId,
+      status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
+      paidAt: { gte: start, lte: end },
+    },
+    include: {
+      items: { select: { name: true, quantity: true, total: true } },
+      employee: { select: { name: true } },
+      payments: {
+        where: { status: "SUCCEEDED" },
+        select: { method: true, amount: true },
+      },
+    },
+  });
+
+  const dailyMap = new Map<string, { date: string; sales: number; orders: number }>();
+  const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
+  const employeeMap = new Map<string, { name: string; sales: number; orders: number }>();
+  const paymentMap = new Map<string, number>();
+
+  for (const order of orders) {
+    const orderTotal = Number(order.total);
+    if (order.paidAt) {
+      const dateKey = order.paidAt.toISOString().split("T")[0];
+      const day = dailyMap.get(dateKey) || { date: dateKey, sales: 0, orders: 0 };
+      day.sales += orderTotal;
+      day.orders += 1;
+      dailyMap.set(dateKey, day);
+    }
+
+    const employeeName = order.employee?.name ?? "Unknown";
+    const employeeStats = employeeMap.get(employeeName) || {
+      name: employeeName,
+      sales: 0,
+      orders: 0,
+    };
+    employeeStats.sales += orderTotal;
+    employeeStats.orders += 1;
+    employeeMap.set(employeeName, employeeStats);
+
+    for (const item of order.items) {
+      const existing = productMap.get(item.name) || {
+        name: item.name,
+        revenue: 0,
+        quantity: 0,
+      };
+      existing.revenue += Number(item.total);
+      existing.quantity += item.quantity;
+      productMap.set(item.name, existing);
+    }
+
+    for (const payment of order.payments) {
+      const method =
+        payment.method === "CARD"
+          ? "Card"
+          : payment.method === "CASH"
+            ? "Cash"
+            : payment.method;
+      paymentMap.set(method, (paymentMap.get(method) ?? 0) + Number(payment.amount));
+    }
+  }
+
   return {
-    salesByDay: [],
-    topProducts: [],
-    employeeSales: [],
-    paymentMethods: [],
+    salesByDay: Array.from(dailyMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    ),
+    topProducts: Array.from(productMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10),
+    employeeSales: Array.from(employeeMap.values()).sort(
+      (a, b) => b.sales - a.sales
+    ),
+    paymentMethods: Array.from(paymentMap.entries()).map(([method, amount]) => ({
+      method,
+      amount,
+    })),
   };
 }

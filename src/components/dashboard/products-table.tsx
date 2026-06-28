@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Package, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Package, Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -33,8 +35,37 @@ type ProductsTableProps = {
 };
 
 export function ProductsTable({ products, categories }: ProductsTableProps) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(product: ProductRow) {
+    if (
+      !window.confirm(
+        `Delete "${product.name}"? This will deactivate the product.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(product.id);
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast.error(err?.error ?? "Failed to delete product");
+        return;
+      }
+      toast.success("Product deleted");
+      router.refresh();
+    } catch {
+      toast.error("Failed to delete product");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -103,12 +134,13 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
               <th className="px-4 py-3 text-left font-medium text-slate-600">Price</th>
               <th className="px-4 py-3 text-left font-medium text-slate-600">Stock</th>
               <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
+              <th className="px-4 py-3 text-right font-medium text-slate-600">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No products match your filters.
                 </td>
               </tr>
@@ -126,6 +158,23 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
                     <Badge variant={product.isActive ? "success" : "secondary"}>
                       {product.isActive ? "Active" : "Inactive"}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" asChild>
+                        <Link href={`/products/${product.id}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(product)}
+                        disabled={deletingId === product.id}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))

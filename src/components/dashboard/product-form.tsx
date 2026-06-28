@@ -24,10 +24,17 @@ type ProductFormValues = z.infer<typeof productSchema>;
 
 type ProductFormProps = {
   categories: Array<{ id: string; name: string }>;
+  productId?: string;
+  defaultValues?: Partial<ProductFormValues>;
 };
 
-export function ProductForm({ categories }: ProductFormProps) {
+export function ProductForm({
+  categories,
+  productId,
+  defaultValues,
+}: ProductFormProps) {
   const router = useRouter();
+  const isEditing = Boolean(productId);
   const {
     register,
     handleSubmit,
@@ -50,6 +57,7 @@ export function ProductForm({ categories }: ProductFormProps) {
       trackInventory: true,
       isActive: true,
       initialStock: 0,
+      ...defaultValues,
     },
   });
 
@@ -80,8 +88,10 @@ export function ProductForm({ categories }: ProductFormProps) {
     };
 
     try {
-      const res = await fetch("/api/products", {
-        method: "POST",
+      const url = isEditing ? `/api/products/${productId}` : "/api/products";
+      const method = isEditing ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -90,11 +100,11 @@ export function ProductForm({ categories }: ProductFormProps) {
         const err = (await res.json().catch(() => null)) as {
           error?: string;
         } | null;
-        toast.error(err?.error ?? "Failed to create product");
+        toast.error(err?.error ?? `Failed to ${isEditing ? "update" : "create"} product`);
         return;
       }
 
-      toast.success("Product created");
+      toast.success(isEditing ? "Product updated" : "Product created");
       router.push("/products");
       router.refresh();
     } catch {
@@ -261,7 +271,13 @@ export function ProductForm({ categories }: ProductFormProps) {
 
       <div className="flex gap-3">
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Creating..." : "Create Product"}
+          {isSubmitting
+            ? isEditing
+              ? "Saving..."
+              : "Creating..."
+            : isEditing
+              ? "Save Product"
+              : "Create Product"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel

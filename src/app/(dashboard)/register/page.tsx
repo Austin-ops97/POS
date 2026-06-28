@@ -33,11 +33,14 @@ type TaxRateDisplay = {
   appliesToServices: boolean;
 };
 
-const DEFAULT_TAX_RATES: TaxRateDisplay[] = [
-  { name: "Sales Tax", rate: 0.08, appliesToProducts: true, appliesToServices: true },
-];
+const DEFAULT_TAX_RATES: TaxRateDisplay[] = [];
 
-/** Production wraps order in `{ order }`; demo may return at top level. */
+function primaryTaxRate(rates: TaxRateDisplay[]) {
+  if (rates.length === 0) return 0;
+  const productRate = rates.find((r) => r.appliesToProducts);
+  return productRate?.rate ?? rates[0].rate;
+}
+
 function resolveOrderFromPollResponse(data: unknown): PollOrderPayload | null {
   if (!data || typeof data !== "object") return null;
   const payload = data as { order?: PollOrderPayload } & PollOrderPayload;
@@ -66,12 +69,6 @@ function resolveLocationFromBusiness(biz: {
   );
 }
 
-function primaryTaxRate(rates: TaxRateDisplay[]) {
-  if (rates.length === 0) return DEFAULT_TAX_RATES[0].rate;
-  const productRate = rates.find((r) => r.appliesToProducts);
-  return productRate?.rate ?? rates[0].rate;
-}
-
 export default function RegisterPage() {
   const [search, setSearch] = useState("");
   const [barcode, setBarcode] = useState("");
@@ -96,10 +93,13 @@ export default function RegisterPage() {
     discounts,
     customerId,
     notes,
+    heldOrderId,
     addItem,
     addDiscount,
     setCustomer,
+    setNotes,
     clearCart,
+    loadHeldOrder,
   } = useCartStore();
 
   const totals = calculateOrderTotals(
@@ -304,6 +304,47 @@ export default function RegisterPage() {
     });
   };
 
+  const resolveOrderForPayment = async (): Promise<{
+    id: string;
+    orderNumber?: string;
+  }> => {
+    const loc = await resolveLocationId();
+
+    if (heldOrderId) {
+      const holdRes = await fetch("/api/checkout/hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...buildCheckoutPayload(),
+          locationId: loc,
+          orderId: heldOrderId,
+        }),
+      });
+      if (!holdRes.ok) {
+        const err = await holdRes.json();
+        throw new Error(err.error || "Failed to update held order");
+      }
+      const holdData = await holdRes.json();
+      const order = resolveCheckoutOrder(holdData);
+      if (!order?.id) {
+        throw new Error("Failed to update held order");
+      }
+      return { id: order.id, orderNumber: order.orderNumber };
+    }
+
+    const checkoutRes = await createOrder();
+    if (!checkoutRes.ok) {
+      const err = await checkoutRes.json();
+      throw new Error(err.error || "Failed to create order");
+    }
+    const checkoutData = await checkoutRes.json();
+    const checkoutOrder = resolveCheckoutOrder(checkoutData);
+    if (!checkoutOrder?.id) {
+      throw new Error("Failed to create order");
+    }
+    return { id: checkoutOrder.id, orderNumber: checkoutOrder.orderNumber };
+  };
+
   const handlePayCash = async () => {
     setPaymentMethod("CASH");
     setPaymentOpen(true);
@@ -311,16 +352,7 @@ export default function RegisterPage() {
     setProcessing(true);
 
     try {
-      const checkoutRes = await createOrder();
-      if (!checkoutRes.ok) {
-        const err = await checkoutRes.json();
-        throw new Error(err.error || "Failed to create order");
-      }
-      const checkoutData = await checkoutRes.json();
-      const checkoutOrder = resolveCheckoutOrder(checkoutData);
-      if (!checkoutOrder?.id) {
-        throw new Error("Failed to create order");
-      }
+      const checkoutOrder = await resolveOrderForPayment();
 
       const cashRes = await fetch("/api/checkout/cash", {
         method: "POST",
@@ -354,16 +386,7 @@ export default function RegisterPage() {
     setProcessing(true);
 
     try {
-      const checkoutRes = await createOrder();
-      if (!checkoutRes.ok) {
-        const err = await checkoutRes.json();
-        throw new Error(err.error || "Failed to create order");
-      }
-      const checkoutData = await checkoutRes.json();
-      const checkoutOrder = resolveCheckoutOrder(checkoutData);
-      if (!checkoutOrder?.id) {
-        throw new Error("Failed to create order");
-      }
+      const checkoutOrder = await resolveOrderForPayment();
       const orderId = checkoutOrder.id;
 
       const payRes = await fetch("/api/checkout/payment", {
@@ -444,7 +467,11 @@ export default function RegisterPage() {
       const res = await fetch("/api/checkout/hold", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildCheckoutPayload(), locationId: loc }),
+        body: JSON.stringify({
+          ...buildCheckoutPayload(),
+          locationId: loc,
+          ...(heldOrderId ? { orderId: heldOrderId } : {}),
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -454,6 +481,83 @@ export default function RegisterPage() {
       clearCart();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to hold order");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleResumeHeld = async () => {
+    setProcessing(true);
+    try {
+      const res = await fetch("/api/orders?status=HELD&limit=20");
+      if (!res.ok) throw new Error("Failed to load held orders");
+      const data = await res.json();
+      const heldOrders: Array<{
+        id: string;
+        orderNumber: string;
+        total: number;
+      }> = data.orders || [];
+      if (heldOrders.length === 0) {
+        toast.error("No held orders");
+        return;
+      }
+      const list = heldOrders
+        .map(
+          (o, i) =>
+            `${i + 1}. ${o.orderNumber} — $${Number(o.total).toFixed(2)}`
+        )
+        .join("\n");
+      const pick = window.prompt(`Enter held order number:\n${list}`);
+      if (!pick) return;
+      const index = parseInt(pick, 10) - 1;
+      const selected =
+        index >= 0 && index < heldOrders.length
+          ? heldOrders[index]
+          : heldOrders.find((o) => o.orderNumber === pick.trim());
+      if (!selected) {
+        toast.error("Invalid selection");
+        return;
+      }
+
+      const orderRes = await fetch(`/api/orders/${selected.id}`);
+      if (!orderRes.ok) throw new Error("Failed to load order");
+      const orderData = await orderRes.json();
+      const order = orderData.order ?? orderData;
+
+      clearCart();
+      if (order.customer?.id) {
+        setCustomer(
+          order.customer.id,
+          `${order.customer.firstName}${order.customer.lastName ? ` ${order.customer.lastName}` : ""}`
+        );
+      }
+      if (order.notes) setNotes(order.notes);
+
+      const cartItems = (order.items || []).map(
+        (item: {
+          productId?: string;
+          variantId?: string;
+          name: string;
+          sku?: string;
+          quantity: number;
+          unitPrice: number;
+          product?: { type?: string };
+        }) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          name: item.name,
+          sku: item.sku,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          taxable: true,
+          type: item.product?.type,
+        })
+      );
+
+      loadHeldOrder(order.id, cartItems);
+      toast.success(`Resumed ${order.orderNumber}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to resume order");
     } finally {
       setProcessing(false);
     }
@@ -609,6 +713,7 @@ export default function RegisterPage() {
           onPayCash={handlePayCash}
           onPayCard={handlePayCard}
           onHold={handleHold}
+          onResumeHeld={handleResumeHeld}
           onClear={clearCart}
           onAddCustom={handleAddCustom}
           onSelectCustomer={handleSelectCustomer}

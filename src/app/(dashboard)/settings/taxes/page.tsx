@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getTaxRates } from "@/lib/queries";
+import { TaxRateForm } from "@/components/dashboard/tax-rate-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ export default async function TaxesSettingsPage() {
           <p className="text-sm text-slate-500">Configure sales tax for your locations</p>
         </div>
       </div>
+      <TaxRateForm locationId={ctx.location?.id} />
       <Card>
         <CardHeader><CardTitle>Active Tax Rates</CardTitle></CardHeader>
         <CardContent>

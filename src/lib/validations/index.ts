@@ -33,6 +33,15 @@ export const posConfigSchema = z.object({
   multipleLocations: z.boolean().optional(),
 });
 
+export const taxRateSchema = z.object({
+  name: z.string().min(1, "Tax name is required"),
+  rate: z.number().min(0).max(1),
+  locationId: z.string().optional(),
+  appliesToProducts: z.boolean().optional(),
+  appliesToServices: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
 export const receiptSettingsSchema = z.object({
   receiptFooter: z.string().optional(),
   showCashierOnReceipt: z.boolean(),

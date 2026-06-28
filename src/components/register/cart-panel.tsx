@@ -23,6 +23,7 @@ type CartPanelProps = {
   onPayCash: () => void;
   onPayCard: () => void;
   onHold: () => void;
+  onResumeHeld?: () => void;
   onClear: () => void;
   onAddCustom: () => void;
   onSelectCustomer: () => void;
@@ -33,10 +34,11 @@ type CartPanelProps = {
 
 export function CartPanel({
   dark = true,
-  taxRate = 0.08,
+  taxRate = 0,
   onPayCash,
   onPayCard,
   onHold,
+  onResumeHeld,
   onClear,
   onAddCustom,
   onSelectCustomer,
@@ -95,6 +97,18 @@ export function CartPanel({
           </p>
         </div>
         <div className="flex gap-2">
+          {onResumeHeld && (
+            <Button
+              variant={dark ? "secondary" : "outline"}
+              size="sm"
+              onClick={onResumeHeld}
+              disabled={disabled}
+              className="h-10"
+            >
+              <RotateCcw className="mr-1.5 h-4 w-4" />
+              Resume
+            </Button>
+          )}
           <Button
             variant={dark ? "secondary" : "outline"}
             size="sm"

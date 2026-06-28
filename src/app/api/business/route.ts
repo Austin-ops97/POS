@@ -228,6 +228,18 @@ export async function POST(request: Request) {
         },
       });
 
+      await tx.taxRate.create({
+        data: {
+          businessId: created.id,
+          locationId: location.id,
+          name: "Sales Tax",
+          rate: 0,
+          appliesToProducts: true,
+          appliesToServices: true,
+          isActive: true,
+        },
+      });
+
       return tx.business.findUnique({
         where: { id: created.id },
         include: {
