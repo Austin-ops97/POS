@@ -67,6 +67,16 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {ctx.business.onboardingComplete && ctx.business.onboardingStep !== "COMPLETED" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Setup was skipped. You can{" "}
+          <Link href="/onboarding" className="font-medium underline">
+            resume setup
+          </Link>{" "}
+          anytime, or finish configuration in Settings.
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Today's Sales"

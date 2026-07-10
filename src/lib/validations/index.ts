@@ -53,6 +53,17 @@ export const receiptSettingsSchema = z.object({
   enableReceiptPrinting: z.boolean(),
 });
 
+/** Receipt fields collected during onboarding wizard. */
+export const onboardingReceiptSettingsSchema = z.object({
+  receiptFooter: z.string().optional(),
+  showCashierOnReceipt: z.boolean(),
+  showCustomerOnReceipt: z.boolean(),
+  showBusinessEmailOnReceipt: z.boolean(),
+  showBusinessPhoneOnReceipt: z.boolean(),
+  showSkuOnReceipt: z.boolean(),
+  enableReceiptPrinting: z.boolean(),
+});
+
 export const MODULE_SETTING_KEYS = [
   "RETAIL",
   "SERVICE",
@@ -239,5 +250,6 @@ export const onboardingPatchSchema = z.object({
   posConfig: posConfigSchema.partial().optional(),
   plan: z.enum(["STARTER", "PRO", "MULTI_LOCATION", "ENTERPRISE"]).optional(),
   complete: z.boolean().optional(),
+  skipSetup: z.boolean().optional(),
   autoSave: z.boolean().optional(),
 });

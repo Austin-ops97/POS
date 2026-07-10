@@ -285,7 +285,7 @@ export async function PATCH(request: Request) {
       }
 
       const onboardingComplete =
-        data.complete ?? data.step === "COMPLETED";
+        data.complete ?? data.skipSetup ?? data.step === "COMPLETED";
 
       await tx.business.update({
         where: { id: ctx.business.id },
@@ -316,7 +316,7 @@ export async function PATCH(request: Request) {
         action: "SETTINGS_CHANGE",
         entity: "Business",
         entityId: ctx.business.id,
-        details: { onboardingStep: data.step, complete: data.complete },
+        details: { onboardingStep: data.step, complete: data.complete, skipSetup: data.skipSetup },
       });
     }
 

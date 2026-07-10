@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,7 +41,7 @@ import {
   businessTypeSchema,
   locationSchema,
   onboardingTaxSchema,
-  receiptSettingsSchema,
+  onboardingReceiptSettingsSchema,
   productSchema,
   onboardingEmployeeSchema,
 } from "@/lib/validations";
@@ -61,7 +60,7 @@ type BusinessInfoData = z.infer<typeof businessInfoSchema>;
 type BusinessTypeData = z.infer<typeof businessTypeSchema>;
 type LocationData = z.infer<typeof locationSchema>;
 type TaxData = z.infer<typeof onboardingTaxSchema>;
-type ReceiptData = z.infer<typeof receiptSettingsSchema>;
+type ReceiptData = z.infer<typeof onboardingReceiptSettingsSchema>;
 type ProductData = z.infer<typeof onboardingProductSchema>;
 type EmployeeInvite = z.infer<typeof onboardingEmployeeSchema>;
 
@@ -82,7 +81,6 @@ const BUSINESS_TYPES = [
 ] as const;
 
 export function OnboardingWizard() {
-  const router = useRouter();
   const {
     currentStep,
     stepKey,
@@ -97,6 +95,7 @@ export function OnboardingWizard() {
     goToStep,
     advanceStep,
     completeOnboarding,
+    exitSetup,
     progress,
   } = useOnboarding();
 
@@ -147,11 +146,13 @@ export function OnboardingWizard() {
   });
 
   const receiptForm = useForm<ReceiptData>({
-    resolver: zodResolver(receiptSettingsSchema),
+    resolver: zodResolver(onboardingReceiptSettingsSchema),
     defaultValues: {
       receiptFooter: "",
       showCashierOnReceipt: true,
       showCustomerOnReceipt: true,
+      showBusinessEmailOnReceipt: true,
+      showBusinessPhoneOnReceipt: true,
       showSkuOnReceipt: false,
       enableReceiptPrinting: true,
     },
@@ -190,6 +191,8 @@ export function OnboardingWizard() {
         receiptFooter?: string | null;
         showCashierOnReceipt: boolean;
         showCustomerOnReceipt: boolean;
+        showBusinessEmailOnReceipt?: boolean;
+        showBusinessPhoneOnReceipt?: boolean;
         showSkuOnReceipt: boolean;
         enableReceiptPrinting: boolean;
       } | null;
@@ -239,6 +242,8 @@ export function OnboardingWizard() {
           receiptFooter: biz.settings.receiptFooter || "",
           showCashierOnReceipt: biz.settings.showCashierOnReceipt,
           showCustomerOnReceipt: biz.settings.showCustomerOnReceipt,
+          showBusinessEmailOnReceipt: biz.settings.showBusinessEmailOnReceipt ?? true,
+          showBusinessPhoneOnReceipt: biz.settings.showBusinessPhoneOnReceipt ?? true,
           showSkuOnReceipt: biz.settings.showSkuOnReceipt,
           enableReceiptPrinting: biz.settings.enableReceiptPrinting,
         });
@@ -358,7 +363,7 @@ export function OnboardingWizard() {
           break;
         }
         case "RECEIPT_SETTINGS": {
-          const parsed = receiptSettingsSchema.parse(receiptForm.getValues());
+          const parsed = onboardingReceiptSettingsSchema.parse(receiptForm.getValues());
           await patchOnboarding("RECEIPT_SETTINGS", { receiptSettings: parsed });
           break;
         }
@@ -410,22 +415,26 @@ export function OnboardingWizard() {
     }
   }
 
+  function handleFormInvalid() {
+    toast.error("Please fix the highlighted fields before continuing");
+  }
+
   function handleNext() {
     switch (stepKey) {
       case "BUSINESS_INFO":
-        void infoForm.handleSubmit(() => saveCurrentStep())();
+        void infoForm.handleSubmit(() => saveCurrentStep(), handleFormInvalid)();
         break;
       case "BUSINESS_TYPE":
-        void typeForm.handleSubmit(() => saveCurrentStep())();
+        void typeForm.handleSubmit(() => saveCurrentStep(), handleFormInvalid)();
         break;
       case "BUSINESS_ADDRESS":
-        void locationForm.handleSubmit(() => saveCurrentStep())();
+        void locationForm.handleSubmit(() => saveCurrentStep(), handleFormInvalid)();
         break;
       case "TAX_SETTINGS":
-        void taxForm.handleSubmit(() => saveCurrentStep())();
+        void taxForm.handleSubmit(() => saveCurrentStep(), handleFormInvalid)();
         break;
       case "RECEIPT_SETTINGS":
-        void receiptForm.handleSubmit(() => saveCurrentStep())();
+        void receiptForm.handleSubmit(() => saveCurrentStep(), handleFormInvalid)();
         break;
       default:
         void saveCurrentStep();
@@ -507,6 +516,17 @@ export function OnboardingWizard() {
           <Badge variant="secondary" className="ml-auto">
             Setup · {Math.round(progress)}%
           </Badge>
+          {businessId && stepKey !== "COMPLETED" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden sm:inline-flex"
+              disabled={submitting}
+              onClick={() => void exitSetup()}
+            >
+              Skip to dashboard
+            </Button>
+          )}
         </div>
       </header>
 
@@ -938,10 +958,11 @@ export function OnboardingWizard() {
             Progress saved automatically ·{" "}
             <button
               type="button"
-              className="underline hover:text-slate-600"
-              onClick={() => router.push("/dashboard")}
+              className="underline hover:text-slate-600 disabled:opacity-50"
+              disabled={submitting}
+              onClick={() => void exitSetup()}
             >
-              Exit setup
+              Skip setup and open dashboard
             </button>
           </p>
         )}

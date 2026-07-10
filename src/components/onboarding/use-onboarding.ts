@@ -69,7 +69,7 @@ export function useOnboarding() {
           return;
         }
 
-        if (biz.onboardingComplete) {
+        if (biz.onboardingComplete && resolveOnboardingStep(biz.onboardingStep) === "COMPLETED") {
           router.push("/dashboard");
           return;
         }
@@ -110,6 +110,21 @@ export function useOnboarding() {
     }
   }, [patchOnboarding, router]);
 
+  const exitSetup = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      const step = ONBOARDING_STEPS[currentStep];
+      await patchOnboarding(step, { complete: true, skipSetup: true });
+      toast.success("Setup skipped — you can finish configuration anytime in Settings");
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not exit setup");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [currentStep, patchOnboarding, router]);
+
   return {
     currentStep,
     stepKey: ONBOARDING_STEPS[currentStep],
@@ -125,6 +140,7 @@ export function useOnboarding() {
     goToStep,
     advanceStep,
     completeOnboarding,
+    exitSetup,
     totalSteps: ONBOARDING_STEPS.length,
     progress: ((currentStep + 1) / ONBOARDING_STEPS.length) * 100,
   };
