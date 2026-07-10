@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
+import { ensurePaidSubscription } from "@/lib/subscription-server"
 import { canAddEmployee, getPlanEntitlements, PlanLimitError } from "@/lib/subscription-access";
 import { employeeSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -103,6 +103,13 @@ export async function POST(request: Request) {
 
     const pinHash = data.pin ? await hashPin(data.pin) : undefined;
 
+    const workforceSettings = await db.workforceSettings.findUnique({
+      where: { businessId: ctx.business.id },
+    });
+    const defaultPto = workforceSettings
+      ? Number(workforceSettings.defaultPtoAnnualHours)
+      : 80;
+
     const employee = await db.$transaction(async (tx) => {
       const created = await tx.employeeProfile.create({
         data: {
@@ -112,6 +119,9 @@ export async function POST(request: Request) {
           email: data.email,
           phone: data.phone,
           pinHash,
+          hourlyWage: data.hourlyWage,
+          ptoAnnualHours: data.ptoAnnualHours ?? defaultPto,
+          ptoBalanceHours: data.ptoAnnualHours ?? defaultPto,
           status: "INVITED",
         },
         include: {

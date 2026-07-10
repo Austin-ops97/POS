@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
+import { ensurePaidSubscription } from "@/lib/subscription-server"
 import { canAddLocation, getPlanEntitlements, PlanLimitError } from "@/lib/subscription-access";
 import { locationSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";

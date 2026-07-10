@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,6 +21,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const employeeFormSchema = employeeSchema.extend({
   pin: z.union([z.string().length(4), z.literal("")]).optional(),
+  hourlyWage: z.coerce.number().min(0).optional(),
+  ptoAnnualHours: z.coerce.number().min(0).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE", "INVITED"]).optional(),
+  ptoBalanceHours: z.coerce.number().min(0).optional(),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
@@ -28,10 +32,19 @@ type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
 type EmployeeFormProps = {
   roles: Array<{ id: string; name: string }>;
   locations: Array<{ id: string; name: string }>;
+  employeeId?: string;
+  defaultValues?: Partial<EmployeeFormValues & { locationIds: string[] }>;
 };
 
-export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
+export function EmployeeForm({
+  roles,
+  locations,
+  employeeId,
+  defaultValues,
+}: EmployeeFormProps) {
   const router = useRouter();
+  const isEdit = !!employeeId;
+
   const {
     register,
     handleSubmit,
@@ -39,19 +52,24 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormValues>({
-    resolver: zodResolver(employeeFormSchema),
+    resolver: zodResolver(employeeFormSchema) as Resolver<EmployeeFormValues>,
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      roleId: "",
+      name: defaultValues?.name ?? "",
+      email: defaultValues?.email ?? "",
+      phone: defaultValues?.phone ?? "",
+      roleId: defaultValues?.roleId ?? "",
       pin: "",
-      locationIds: [],
+      locationIds: defaultValues?.locationIds ?? [],
+      hourlyWage: defaultValues?.hourlyWage ?? undefined,
+      ptoAnnualHours: defaultValues?.ptoAnnualHours ?? undefined,
+      ...(isEdit ? { ptoBalanceHours: defaultValues?.ptoBalanceHours ?? undefined } : {}),
+      ...(isEdit ? { status: defaultValues?.status ?? "ACTIVE" } : {}),
     },
   });
 
   const roleId = watch("roleId");
   const locationIds = watch("locationIds") ?? [];
+  const status = watch("status");
 
   async function onSubmit(data: EmployeeFormValues) {
     const payload = {
@@ -62,29 +80,42 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
       ...(data.pin ? { pin: data.pin } : {}),
       ...(data.locationIds && data.locationIds.length > 0
         ? { locationIds: data.locationIds }
+        : isEdit
+          ? { locationIds: data.locationIds ?? [] }
+          : {}),
+      ...(data.hourlyWage !== undefined
+        ? { hourlyWage: Number(data.hourlyWage) }
         : {}),
+      ...(data.ptoAnnualHours !== undefined
+        ? { ptoAnnualHours: Number(data.ptoAnnualHours) }
+        : {}),
+      ...(data.ptoBalanceHours !== undefined
+        ? { ptoBalanceHours: Number(data.ptoBalanceHours) }
+        : {}),
+      ...(data.status ? { status: data.status } : {}),
     };
 
     try {
-      const res = await fetch("/api/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        isEdit ? `/api/employees/${employeeId}` : "/api/employees",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        toast.error(err?.error ?? "Failed to create employee");
+        const err = (await res.json().catch(() => null)) as { error?: string } | null;
+        toast.error(err?.error ?? `Failed to ${isEdit ? "update" : "create"} employee`);
         return;
       }
 
-      toast.success("Employee created");
-      router.push("/employees");
+      toast.success(isEdit ? "Employee updated" : "Employee created");
+      router.push(isEdit ? `/employees/${employeeId}` : "/employees");
       router.refresh();
     } catch {
-      toast.error("Failed to create employee");
+      toast.error(`Failed to ${isEdit ? "update" : "create"} employee`);
     }
   }
 
@@ -138,7 +169,9 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="pin">PIN (4 digits, optional)</Label>
+              <Label htmlFor="pin">
+                PIN (4 digits{isEdit ? ", leave blank to keep" : ", optional"})
+              </Label>
               <Input
                 id="pin"
                 type="password"
@@ -152,6 +185,28 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
               )}
             </div>
           </div>
+          {isEdit && (
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={status}
+                onValueChange={(v) =>
+                  setValue("status", v as EmployeeFormValues["status"], {
+                    shouldValidate: true,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="INVITED">Invited</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {locations.length > 0 && (
             <div className="space-y-2">
               <Label>Locations</Label>
@@ -168,9 +223,7 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
                         setValue("locationIds", next);
                       }}
                     />
-                    <Label htmlFor={`location-${location.id}`}>
-                      {location.name}
-                    </Label>
+                    <Label htmlFor={`location-${location.id}`}>{location.name}</Label>
                   </div>
                 ))}
               </div>
@@ -179,9 +232,57 @@ export function EmployeeForm({ roles, locations }: EmployeeFormProps) {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Compensation & PTO</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="hourlyWage">Hourly wage ($)</Label>
+              <Input
+                id="hourlyWage"
+                type="number"
+                step="0.01"
+                min="0"
+                {...register("hourlyWage")}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ptoAnnualHours">Annual PTO hours</Label>
+              <Input
+                id="ptoAnnualHours"
+                type="number"
+                step="0.5"
+                min="0"
+                {...register("ptoAnnualHours")}
+              />
+            </div>
+          </div>
+          {isEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="ptoBalanceHours">PTO balance (hours)</Label>
+              <Input
+                id="ptoBalanceHours"
+                type="number"
+                step="0.5"
+                min="0"
+                {...register("ptoBalanceHours")}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-3">
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Creating..." : "Create Employee"}
+          {isSubmitting
+            ? isEdit
+              ? "Saving..."
+              : "Creating..."
+            : isEdit
+              ? "Save Changes"
+              : "Create Employee"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel

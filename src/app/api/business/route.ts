@@ -187,6 +187,10 @@ export async function POST(request: Request) {
         },
       });
 
+      await tx.workforceSettings.create({
+        data: { businessId: created.id },
+      });
+
       await tx.moduleSetting.createMany({
         data: buildModuleSettings(posConfig).map((setting) => ({
           businessId: created.id,

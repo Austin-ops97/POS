@@ -188,6 +188,8 @@ export const employeeSchema = z.object({
   roleId: z.string(),
   pin: z.string().length(4).optional(),
   locationIds: z.array(z.string()).optional(),
+  hourlyWage: z.number().min(0).optional(),
+  ptoAnnualHours: z.number().min(0).optional(),
 });
 
 export const businessInfoSchema = businessProfileSchema.omit({ type: true });

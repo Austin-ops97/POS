@@ -154,6 +154,49 @@ enum AuditAction {
   EMPLOYEE_CHANGE
   LOGIN
   PAYMENT
+  WORKFORCE_CHANGE
+  TIME_ENTRY_ADJUSTMENT
+  TIME_OFF_REVIEW
+  PAYROLL_BONUS
+}
+
+enum PayPeriodType {
+  WEEKLY
+  BIWEEKLY
+  SEMIMONTHLY
+  MONTHLY
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TimeEntrySource {
+  PIN_KIOSK
+  MANUAL
+}
+
+enum TimeEntryStatus {
+  ACTIVE
+  COMPLETED
+  ADJUSTED
+}
+
+enum TimeOffType {
+  PTO
+  SICK
+  UNPAID
+  OTHER
+}
+
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
 }
 
 // ─── Core Multi-Tenant ───────────────────────────────────────────────────────
@@ -190,6 +233,11 @@ model Business {
   moduleSettings  ModuleSetting[]
   auditLogs       AuditLog[]
   registerSessions RegisterSession[]
+  workforceSettings WorkforceSettings?
+  shifts          Shift[]
+  timeEntries     TimeEntry[]
+  timeOffRequests TimeOffRequest[]
+  payrollBonuses  PayrollBonus[]
 
   @@index([createdAt])
 }
@@ -218,6 +266,8 @@ model Location {
   terminalReaders TerminalReader[]
   registerSessions RegisterSession[]
   employeeLocations EmployeeLocation[]
+  shifts          Shift[]
+  timeEntries     TimeEntry[]
 
   @@index([businessId])
 }
@@ -272,27 +322,38 @@ model RolePermission {
 }
 
 model EmployeeProfile {
-  id          String         @id @default(cuid())
-  businessId  String
-  userId      String?
-  roleId      String
-  name        String
-  email       String
-  phone       String?
-  pinHash     String?
-  status      EmployeeStatus @default(ACTIVE)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  deletedAt   DateTime?
+  id              String         @id @default(cuid())
+  businessId      String
+  userId          String?
+  roleId          String
+  name            String
+  email           String
+  phone           String?
+  pinHash         String?
+  hourlyWage      Decimal?       @db.Decimal(10, 2)
+  ptoBalanceHours Decimal        @default(0) @db.Decimal(8, 2)
+  ptoAnnualHours  Decimal        @default(0) @db.Decimal(8, 2)
+  status          EmployeeStatus @default(ACTIVE)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user        User?    @relation(fields: [userId], references: [id])
-  role        Role     @relation(fields: [roleId], references: [id])
-  locations   EmployeeLocation[]
-  orders      Order[]
-  refunds     Refund[]
-  registerSessions RegisterSession[]
-  auditLogs   AuditLog[]
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                  User?    @relation(fields: [userId], references: [id])
+  role                  Role     @relation(fields: [roleId], references: [id])
+  locations             EmployeeLocation[]
+  orders                Order[]
+  refunds               Refund[]
+  registerSessions      RegisterSession[]
+  auditLogs             AuditLog[]
+  shifts                Shift[]
+  shiftsCreated         Shift[]          @relation("ShiftCreatedBy")
+  timeEntries           TimeEntry[]
+  timeEntriesAdjusted   TimeEntry[]      @relation("TimeEntryAdjustedBy")
+  timeOffRequests       TimeOffRequest[]
+  timeOffReviews        TimeOffRequest[] @relation("TimeOffReviewedBy")
+  payrollBonuses        PayrollBonus[]
+  payrollBonusesCreated PayrollBonus[]   @relation("PayrollBonusCreatedBy")
 
   @@index([businessId])
   @@index([email])
@@ -847,4 +908,130 @@ model AuditLog {
   @@index([businessId])
   @@index([createdAt])
   @@index([entity])
+}
+
+// ─── Workforce ───────────────────────────────────────────────────────────────
+
+model WorkforceSettings {
+  id                     String        @id @default(cuid())
+  businessId             String        @unique
+  payPeriodType          PayPeriodType @default(BIWEEKLY)
+  weekStartDay           Int           @default(0)
+  overtimeThresholdHours Decimal       @default(40) @db.Decimal(6, 2)
+  defaultPtoAnnualHours  Decimal       @default(80) @db.Decimal(8, 2)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Shift {
+  id          String      @id @default(cuid())
+  businessId  String
+  employeeId  String
+  locationId  String?
+  startAt     DateTime
+  endAt       DateTime
+  notes       String?
+  status      ShiftStatus @default(SCHEDULED)
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee    EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location    Location?       @relation(fields: [locationId], references: [id])
+  createdBy   EmployeeProfile @relation("ShiftCreatedBy", fields: [createdById], references: [id])
+  timeEntries TimeEntry[]
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([startAt])
+}
+
+model TimeEntry {
+  id              String          @id @default(cuid())
+  businessId      String
+  employeeId      String
+  locationId      String?
+  shiftId         String?
+  clockIn         DateTime
+  clockOut        DateTime?
+  source          TimeEntrySource @default(PIN_KIOSK)
+  status          TimeEntryStatus @default(ACTIVE)
+  adjustedById    String?
+  adjustmentNote  String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee        EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location        Location?       @relation(fields: [locationId], references: [id])
+  shift           Shift?          @relation(fields: [shiftId], references: [id])
+  adjustedBy      EmployeeProfile? @relation("TimeEntryAdjustedBy", fields: [adjustedById], references: [id])
+  breaks          TimeBreak[]
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([clockIn])
+  @@index([status])
+}
+
+model TimeBreak {
+  id          String    @id @default(cuid())
+  timeEntryId String
+  breakStart  DateTime
+  breakEnd    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  timeEntry   TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+
+  @@index([timeEntryId])
+}
+
+model TimeOffRequest {
+  id             String        @id @default(cuid())
+  businessId     String
+  employeeId     String
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  hoursRequested Decimal       @db.Decimal(8, 2)
+  type           TimeOffType   @default(PTO)
+  status         TimeOffStatus @default(PENDING)
+  notes          String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  denialReason   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee       EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy     EmployeeProfile? @relation("TimeOffReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model PayrollBonus {
+  id              String   @id @default(cuid())
+  businessId      String
+  employeeId      String
+  amount          Decimal  @db.Decimal(10, 2)
+  description     String
+  payPeriodStart  DateTime @db.Date
+  payPeriodEnd    DateTime @db.Date
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee        EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy       EmployeeProfile @relation("PayrollBonusCreatedBy", fields: [createdById], references: [id])
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([payPeriodStart, payPeriodEnd])
 }

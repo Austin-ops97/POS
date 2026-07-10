@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   CreditCard,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/orders", label: "Orders", icon: ClipboardList },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/employees", label: "Employees", icon: UserCog },
+  { href: "/workforce", label: "Workforce", icon: CalendarClock },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

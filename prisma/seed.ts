@@ -84,6 +84,12 @@ async function main() {
     update: {},
   });
 
+  await db.workforceSettings.upsert({
+    where: { businessId: business.id },
+    create: { businessId: business.id },
+    update: {},
+  });
+
   await db.stripeAccount.upsert({
     where: { businessId: business.id },
     create: { businessId: business.id, status: "NOT_CONNECTED" },
@@ -125,9 +131,9 @@ async function main() {
   const pinHash = await bcrypt.hash("1234", 10);
 
   const employees = [
-    { id: "demo-owner", name: "Alex Owner", email: "owner@demo.nexapos.com", roleId: ownerRole.id },
-    { id: "demo-manager", name: "Maria Manager", email: "manager@demo.nexapos.com", roleId: managerRole.id },
-    { id: "demo-cashier", name: "Chris Cashier", email: "cashier@demo.nexapos.com", roleId: cashierRole.id },
+    { id: "demo-owner", name: "Alex Owner", email: "owner@demo.nexapos.com", roleId: ownerRole.id, hourlyWage: 35, ptoAnnualHours: 120 },
+    { id: "demo-manager", name: "Maria Manager", email: "manager@demo.nexapos.com", roleId: managerRole.id, hourlyWage: 28, ptoAnnualHours: 80 },
+    { id: "demo-cashier", name: "Chris Cashier", email: "cashier@demo.nexapos.com", roleId: cashierRole.id, hourlyWage: 18, ptoAnnualHours: 80 },
   ];
 
   for (const emp of employees) {
@@ -140,9 +146,16 @@ async function main() {
         name: emp.name,
         email: emp.email,
         pinHash,
+        hourlyWage: emp.hourlyWage,
+        ptoAnnualHours: emp.ptoAnnualHours,
+        ptoBalanceHours: emp.ptoAnnualHours,
         status: "ACTIVE",
       },
-      update: {},
+      update: {
+        hourlyWage: emp.hourlyWage,
+        ptoAnnualHours: emp.ptoAnnualHours,
+        ptoBalanceHours: emp.ptoAnnualHours,
+      },
     });
 
     await db.employeeLocation.upsert({

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
+import { ensurePaidSubscription } from "@/lib/subscription-server"
 import { canUseTerminal, PlanLimitError } from "@/lib/subscription-access";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";

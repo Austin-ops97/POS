@@ -388,7 +388,18 @@ export async function getEmployees(ctx: AuthContext) {
   if (isDemoMode()) return demoEmployees;
   return db.employeeProfile.findMany({
     where: { businessId: ctx.business.id, deletedAt: null },
-    include: { role: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      status: true,
+      hourlyWage: true,
+      ptoBalanceHours: true,
+      ptoAnnualHours: true,
+      role: { select: { id: true, name: true } },
+      createdAt: true,
+    },
     orderBy: { name: "asc" },
   });
 }
@@ -546,4 +557,123 @@ export async function getReportsData(
         }))
       : [],
   };
+}
+
+export async function getEmployeeById(ctx: AuthContext, id: string) {
+  if (isDemoMode()) {
+    const employee = demoEmployees.find((e) => e.id === id);
+    if (!employee) return null;
+    return {
+      ...employee,
+      phone: null,
+      hourlyWage: 18,
+      ptoBalanceHours: 80,
+      ptoAnnualHours: 80,
+      locations: [],
+      role: { id: employee.role.name, name: employee.role.name },
+    };
+  }
+  return db.employeeProfile.findFirst({
+    where: { id, businessId: ctx.business.id, deletedAt: null },
+    include: {
+      role: { select: { id: true, name: true } },
+      locations: { include: { location: { select: { id: true, name: true } } } },
+    },
+  });
+}
+
+export async function getWorkforceOverview(ctx: AuthContext) {
+  if (isDemoMode()) {
+    return {
+      clockedIn: [],
+      todayShifts: [],
+      pendingTimeOff: [],
+      activeEmployees: demoEmployees.length,
+    };
+  }
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const [clockedIn, todayShifts, pendingTimeOff, activeEmployees] = await Promise.all([
+    db.timeEntry.findMany({
+      where: {
+        businessId: ctx.business.id,
+        status: "ACTIVE",
+      },
+      include: {
+        employee: { select: { id: true, name: true } },
+        breaks: true,
+      },
+    }),
+    db.shift.findMany({
+      where: {
+        businessId: ctx.business.id,
+        status: "SCHEDULED",
+        startAt: { gte: todayStart, lte: todayEnd },
+      },
+      include: {
+        employee: { select: { id: true, name: true } },
+        location: { select: { id: true, name: true } },
+      },
+      orderBy: { startAt: "asc" },
+    }),
+    db.timeOffRequest.findMany({
+      where: {
+        businessId: ctx.business.id,
+        status: "PENDING",
+      },
+      include: {
+        employee: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.employeeProfile.count({
+      where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE" },
+    }),
+  ]);
+
+  return { clockedIn, todayShifts, pendingTimeOff, activeEmployees };
+}
+
+export async function getEmployeeWorkforceSummary(ctx: AuthContext, employeeId: string) {
+  if (isDemoMode()) {
+    return { timeEntries: [], upcomingShifts: [], activeEntry: null };
+  }
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const [timeEntries, upcomingShifts, activeEntry] = await Promise.all([
+    db.timeEntry.findMany({
+      where: {
+        businessId: ctx.business.id,
+        employeeId,
+        clockIn: { gte: weekStart },
+      },
+      include: { breaks: true },
+      orderBy: { clockIn: "desc" },
+      take: 10,
+    }),
+    db.shift.findMany({
+      where: {
+        businessId: ctx.business.id,
+        employeeId,
+        status: "SCHEDULED",
+        startAt: { gte: new Date() },
+      },
+      orderBy: { startAt: "asc" },
+      take: 5,
+    }),
+    db.timeEntry.findFirst({
+      where: { employeeId, status: "ACTIVE" },
+      include: { breaks: true },
+    }),
+  ]);
+
+  return { timeEntries, upcomingShifts, activeEntry };
 }

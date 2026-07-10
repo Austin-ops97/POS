@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Layers,
   Sparkles,
+  CalendarClock,
 } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -50,6 +51,12 @@ const settingsSections = [
         title: "Employees",
         description: "Staff accounts, roles, and PIN access",
         icon: UserCog,
+      },
+      {
+        href: "/workforce",
+        title: "Workforce",
+        description: "Scheduling, time clock, PTO, and payroll",
+        icon: CalendarClock,
       },
       {
         href: "/settings/roles",
