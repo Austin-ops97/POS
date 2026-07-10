@@ -12,13 +12,46 @@ export const PERMISSIONS = {
   MANAGE_BILLING: "manage_billing",
   MANAGE_STRIPE: "manage_stripe",
   MANAGE_LOCATIONS: "manage_locations",
+  VIEW_WORKFORCE: "view_workforce",
   MANAGE_WORKFORCE: "manage_workforce",
-  APPROVE_TIME_OFF: "approve_time_off",
+  VIEW_EMPLOYEE_PERSONAL: "view_employee_personal",
+  VIEW_COMPENSATION: "view_compensation",
+  MANAGE_COMPENSATION: "manage_compensation",
   VIEW_PAYROLL: "view_payroll",
+  MANAGE_PAYROLL: "manage_payroll",
+  MANAGE_TIME_ENTRIES: "manage_time_entries",
+  APPROVE_TIME_OFF: "approve_time_off",
+  REVIEW_TIME_OFF: "review_time_off",
+  MANAGE_WORKFORCE_SETTINGS: "manage_workforce_settings",
   REQUEST_TIME_OFF: "request_time_off",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+const WORKFORCE_VIEW: PermissionKey[] = [
+  PERMISSIONS.VIEW_WORKFORCE,
+  PERMISSIONS.REQUEST_TIME_OFF,
+];
+
+const WORKFORCE_MANAGE: PermissionKey[] = [
+  PERMISSIONS.MANAGE_WORKFORCE,
+  PERMISSIONS.MANAGE_TIME_ENTRIES,
+  PERMISSIONS.MANAGE_WORKFORCE_SETTINGS,
+];
+
+const WORKFORCE_HR: PermissionKey[] = [
+  PERMISSIONS.VIEW_EMPLOYEE_PERSONAL,
+  PERMISSIONS.MANAGE_EMPLOYEES,
+  PERMISSIONS.VIEW_COMPENSATION,
+  PERMISSIONS.MANAGE_COMPENSATION,
+];
+
+const WORKFORCE_PAYROLL: PermissionKey[] = [
+  PERMISSIONS.VIEW_PAYROLL,
+  PERMISSIONS.MANAGE_PAYROLL,
+  PERMISSIONS.REVIEW_TIME_OFF,
+  PERMISSIONS.APPROVE_TIME_OFF,
+];
 
 export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Owner: Object.values(PERMISSIONS),
@@ -35,9 +68,10 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_EMPLOYEES,
     PERMISSIONS.MANAGE_STRIPE,
     PERMISSIONS.MANAGE_LOCATIONS,
-    PERMISSIONS.MANAGE_WORKFORCE,
-    PERMISSIONS.APPROVE_TIME_OFF,
-    PERMISSIONS.VIEW_PAYROLL,
+    ...WORKFORCE_VIEW,
+    ...WORKFORCE_MANAGE,
+    ...WORKFORCE_HR,
+    ...WORKFORCE_PAYROLL,
     PERMISSIONS.REQUEST_TIME_OFF,
   ],
   Manager: [
@@ -50,9 +84,14 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_CUSTOMERS,
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.MANAGE_LOCATIONS,
+    PERMISSIONS.VIEW_WORKFORCE,
     PERMISSIONS.MANAGE_WORKFORCE,
-    PERMISSIONS.APPROVE_TIME_OFF,
+    PERMISSIONS.MANAGE_TIME_ENTRIES,
+    PERMISSIONS.VIEW_EMPLOYEE_PERSONAL,
+    PERMISSIONS.VIEW_COMPENSATION,
     PERMISSIONS.VIEW_PAYROLL,
+    PERMISSIONS.REVIEW_TIME_OFF,
+    PERMISSIONS.APPROVE_TIME_OFF,
     PERMISSIONS.REQUEST_TIME_OFF,
   ],
   Cashier: [
@@ -60,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.PROCESS_SALE,
     PERMISSIONS.APPLY_DISCOUNT,
     PERMISSIONS.MANAGE_CUSTOMERS,
+    PERMISSIONS.VIEW_WORKFORCE,
     PERMISSIONS.REQUEST_TIME_OFF,
   ],
   "Inventory Staff": [
@@ -70,3 +110,11 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   "Reports Viewer": [PERMISSIONS.VIEW_REPORTS, PERMISSIONS.REQUEST_TIME_OFF],
 };
+
+/** @deprecated Use APPROVE_TIME_OFF or REVIEW_TIME_OFF */
+export function isTimeOffReviewer(permissions: PermissionKey[]): boolean {
+  return (
+    permissions.includes(PERMISSIONS.APPROVE_TIME_OFF) ||
+    permissions.includes(PERMISSIONS.REVIEW_TIME_OFF)
+  );
+}

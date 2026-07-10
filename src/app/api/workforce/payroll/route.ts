@@ -41,6 +41,7 @@ export async function GET(request: Request) {
       periodStart: start,
       periodEnd: end,
       overtimeThreshold: Number(settings.overtimeThresholdHours),
+      weekStartDay: settings.weekStartDay,
     });
 
     if (format === "csv") {
@@ -73,10 +74,9 @@ export async function POST(request: Request) {
     const ctx = await requireAuth();
     await ensurePaidSubscription(ctx);
 
-    if (!hasPermission(ctx, PERMISSIONS.VIEW_PAYROLL)) {
-      throw new Error(`Missing permission: ${PERMISSIONS.VIEW_PAYROLL}`);
+    if (!hasPermission(ctx, PERMISSIONS.MANAGE_PAYROLL)) {
+      throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_PAYROLL}`);
     }
-
     const body = await request.json();
     const data = payrollBonusSchema.parse(body);
 

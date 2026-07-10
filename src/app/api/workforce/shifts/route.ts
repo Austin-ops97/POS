@@ -4,17 +4,20 @@ import { requireAuth, hasPermission } from "@/lib/auth";
 import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { shiftSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
-import {
-  hasOverlappingShift,
-  validateShiftTimes,
-} from "@/lib/workforce/schedule-service";
-import { createAuditLog } from "@/lib/audit";
+import { createShift } from "@/lib/workforce/schedule-service";
 import { handleApiError } from "@/lib/api-utils";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
     await ensurePaidSubscription(ctx);
+
+    if (
+      !hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE) &&
+      !hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)
+    ) {
+      throw new Error(`Missing permission: ${PERMISSIONS.VIEW_WORKFORCE}`);
+    }
 
     const { searchParams } = new URL(request.url);
     const from = searchParams.get("from");
@@ -24,9 +27,15 @@ export async function GET(request: Request) {
 
     if (!from || !to) {
       return NextResponse.json(
-        { error: "from and to query params are required" },
+        { error: "from and to query params are required", code: "VALIDATION_ERROR" },
         { status: 400 }
       );
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      return NextResponse.json({ error: "Invalid date range", code: "VALIDATION_ERROR" }, { status: 400 });
     }
 
     const shifts = await db.shift.findMany({
@@ -34,12 +43,12 @@ export async function GET(request: Request) {
         businessId: ctx.business.id,
         ...(locationId ? { locationId } : {}),
         ...(employeeId ? { employeeId } : {}),
-        startAt: { lt: new Date(to) },
-        endAt: { gt: new Date(from) },
+        startAt: { lt: toDate },
+        endAt: { gt: fromDate },
       },
       include: {
         employee: { select: { id: true, name: true } },
-        location: { select: { id: true, name: true } },
+        location: { select: { id: true, name: true, timezone: true } },
       },
       orderBy: { startAt: "asc" },
     });
@@ -62,58 +71,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const data = shiftSchema.parse(body);
 
-    const startAt = new Date(data.startAt);
-    const endAt = new Date(data.endAt);
-
-    const timeError = validateShiftTimes(startAt, endAt);
-    if (timeError) {
-      return NextResponse.json({ error: timeError }, { status: 400 });
-    }
-
-    const employee = await db.employeeProfile.findFirst({
-      where: {
-        id: data.employeeId,
-        businessId: ctx.business.id,
-        deletedAt: null,
-      },
-    });
-    if (!employee) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-    }
-
-    if (await hasOverlappingShift(data.employeeId, startAt, endAt)) {
-      return NextResponse.json(
-        { error: "Shift overlaps with an existing shift" },
-        { status: 409 }
-      );
-    }
-
-    const shift = await db.shift.create({
+    const result = await createShift({
+      businessId: ctx.business.id,
+      createdById: ctx.employee.id,
       data: {
-        businessId: ctx.business.id,
         employeeId: data.employeeId,
         locationId: data.locationId,
-        startAt,
-        endAt,
+        startAt: new Date(data.startAt),
+        endAt: new Date(data.endAt),
         notes: data.notes,
-        createdById: ctx.employee.id,
-      },
-      include: {
-        employee: { select: { id: true, name: true } },
-        location: { select: { id: true, name: true } },
+        status: data.status,
       },
     });
 
-    await createAuditLog({
-      businessId: ctx.business.id,
-      employeeId: ctx.employee.id,
-      action: "WORKFORCE_CHANGE",
-      entity: "Shift",
-      entityId: shift.id,
-      details: { action: "created", employeeId: data.employeeId, startAt, endAt },
-    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error, code: "SHIFT_CREATE_FAILED" }, { status: result.status });
+    }
 
-    return NextResponse.json(shift, { status: 201 });
+    return NextResponse.json(result.shift, { status: 201 });
   } catch (error) {
     return handleApiError(error, "POST /api/workforce/shifts");
   }

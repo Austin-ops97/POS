@@ -12,7 +12,11 @@ import { PERMISSIONS } from "@/lib/permissions";
 export default async function SchedulePage() {
   const ctx = await requireAuth();
 
-  if (!hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)) {
+  const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE);
+  const canViewSchedule =
+    canManage || hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
+
+  if (!canViewSchedule) {
     redirect("/workforce");
   }
 
@@ -20,11 +24,16 @@ export default async function SchedulePage() {
     getEmployees(ctx),
     db.location.findMany({
       where: { businessId: ctx.business.id, deletedAt: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, timezone: true },
       orderBy: { name: "asc" },
     }),
     ensureWorkforceSettings(ctx.business.id),
   ]);
+
+  const defaultTimezone =
+    locations.find((l) => l.id === ctx.location?.id)?.timezone ??
+    locations[0]?.timezone ??
+    "America/New_York";
 
   return (
     <div className="space-y-6">
@@ -43,7 +52,8 @@ export default async function SchedulePage() {
         employees={employees.map((e) => ({ id: e.id, name: e.name }))}
         locations={locations}
         weekStartDay={settings.weekStartDay}
-        canManage
+        defaultTimezone={defaultTimezone}
+        canManage={canManage}
       />
     </div>
   );

@@ -24,10 +24,15 @@ export default async function EmployeeEditPage({
   const employee = await getEmployeeById(ctx, id);
   if (!employee) notFound();
 
-  const [roles, locations] = await Promise.all([
+  const [roles, locations, managers] = await Promise.all([
     db.role.findMany({ orderBy: { name: "asc" } }),
     db.location.findMany({
       where: { businessId: ctx.business.id, deletedAt: null },
+      orderBy: { name: "asc" },
+    }),
+    db.employeeProfile.findMany({
+      where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE", id: { not: id } },
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -57,6 +62,10 @@ export default async function EmployeeEditPage({
         employeeId={id}
         roles={roles}
         locations={locations}
+        managers={managers}
+        canViewPersonal={hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL)}
+        canViewCompensation={hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION)}
+        canManageCompensation={hasPermission(ctx, PERMISSIONS.MANAGE_COMPENSATION)}
         defaultValues={{
           name: employee.name,
           email: employee.email,

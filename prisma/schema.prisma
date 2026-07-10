@@ -199,90 +199,124 @@ enum TimeOffStatus {
   CANCELLED
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  SEASONAL
+  TEMPORARY
+  CONTRACTOR
+}
+
+enum PayType {
+  HOURLY
+  SALARY
+}
+
+enum DisplayNameStrategy {
+  LEGAL
+  PREFERRED
+  CUSTOM
+}
+
+enum PtoAccrualPolicy {
+  ANNUAL_GRANT
+  NONE
+}
+
+enum PtoLedgerType {
+  ACCRUAL
+  USAGE
+  ADJUSTMENT
+  CARRYOVER
+  REVERSAL
+}
+
 // ─── Core Multi-Tenant ───────────────────────────────────────────────────────
 
 model Business {
-  id              String       @id @default(cuid())
-  name            String
-  legalName       String?
-  type            BusinessType @default(RETAIL)
-  phone           String?
-  email           String?
-  website         String?
-  logoUrl         String?
-  primaryColor    String       @default("#1e3a5f")
-  onboardingStep  OnboardingStep @default(WELCOME)
-  onboardingComplete Boolean   @default(false)
-  demoMode        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  deletedAt       DateTime?
+  id                 String         @id @default(cuid())
+  name               String
+  legalName          String?
+  type               BusinessType   @default(RETAIL)
+  phone              String?
+  email              String?
+  website            String?
+  logoUrl            String?
+  primaryColor       String         @default("#1e3a5f")
+  onboardingStep     OnboardingStep @default(WELCOME)
+  onboardingComplete Boolean        @default(false)
+  demoMode           Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  deletedAt          DateTime?
 
-  locations       Location[]
-  employees       EmployeeProfile[]
-  products        Product[]
-  categories      Category[]
-  customers       Customer[]
-  orders          Order[]
-  discounts       Discount[]
-  taxRates        TaxRate[]
-  inventoryItems  InventoryItem[]
-  stripeAccount   StripeAccount?
-  subscription    Subscription?
-  settings        BusinessSetting?
-  moduleSettings  ModuleSetting[]
-  auditLogs       AuditLog[]
-  registerSessions RegisterSession[]
+  locations         Location[]
+  employees         EmployeeProfile[]
+  products          Product[]
+  categories        Category[]
+  customers         Customer[]
+  orders            Order[]
+  discounts         Discount[]
+  taxRates          TaxRate[]
+  inventoryItems    InventoryItem[]
+  stripeAccount     StripeAccount?
+  subscription      Subscription?
+  settings          BusinessSetting?
+  moduleSettings    ModuleSetting[]
+  auditLogs         AuditLog[]
+  registerSessions  RegisterSession[]
   workforceSettings WorkforceSettings?
-  shifts          Shift[]
-  timeEntries     TimeEntry[]
-  timeOffRequests TimeOffRequest[]
-  payrollBonuses  PayrollBonus[]
+  shifts            Shift[]
+  timeEntries       TimeEntry[]
+  timeOffRequests   TimeOffRequest[]
+  payrollBonuses    PayrollBonus[]
+  ptoLedgerEntries  PtoLedgerEntry[]
 
   @@index([createdAt])
 }
 
 model Location {
-  id          String   @id @default(cuid())
-  businessId  String
-  name        String
-  street      String?
-  city        String?
-  state       String?
-  zip         String?
-  country     String   @default("US")
-  timezone    String   @default("America/New_York")
-  taxRegion   String?
-  isActive    Boolean  @default(true)
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  id         String    @id @default(cuid())
+  businessId String
+  name       String
+  street     String?
+  city       String?
+  state      String?
+  zip        String?
+  country    String    @default("US")
+  timezone   String    @default("America/New_York")
+  taxRegion  String?
+  isActive   Boolean   @default(true)
+  isDefault  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  inventoryItems InventoryItem[]
-  orders      Order[]
-  taxRates    TaxRate[]
-  terminalReaders TerminalReader[]
-  registerSessions RegisterSession[]
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryItems    InventoryItem[]
+  orders            Order[]
+  taxRates          TaxRate[]
+  terminalReaders   TerminalReader[]
+  registerSessions  RegisterSession[]
   employeeLocations EmployeeLocation[]
-  shifts          Shift[]
-  timeEntries     TimeEntry[]
+  defaultEmployees  EmployeeProfile[]  @relation("EmployeeDefaultLocation")
+  shifts            Shift[]
+  timeEntries       TimeEntry[]
 
   @@index([businessId])
 }
 
 model User {
-  id            String   @id @default(cuid())
-  clerkId       String   @unique
-  email         String
-  firstName     String?
-  lastName      String?
-  imageUrl      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String
+  firstName String?
+  lastName  String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  employees     EmployeeProfile[]
+  employees EmployeeProfile[]
 
   @@index([email])
 }
@@ -307,7 +341,7 @@ model Permission {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  roles       RolePermission[]
+  roles RolePermission[]
 }
 
 model RolePermission {
@@ -315,48 +349,150 @@ model RolePermission {
   roleId       String
   permissionId String
 
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
 }
 
 model EmployeeProfile {
-  id              String         @id @default(cuid())
-  businessId      String
-  userId          String?
-  roleId          String
-  name            String
-  email           String
-  phone           String?
-  pinHash         String?
-  hourlyWage      Decimal?       @db.Decimal(10, 2)
-  ptoBalanceHours Decimal        @default(0) @db.Decimal(8, 2)
-  ptoAnnualHours  Decimal        @default(0) @db.Decimal(8, 2)
-  status          EmployeeStatus @default(ACTIVE)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  deletedAt       DateTime?
+  id                  String              @id @default(cuid())
+  businessId          String
+  userId              String?
+  roleId              String
+  name                String
+  email               String
+  phone               String?
+  pinHash             String?
+  hourlyWage          Decimal?            @db.Decimal(10, 2)
+  ptoBalanceHours     Decimal             @default(0) @db.Decimal(8, 2)
+  ptoAnnualHours      Decimal             @default(0) @db.Decimal(8, 2)
+  sickBalanceHours    Decimal             @default(0) @db.Decimal(8, 2)
+  ptoCarryoverLimit   Decimal?            @db.Decimal(8, 2)
+  ptoAccrualPolicy    PtoAccrualPolicy    @default(ANNUAL_GRANT)
+  status              EmployeeStatus      @default(ACTIVE)
+  legalFirstName      String?
+  legalMiddleName     String?
+  legalLastName       String?
+  preferredName       String?
+  displayNameStrategy DisplayNameStrategy @default(LEGAL)
+  dateOfBirth         DateTime?           @db.Date
+  personalEmail       String?
+  workEmail           String?
+  mobilePhone         String?
+  secondaryPhone      String?
+  profilePhotoUrl     String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  stateProvince       String?
+  postalCode          String?
+  country             String?             @default("US")
+  employeeNumber      String?
+  jobTitle            String?
+  department          String?
+  employmentType      EmploymentType?
+  hireDate            DateTime?           @db.Date
+  startDate           DateTime?           @db.Date
+  terminationDate     DateTime?           @db.Date
+  terminationReason   String?
+  managerId           String?
+  defaultLocationId   String?
+  employmentNotes     String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
 
-  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user                  User?    @relation(fields: [userId], references: [id])
-  role                  Role     @relation(fields: [roleId], references: [id])
+  business              Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                  User?                      @relation(fields: [userId], references: [id])
+  role                  Role                       @relation(fields: [roleId], references: [id])
+  manager               EmployeeProfile?           @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports         EmployeeProfile[]          @relation("EmployeeManager")
+  defaultLocation       Location?                  @relation("EmployeeDefaultLocation", fields: [defaultLocationId], references: [id], onDelete: SetNull)
   locations             EmployeeLocation[]
+  emergencyContacts     EmployeeEmergencyContact[]
+  compensationHistory   EmployeeCompensation[]
+  compensationCreated   EmployeeCompensation[]     @relation("CompensationCreatedBy")
+  ptoLedgerEntries      PtoLedgerEntry[]
+  ptoAdjustmentsMade    PtoLedgerEntry[]           @relation("PtoAdjustedBy")
   orders                Order[]
   refunds               Refund[]
   registerSessions      RegisterSession[]
   auditLogs             AuditLog[]
   shifts                Shift[]
-  shiftsCreated         Shift[]          @relation("ShiftCreatedBy")
+  shiftsCreated         Shift[]                    @relation("ShiftCreatedBy")
   timeEntries           TimeEntry[]
-  timeEntriesAdjusted   TimeEntry[]      @relation("TimeEntryAdjustedBy")
+  timeEntriesAdjusted   TimeEntry[]                @relation("TimeEntryAdjustedBy")
   timeOffRequests       TimeOffRequest[]
-  timeOffReviews        TimeOffRequest[] @relation("TimeOffReviewedBy")
+  timeOffReviews        TimeOffRequest[]           @relation("TimeOffReviewedBy")
   payrollBonuses        PayrollBonus[]
-  payrollBonusesCreated PayrollBonus[]   @relation("PayrollBonusCreatedBy")
+  payrollBonusesCreated PayrollBonus[]             @relation("PayrollBonusCreatedBy")
 
+  @@unique([businessId, employeeNumber])
   @@index([businessId])
   @@index([email])
+  @@index([businessId, status])
+  @@index([managerId])
+}
+
+model EmployeeEmergencyContact {
+  id             String   @id @default(cuid())
+  employeeId     String
+  name           String
+  relationship   String
+  primaryPhone   String
+  alternatePhone String?
+  email          String?
+  isPrimary      Boolean  @default(false)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model EmployeeCompensation {
+  id                 String    @id @default(cuid())
+  employeeId         String
+  payType            PayType
+  hourlyRate         Decimal?  @db.Decimal(10, 2)
+  annualSalary       Decimal?  @db.Decimal(12, 2)
+  overtimeEligible   Boolean   @default(true)
+  overtimeMultiplier Decimal   @default(1.5) @db.Decimal(4, 2)
+  effectiveFrom      DateTime  @db.Date
+  effectiveTo        DateTime? @db.Date
+  notes              String?
+  createdById        String?
+  createdAt          DateTime  @default(now())
+
+  employee  EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile? @relation("CompensationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([employeeId, effectiveFrom])
+}
+
+model PtoLedgerEntry {
+  id           String        @id @default(cuid())
+  businessId   String
+  employeeId   String
+  type         PtoLedgerType
+  hours        Decimal       @db.Decimal(8, 2)
+  balanceAfter Decimal       @db.Decimal(8, 2)
+  reason       String?
+  referenceId  String?
+  adjustedById String?
+  createdAt    DateTime      @default(now())
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  adjustedBy EmployeeProfile? @relation("PtoAdjustedBy", fields: [adjustedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([createdAt])
 }
 
 model EmployeeLocation {
@@ -364,8 +500,8 @@ model EmployeeLocation {
   employeeId String
   locationId String
 
-  employee   EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, locationId])
 }
@@ -373,51 +509,51 @@ model EmployeeLocation {
 // ─── Catalog ─────────────────────────────────────────────────────────────────
 
 model Category {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   businessId  String
   name        String
   description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  products    Product[]
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products Product[]
 
   @@index([businessId])
 }
 
 model Product {
-  id              String      @id @default(cuid())
-  businessId      String
-  categoryId      String?
-  name            String
-  description     String?
-  sku             String?
-  barcode         String?
-  brand           String?
-  supplier        String?
-  imageUrl        String?
-  price           Decimal     @db.Decimal(10, 2)
-  cost            Decimal?    @db.Decimal(10, 2)
-  type            ProductType @default(PHYSICAL)
-  taxable         Boolean     @default(true)
-  taxCategory     String?
-  trackInventory  Boolean     @default(true)
-  isActive        Boolean     @default(true)
-  isFavorite      Boolean     @default(false)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  deletedAt       DateTime?
+  id             String      @id @default(cuid())
+  businessId     String
+  categoryId     String?
+  name           String
+  description    String?
+  sku            String?
+  barcode        String?
+  brand          String?
+  supplier       String?
+  imageUrl       String?
+  price          Decimal     @db.Decimal(10, 2)
+  cost           Decimal?    @db.Decimal(10, 2)
+  type           ProductType @default(PHYSICAL)
+  taxable        Boolean     @default(true)
+  taxCategory    String?
+  trackInventory Boolean     @default(true)
+  isActive       Boolean     @default(true)
+  isFavorite     Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category        Category? @relation(fields: [categoryId], references: [id])
-  variants        ProductVariant[]
-  modifierGroups  ProductModifierGroup[]
-  inventoryItems  InventoryItem[]
-  orderItems      OrderItem[]
+  business       Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category       Category?              @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  modifierGroups ProductModifierGroup[]
+  inventoryItems InventoryItem[]
+  orderItems     OrderItem[]
 
   @@index([businessId])
   @@index([sku])
@@ -426,19 +562,19 @@ model Product {
 }
 
 model ProductVariant {
-  id          String   @id @default(cuid())
-  productId   String
-  name        String
-  sku         String?
-  barcode     String?
-  price       Decimal? @db.Decimal(10, 2)
-  attributes  Json?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  productId  String
+  name       String
+  sku        String?
+  barcode    String?
+  price      Decimal? @db.Decimal(10, 2)
+  attributes Json?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems  OrderItem[]
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
 
   @@index([productId])
   @@index([sku])
@@ -446,18 +582,18 @@ model ProductVariant {
 }
 
 model ModifierGroup {
-  id          String   @id @default(cuid())
-  businessId  String
-  name        String
-  required    Boolean  @default(false)
-  minSelect   Int      @default(0)
-  maxSelect   Int      @default(1)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  required   Boolean  @default(false)
+  minSelect  Int      @default(0)
+  maxSelect  Int      @default(1)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  options     ModifierOption[]
-  products    ProductModifierGroup[]
+  options  ModifierOption[]
+  products ProductModifierGroup[]
 
   @@index([businessId])
 }
@@ -471,7 +607,7 @@ model ModifierOption {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
 }
 
 model ProductModifierGroup {
@@ -479,8 +615,8 @@ model ProductModifierGroup {
   productId       String
   modifierGroupId String
 
-  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
 
   @@unique([productId, modifierGroupId])
 }
@@ -488,21 +624,21 @@ model ProductModifierGroup {
 // ─── Inventory ───────────────────────────────────────────────────────────────
 
 model InventoryItem {
-  id              String   @id @default(cuid())
-  businessId      String
-  locationId      String
-  productId       String
-  quantityOnHand  Int      @default(0)
-  quantityReserved Int     @default(0)
-  reorderPoint    Int      @default(5)
-  costPerUnit     Decimal? @db.Decimal(10, 2)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  businessId       String
+  locationId       String
+  productId        String
+  quantityOnHand   Int      @default(0)
+  quantityReserved Int      @default(0)
+  reorderPoint     Int      @default(5)
+  costPerUnit      Decimal? @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location        Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  movements       InventoryMovement[]
+  business  Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location  Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  movements InventoryMovement[]
 
   @@unique([locationId, productId])
   @@index([businessId])
@@ -510,7 +646,7 @@ model InventoryItem {
 }
 
 model InventoryMovement {
-  id              String              @id @default(cuid())
+  id              String                @id @default(cuid())
   businessId      String
   inventoryItemId String
   type            InventoryMovementType
@@ -520,9 +656,9 @@ model InventoryMovement {
   reason          String?
   referenceId     String?
   employeeId      String?
-  createdAt       DateTime            @default(now())
+  createdAt       DateTime              @default(now())
 
-  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([inventoryItemId])
@@ -532,25 +668,25 @@ model InventoryMovement {
 // ─── Customers ───────────────────────────────────────────────────────────────
 
 model Customer {
-  id              String   @id @default(cuid())
-  businessId      String
-  firstName       String
-  lastName        String?
-  email           String?
-  phone           String?
-  address         String?
-  notes           String?
-  tags            String[]
-  birthday        DateTime?
-  marketingOptIn  Boolean  @default(false)
-  taxExempt       Boolean  @default(false)
+  id               String    @id @default(cuid())
+  businessId       String
+  firstName        String
+  lastName         String?
+  email            String?
+  phone            String?
+  address          String?
+  notes            String?
+  tags             String[]
+  birthday         DateTime?
+  marketingOptIn   Boolean   @default(false)
+  taxExempt        Boolean   @default(false)
   stripeCustomerId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  orders          Order[]
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders   Order[]
 
   @@index([businessId])
   @@index([email])
@@ -560,31 +696,31 @@ model Customer {
 // ─── Orders & Payments ───────────────────────────────────────────────────────
 
 model Order {
-  id              String      @id @default(cuid())
-  businessId      String
-  locationId      String
-  orderNumber     String
-  status          OrderStatus @default(DRAFT)
-  employeeId      String?
-  customerId      String?
-  subtotal        Decimal     @default(0) @db.Decimal(10, 2)
-  discountAmount  Decimal     @default(0) @db.Decimal(10, 2)
-  taxAmount       Decimal     @default(0) @db.Decimal(10, 2)
-  total           Decimal     @default(0) @db.Decimal(10, 2)
-  notes           String?
-  heldAt          DateTime?
-  paidAt          DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id             String      @id @default(cuid())
+  businessId     String
+  locationId     String
+  orderNumber    String
+  status         OrderStatus @default(DRAFT)
+  employeeId     String?
+  customerId     String?
+  subtotal       Decimal     @default(0) @db.Decimal(10, 2)
+  discountAmount Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal     @default(0) @db.Decimal(10, 2)
+  total          Decimal     @default(0) @db.Decimal(10, 2)
+  notes          String?
+  heldAt         DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location        Location @relation(fields: [locationId], references: [id])
-  employee        EmployeeProfile? @relation(fields: [employeeId], references: [id])
-  customer        Customer? @relation(fields: [customerId], references: [id])
-  items           OrderItem[]
-  payments        Payment[]
-  refunds         Refund[]
-  receipts        Receipt[]
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location         Location         @relation(fields: [locationId], references: [id])
+  employee         EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  customer         Customer?        @relation(fields: [customerId], references: [id])
+  items            OrderItem[]
+  payments         Payment[]
+  refunds          Refund[]
+  receipts         Receipt[]
   appliedDiscounts OrderDiscount[]
 
   @@unique([businessId, orderNumber])
@@ -595,26 +731,26 @@ model Order {
 }
 
 model OrderItem {
-  id              String   @id @default(cuid())
-  orderId         String
-  productId       String?
-  variantId       String?
-  name            String
-  sku             String?
-  quantity        Int      @default(1)
-  unitPrice       Decimal  @db.Decimal(10, 2)
-  discountAmount  Decimal  @default(0) @db.Decimal(10, 2)
-  taxAmount       Decimal  @default(0) @db.Decimal(10, 2)
-  total           Decimal  @db.Decimal(10, 2)
-  modifiers       Json?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  orderId        String
+  productId      String?
+  variantId      String?
+  name           String
+  sku            String?
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal  @default(0) @db.Decimal(10, 2)
+  total          Decimal  @db.Decimal(10, 2)
+  modifiers      Json?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  order           Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product         Product? @relation(fields: [productId], references: [id])
-  variant         ProductVariant? @relation(fields: [variantId], references: [id])
-  refundItems     RefundItem[]
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?        @relation(fields: [productId], references: [id])
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+  refundItems RefundItem[]
 
   @@index([orderId])
 }
@@ -635,7 +771,7 @@ model Payment {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  order                 Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([orderId])
@@ -643,105 +779,105 @@ model Payment {
 }
 
 model Refund {
-  id              String       @id @default(cuid())
-  businessId      String
-  orderId         String
-  employeeId      String?
-  amount          Decimal      @db.Decimal(10, 2)
-  taxAmount       Decimal      @default(0) @db.Decimal(10, 2)
-  reason          RefundReason
-  reasonNote      String?
-  stripeRefundId  String?
-  returnToStock   Boolean      @default(false)
-  createdAt       DateTime     @default(now())
+  id             String       @id @default(cuid())
+  businessId     String
+  orderId        String
+  employeeId     String?
+  amount         Decimal      @db.Decimal(10, 2)
+  taxAmount      Decimal      @default(0) @db.Decimal(10, 2)
+  reason         RefundReason
+  reasonNote     String?
+  stripeRefundId String?
+  returnToStock  Boolean      @default(false)
+  createdAt      DateTime     @default(now())
 
-  order           Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  employee        EmployeeProfile? @relation(fields: [employeeId], references: [id])
-  items           RefundItem[]
+  order    Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  items    RefundItem[]
 
   @@index([businessId])
   @@index([orderId])
 }
 
 model RefundItem {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   refundId    String
   orderItemId String
   quantity    Int
   amount      Decimal @db.Decimal(10, 2)
 
-  refund      Refund @relation(fields: [refundId], references: [id], onDelete: Cascade)
-  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  refund    Refund    @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
 }
 
 model Discount {
-  id              String       @id @default(cuid())
-  businessId      String
-  name            String
-  code            String?
-  type            DiscountType
-  value           Decimal      @db.Decimal(10, 2)
-  minCartAmount   Decimal?     @db.Decimal(10, 2)
-  usageLimit      Int?
-  usageCount      Int          @default(0)
-  startDate       DateTime?
-  endDate         DateTime?
-  requiresApproval Boolean     @default(false)
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  businessId       String
+  name             String
+  code             String?
+  type             DiscountType
+  value            Decimal      @db.Decimal(10, 2)
+  minCartAmount    Decimal?     @db.Decimal(10, 2)
+  usageLimit       Int?
+  usageCount       Int          @default(0)
+  startDate        DateTime?
+  endDate          DateTime?
+  requiresApproval Boolean      @default(false)
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  orderDiscounts  OrderDiscount[]
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orderDiscounts OrderDiscount[]
 
   @@index([businessId])
   @@index([code])
 }
 
 model OrderDiscount {
-  id          String  @id @default(cuid())
-  orderId     String
-  discountId  String?
-  name        String
-  type        DiscountType
-  value       Decimal @db.Decimal(10, 2)
-  amount      Decimal @db.Decimal(10, 2)
+  id         String       @id @default(cuid())
+  orderId    String
+  discountId String?
+  name       String
+  type       DiscountType
+  value      Decimal      @db.Decimal(10, 2)
+  amount     Decimal      @db.Decimal(10, 2)
 
-  order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  discount    Discount? @relation(fields: [discountId], references: [id])
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discount Discount? @relation(fields: [discountId], references: [id])
 }
 
 model TaxRate {
-  id              String   @id @default(cuid())
-  businessId      String
-  locationId      String?
-  name            String
-  rate            Decimal  @db.Decimal(5, 4)
-  appliesToProducts Boolean @default(true)
-  appliesToServices Boolean @default(true)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  businessId        String
+  locationId        String?
+  name              String
+  rate              Decimal  @db.Decimal(5, 4)
+  appliesToProducts Boolean  @default(true)
+  appliesToServices Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location        Location? @relation(fields: [locationId], references: [id])
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id])
 
   @@index([businessId])
   @@index([locationId])
 }
 
 model Receipt {
-  id          String   @id @default(cuid())
-  businessId  String
-  orderId     String
+  id            String    @id @default(cuid())
+  businessId    String
+  orderId       String
   receiptNumber String
-  emailedTo       String?
-  lastEmailedAt   DateTime?
-  printed         Boolean  @default(false)
-  printedAt       DateTime?
-  createdAt       DateTime @default(now())
+  emailedTo     String?
+  lastEmailedAt DateTime?
+  printed       Boolean   @default(false)
+  printedAt     DateTime?
+  createdAt     DateTime  @default(now())
 
-  order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([orderId])
@@ -750,26 +886,26 @@ model Receipt {
 // ─── Cash Drawer ─────────────────────────────────────────────────────────────
 
 model RegisterSession {
-  id              String              @id @default(cuid())
-  businessId      String
-  locationId      String
-  employeeId      String
-  status          RegisterSessionStatus @default(OPEN)
-  openingCash     Decimal             @default(0) @db.Decimal(10, 2)
-  cashSales       Decimal             @default(0) @db.Decimal(10, 2)
-  cashRefunds     Decimal             @default(0) @db.Decimal(10, 2)
-  paidIn          Decimal             @default(0) @db.Decimal(10, 2)
-  paidOut         Decimal             @default(0) @db.Decimal(10, 2)
-  expectedCash    Decimal?            @db.Decimal(10, 2)
-  actualCash      Decimal?            @db.Decimal(10, 2)
-  overShort       Decimal?            @db.Decimal(10, 2)
-  openedAt        DateTime            @default(now())
-  closedAt        DateTime?
+  id           String                @id @default(cuid())
+  businessId   String
+  locationId   String
+  employeeId   String
+  status       RegisterSessionStatus @default(OPEN)
+  openingCash  Decimal               @default(0) @db.Decimal(10, 2)
+  cashSales    Decimal               @default(0) @db.Decimal(10, 2)
+  cashRefunds  Decimal               @default(0) @db.Decimal(10, 2)
+  paidIn       Decimal               @default(0) @db.Decimal(10, 2)
+  paidOut      Decimal               @default(0) @db.Decimal(10, 2)
+  expectedCash Decimal?              @db.Decimal(10, 2)
+  actualCash   Decimal?              @db.Decimal(10, 2)
+  overShort    Decimal?              @db.Decimal(10, 2)
+  openedAt     DateTime              @default(now())
+  closedAt     DateTime?
 
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location        Location @relation(fields: [locationId], references: [id])
-  employee        EmployeeProfile @relation(fields: [employeeId], references: [id])
-  cashMovements   CashMovement[]
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location      Location        @relation(fields: [locationId], references: [id])
+  employee      EmployeeProfile @relation(fields: [employeeId], references: [id])
+  cashMovements CashMovement[]
 
   @@index([businessId])
   @@index([locationId])
@@ -783,60 +919,60 @@ model CashMovement {
   reason            String?
   createdAt         DateTime         @default(now())
 
-  registerSession   RegisterSession @relation(fields: [registerSessionId], references: [id], onDelete: Cascade)
+  registerSession RegisterSession @relation(fields: [registerSessionId], references: [id], onDelete: Cascade)
 }
 
 // ─── Stripe ──────────────────────────────────────────────────────────────────
 
 model StripeAccount {
-  id                  String              @id @default(cuid())
-  businessId          String              @unique
-  stripeAccountId     String?             @unique
-  status              StripeAccountStatus @default(NOT_CONNECTED)
-  chargesEnabled      Boolean             @default(false)
-  payoutsEnabled      Boolean             @default(false)
-  detailsSubmitted    Boolean             @default(false)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id               String              @id @default(cuid())
+  businessId       String              @unique
+  stripeAccountId  String?             @unique
+  status           StripeAccountStatus @default(NOT_CONNECTED)
+  chargesEnabled   Boolean             @default(false)
+  payoutsEnabled   Boolean             @default(false)
+  detailsSubmitted Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model TerminalReader {
-  id              String       @id @default(cuid())
-  businessId      String
-  locationId      String?
-  stripeReaderId  String?
-  name            String
-  serialNumber    String?
-  status          ReaderStatus @default(OFFLINE)
-  isDefault       Boolean      @default(false)
-  lastActiveAt    DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  businessId     String
+  locationId     String?
+  stripeReaderId String?
+  name           String
+  serialNumber   String?
+  status         ReaderStatus @default(OFFLINE)
+  isDefault      Boolean      @default(false)
+  lastActiveAt   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  location        Location? @relation(fields: [locationId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
 
   @@index([businessId])
   @@index([locationId])
 }
 
 model Subscription {
-  id                    String             @id @default(cuid())
-  businessId            String             @unique
-  plan                  SubscriptionPlan   @default(STARTER)
-  status                SubscriptionStatus @default(TRIALING)
-  stripeCustomerId      String?
-  stripeSubscriptionId  String?
-  stripePriceId         String?
-  currentPeriodEnd      DateTime?
-  trialEndsAt           DateTime?
-  pastDueSince              DateTime?
-  paymentActionRequiredAt   DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  id                      String             @id @default(cuid())
+  businessId              String             @unique
+  plan                    SubscriptionPlan   @default(STARTER)
+  status                  SubscriptionStatus @default(TRIALING)
+  stripeCustomerId        String?
+  stripeSubscriptionId    String?
+  stripePriceId           String?
+  currentPeriodEnd        DateTime?
+  trialEndsAt             DateTime?
+  pastDueSince            DateTime?
+  paymentActionRequiredAt DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
-  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model StripeWebhookEvent {
@@ -850,60 +986,60 @@ model StripeWebhookEvent {
 // ─── Settings & Audit ────────────────────────────────────────────────────────
 
 model BusinessSetting {
-  id                        String  @id @default(cuid())
-  businessId                String  @unique
-  enableCash                Boolean @default(true)
-  enableCard                Boolean @default(true)
-  enableManualDiscount      Boolean @default(true)
-  requireCustomer           Boolean @default(false)
-  requireManagerRefund      Boolean @default(true)
-  allowCustomItems          Boolean @default(true)
-  requirePinAtRegister      Boolean @default(false)
-  requireManagerPinRefund   Boolean @default(true)
+  id                          String   @id @default(cuid())
+  businessId                  String   @unique
+  enableCash                  Boolean  @default(true)
+  enableCard                  Boolean  @default(true)
+  enableManualDiscount        Boolean  @default(true)
+  requireCustomer             Boolean  @default(false)
+  requireManagerRefund        Boolean  @default(true)
+  allowCustomItems            Boolean  @default(true)
+  requirePinAtRegister        Boolean  @default(false)
+  requireManagerPinRefund     Boolean  @default(true)
   managerPinDiscountThreshold Decimal? @db.Decimal(5, 2)
-  sessionTimeoutMinutes     Int     @default(30)
-  receiptFooter             String?
-  returnPolicy              String?
-  showCashierOnReceipt      Boolean @default(true)
-  showCustomerOnReceipt     Boolean @default(true)
-  showBusinessEmailOnReceipt Boolean @default(true)
-  showBusinessPhoneOnReceipt Boolean @default(true)
-  showSkuOnReceipt          Boolean @default(false)
-  enableBarcodeScanning     Boolean @default(true)
-  enableReceiptPrinting     Boolean @default(true)
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  sessionTimeoutMinutes       Int      @default(30)
+  receiptFooter               String?
+  returnPolicy                String?
+  showCashierOnReceipt        Boolean  @default(true)
+  showCustomerOnReceipt       Boolean  @default(true)
+  showBusinessEmailOnReceipt  Boolean  @default(true)
+  showBusinessPhoneOnReceipt  Boolean  @default(true)
+  showSkuOnReceipt            Boolean  @default(false)
+  enableBarcodeScanning       Boolean  @default(true)
+  enableReceiptPrinting       Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
-  business                  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model ModuleSetting {
-  id          String  @id @default(cuid())
-  businessId  String
-  module      String
-  enabled     Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  businessId String
+  module     String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, module])
   @@index([businessId])
 }
 
 model AuditLog {
-  id          String      @id @default(cuid())
-  businessId  String
-  employeeId  String?
-  action      AuditAction
-  entity      String
-  entityId    String?
-  details     Json?
-  ipAddress   String?
-  createdAt   DateTime    @default(now())
+  id         String      @id @default(cuid())
+  businessId String
+  employeeId String?
+  action     AuditAction
+  entity     String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employee    EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile? @relation(fields: [employeeId], references: [id])
 
   @@index([businessId])
   @@index([createdAt])
@@ -922,7 +1058,7 @@ model WorkforceSettings {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model Shift {
@@ -950,26 +1086,26 @@ model Shift {
 }
 
 model TimeEntry {
-  id              String          @id @default(cuid())
-  businessId      String
-  employeeId      String
-  locationId      String?
-  shiftId         String?
-  clockIn         DateTime
-  clockOut        DateTime?
-  source          TimeEntrySource @default(PIN_KIOSK)
-  status          TimeEntryStatus @default(ACTIVE)
-  adjustedById    String?
-  adjustmentNote  String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  businessId     String
+  employeeId     String
+  locationId     String?
+  shiftId        String?
+  clockIn        DateTime
+  clockOut       DateTime?
+  source         TimeEntrySource @default(PIN_KIOSK)
+  status         TimeEntryStatus @default(ACTIVE)
+  adjustedById   String?
+  adjustmentNote String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
-  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employee        EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  location        Location?       @relation(fields: [locationId], references: [id])
-  shift           Shift?          @relation(fields: [shiftId], references: [id])
-  adjustedBy      EmployeeProfile? @relation("TimeEntryAdjustedBy", fields: [adjustedById], references: [id])
-  breaks          TimeBreak[]
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location   Location?        @relation(fields: [locationId], references: [id])
+  shift      Shift?           @relation(fields: [shiftId], references: [id])
+  adjustedBy EmployeeProfile? @relation("TimeEntryAdjustedBy", fields: [adjustedById], references: [id])
+  breaks     TimeBreak[]
 
   @@index([businessId])
   @@index([employeeId])
@@ -985,7 +1121,7 @@ model TimeBreak {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  timeEntry   TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  timeEntry TimeEntry @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
 
   @@index([timeEntryId])
 }
@@ -1006,9 +1142,9 @@ model TimeOffRequest {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employee       EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  reviewedBy     EmployeeProfile? @relation("TimeOffReviewedBy", fields: [reviewedById], references: [id])
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy EmployeeProfile? @relation("TimeOffReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([businessId])
   @@index([employeeId])
@@ -1016,20 +1152,20 @@ model TimeOffRequest {
 }
 
 model PayrollBonus {
-  id              String   @id @default(cuid())
-  businessId      String
-  employeeId      String
-  amount          Decimal  @db.Decimal(10, 2)
-  description     String
-  payPeriodStart  DateTime @db.Date
-  payPeriodEnd    DateTime @db.Date
-  createdById     String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  businessId     String
+  employeeId     String
+  amount         Decimal  @db.Decimal(10, 2)
+  description    String
+  payPeriodStart DateTime @db.Date
+  payPeriodEnd   DateTime @db.Date
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employee        EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdBy       EmployeeProfile @relation("PayrollBonusCreatedBy", fields: [createdById], references: [id])
+  business  Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee  EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile @relation("PayrollBonusCreatedBy", fields: [createdById], references: [id])
 
   @@index([businessId])
   @@index([employeeId])

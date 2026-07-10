@@ -23,6 +23,9 @@ export default async function EmployeeDetailPage({
 }) {
   const { id } = await params;
   const ctx = await requireAuth();
+  const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
+  const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
+
   const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES);
 
   const employee = await getEmployeeById(ctx, id);
@@ -70,7 +73,11 @@ export default async function EmployeeDetailPage({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Hourly Wage"
-          value={hourlyWage != null ? formatCurrency(hourlyWage) : "—"}
+          value={
+            canViewCompensation && hourlyWage != null
+              ? formatCurrency(hourlyWage)
+              : "—"
+          }
         />
         <StatCard title="PTO Balance" value={`${ptoBalance}h`} />
         <StatCard title="Hours This Week" value={`${weekHours.toFixed(1)}h`} />

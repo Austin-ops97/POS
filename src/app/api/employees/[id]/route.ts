@@ -7,8 +7,25 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { hashPin } from "@/lib/pin";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
+import {
+  addCompensationRecord,
+  buildEmployeeProfileData,
+  sanitizeEmployeeForViewer,
+  upsertEmergencyContacts,
+} from "@/lib/workforce/employee-service";
+import { recordPtoLedgerEntry } from "@/lib/workforce/pto-service";
 
 type RouteParams = { params: Promise<{ id: string }> };
+
+const employeeInclude = {
+  role: { select: { id: true, name: true } },
+  locations: { include: { location: { select: { id: true, name: true } } } },
+  emergencyContacts: { orderBy: { sortOrder: "asc" as const } },
+  compensationHistory: { orderBy: { effectiveFrom: "desc" as const }, take: 5 },
+  manager: { select: { id: true, name: true } },
+  defaultLocation: { select: { id: true, name: true } },
+  ptoLedgerEntries: { orderBy: { createdAt: "desc" as const }, take: 10 },
+};
 
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
@@ -22,20 +39,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
         businessId: ctx.business.id,
         deletedAt: null,
       },
-      include: {
-        role: { select: { id: true, name: true } },
-        locations: {
-          include: { location: { select: { id: true, name: true } } },
-        },
-      },
+      include: employeeInclude,
     });
 
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
+    const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
+    const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
     const { pinHash: _pinHash, ...sanitized } = employee;
-    return NextResponse.json(sanitized);
+
+    return NextResponse.json(
+      sanitizeEmployeeForViewer(sanitized, canViewPersonal, canViewCompensation)
+    );
   } catch (error) {
     return handleApiError(error, "GET /api/employees/[id]");
   }
@@ -76,6 +93,20 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
+    if (data.employeeNumber && data.employeeNumber !== existing.employeeNumber) {
+      const numberTaken = await db.employeeProfile.findFirst({
+        where: {
+          businessId: ctx.business.id,
+          employeeNumber: data.employeeNumber,
+          deletedAt: null,
+          id: { not: id },
+        },
+      });
+      if (numberTaken) {
+        return NextResponse.json({ error: "Employee number already in use" }, { status: 409 });
+      }
+    }
+
     if (data.locationIds) {
       const locations = await db.location.findMany({
         where: {
@@ -89,25 +120,36 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
+    if (data.managerId) {
+      const manager = await db.employeeProfile.findFirst({
+        where: { id: data.managerId, businessId: ctx.business.id, deletedAt: null },
+      });
+      if (!manager) {
+        return NextResponse.json({ error: "Manager not found" }, { status: 404 });
+      }
+    }
+
+    if (data.compensation && !hasPermission(ctx, PERMISSIONS.MANAGE_COMPENSATION)) {
+      throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_COMPENSATION}`);
+    }
+
+    if (data.ptoAdjustment && !hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
+      return NextResponse.json(
+        { error: "PTO adjustments require employee management permission" },
+        { status: 403 }
+      );
+    }
+
     const pinHash = data.pin ? await hashPin(data.pin) : undefined;
+    const profileData = buildEmployeeProfileData(data as Record<string, unknown>);
 
     const employee = await db.$transaction(async (tx) => {
       await tx.employeeProfile.update({
         where: { id },
         data: {
-          ...(data.name !== undefined ? { name: data.name } : {}),
-          ...(data.email !== undefined ? { email: data.email } : {}),
-          ...(data.phone !== undefined ? { phone: data.phone } : {}),
-          ...(data.roleId !== undefined ? { roleId: data.roleId } : {}),
-          ...(data.status !== undefined ? { status: data.status } : {}),
+          ...profileData,
           ...(pinHash ? { pinHash } : {}),
-          ...(data.hourlyWage !== undefined
-            ? { hourlyWage: data.hourlyWage }
-            : {}),
-          ...(data.ptoAnnualHours !== undefined
-            ? { ptoAnnualHours: data.ptoAnnualHours }
-            : {}),
-          ...(data.ptoBalanceHours !== undefined
+          ...(data.ptoBalanceHours !== undefined && !data.ptoAdjustment
             ? { ptoBalanceHours: data.ptoBalanceHours }
             : {}),
         },
@@ -117,22 +159,39 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         await tx.employeeLocation.deleteMany({ where: { employeeId: id } });
         if (data.locationIds.length > 0) {
           await tx.employeeLocation.createMany({
-            data: data.locationIds.map((locationId) => ({
-              employeeId: id,
-              locationId,
-            })),
+            data: data.locationIds.map((locationId) => ({ employeeId: id, locationId })),
           });
         }
       }
 
+      if (data.emergencyContacts) {
+        await upsertEmergencyContacts(id, data.emergencyContacts, tx);
+      }
+
+      if (data.compensation) {
+        await addCompensationRecord({
+          employeeId: id,
+          createdById: ctx.employee.id,
+          compensation: data.compensation,
+          tx,
+        });
+      }
+
+      if (data.ptoAdjustment) {
+        await recordPtoLedgerEntry({
+          businessId: ctx.business.id,
+          employeeId: id,
+          type: "ADJUSTMENT",
+          hours: data.ptoAdjustment.hours,
+          reason: data.ptoAdjustment.reason,
+          adjustedById: ctx.employee.id,
+          tx,
+        });
+      }
+
       return tx.employeeProfile.findUnique({
         where: { id },
-        include: {
-          role: { select: { id: true, name: true } },
-          locations: {
-            include: { location: { select: { id: true, name: true } } },
-          },
-        },
+        include: employeeInclude,
       });
     });
 
@@ -144,10 +203,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       action: "EMPLOYEE_CHANGE",
       entity: "EmployeeProfile",
       entityId: id,
-      details: { ...data, pin: data.pin ? "[redacted]" : undefined },
+      details: {
+        ...data,
+        pin: data.pin ? "[redacted]" : undefined,
+        ptoAdjustment: data.ptoAdjustment ? "[recorded]" : undefined,
+      },
     });
 
-    return NextResponse.json(sanitized);
+    const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
+    const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
+    return NextResponse.json(
+      sanitizeEmployeeForViewer(sanitized, canViewPersonal, canViewCompensation)
+    );
   } catch (error) {
     return handleApiError(error, "PATCH /api/employees/[id]");
   }

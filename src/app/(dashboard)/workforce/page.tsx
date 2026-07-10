@@ -21,6 +21,8 @@ export default async function WorkforcePage() {
   const ctx = await requireAuth();
   const overview = await getWorkforceOverview(ctx);
   const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE);
+  const canViewSchedule =
+    canManage || hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
 
   return (
     <div className="space-y-6">
@@ -101,7 +103,7 @@ export default async function WorkforcePage() {
               <Calendar className="h-5 w-5" />
               Today&apos;s Shifts
             </CardTitle>
-            {canManage && (
+            {canViewSchedule && (
               <Button asChild variant="ghost" size="sm">
                 <Link href="/workforce/schedule">
                   View schedule <ArrowRight className="h-4 w-4" />
@@ -150,7 +152,7 @@ export default async function WorkforcePage() {
             </CardContent>
           </Card>
         </Link>
-        {canManage && (
+        {canViewSchedule && (
           <Link href="/workforce/schedule">
             <Card className="h-full transition-colors hover:bg-slate-50">
               <CardContent className="flex items-center gap-4 pt-6">

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/subscription.test.ts src/lib/stripe-subscription-sync.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts",
+    "test": "tsx --test src/lib/subscription.test.ts src/lib/stripe-subscription-sync.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts src/lib/workforce/workforce.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

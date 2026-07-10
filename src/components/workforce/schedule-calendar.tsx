@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -15,11 +16,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getWeekStart, getWeekDays } from "@/lib/workforce/pay-period";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  getInitialWeekStart,
+  getWeekRange,
+  shiftWeekStart,
+} from "@/lib/workforce/schedule-week";
+import { buildShiftInstants, formatInTimezone } from "@/lib/workforce/timezone";
 import { cn } from "@/lib/utils";
 
 type Employee = { id: string; name: string };
-type Location = { id: string; name: string };
+type Location = { id: string; name: string; timezone?: string };
 type Shift = {
   id: string;
   employeeId: string;
@@ -27,17 +34,23 @@ type Shift = {
   endAt: string;
   notes?: string | null;
   employee: { id: string; name: string };
-  location?: { id: string; name: string } | null;
+  location?: { id: string; name: string; timezone?: string } | null;
 };
 
 type ScheduleCalendarProps = {
   employees: Employee[];
   locations: Location[];
   weekStartDay: number;
+  defaultTimezone?: string;
   canManage: boolean;
 };
 
-function formatTime(dateStr: string) {
+type FieldErrors = Record<string, string>;
+
+function formatTime(dateStr: string, timezone?: string) {
+  if (timezone) {
+    return formatInTimezone(new Date(dateStr), timezone);
+  }
   return new Date(dateStr).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -56,90 +69,181 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+function ScheduleSkeleton() {
+  return (
+    <div className="space-y-2 p-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Skeleton key={i} className="h-10 w-full" />
+      ))}
+    </div>
+  );
+}
+
 export function ScheduleCalendar({
   employees,
   locations,
   weekStartDay,
+  defaultTimezone = "America/New_York",
   canManage,
 }: ScheduleCalendarProps) {
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date(), weekStartDay));
+  const [weekStart, setWeekStart] = useState(() => getInitialWeekStart(weekStartDay));
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [form, setForm] = useState({
     employeeId: "",
     locationId: "",
     date: "",
     startTime: "09:00",
     endTime: "17:00",
+    overnight: false,
     notes: "",
   });
 
-  const weekDays = getWeekDays(weekStart);
-  const weekEnd = new Date(weekDays[6]);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  const loadShifts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/workforce/shifts?from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`
-      );
-      if (res.ok) {
-        setShifts(await res.json());
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [weekStart, weekEnd]);
+  const weekRange = useMemo(() => getWeekRange(weekStart), [weekStart]);
+  const { weekDays, fromIso, toIso } = weekRange;
+  const [retryCount, setRetryCount] = useState(0);
+  const requestSeq = useRef(0);
+  const hasLoadedOnce = useRef(false);
 
   useEffect(() => {
-    loadShifts();
-  }, [loadShifts]);
+    const controller = new AbortController();
+    const seq = ++requestSeq.current;
+    const isInitial = !hasLoadedOnce.current;
+
+    if (isInitial) {
+      setInitialLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    setLoadError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/workforce/shifts?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+          { signal: controller.signal }
+        );
+
+        if (seq !== requestSeq.current) return;
+
+        if (!res.ok) {
+          const err = (await res.json().catch(() => null)) as { error?: string } | null;
+          setLoadError(err?.error ?? "Failed to load schedule");
+          return;
+        }
+
+        setShifts(await res.json());
+        hasLoadedOnce.current = true;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (seq !== requestSeq.current) return;
+        setLoadError("Failed to load schedule");
+      } finally {
+        if (seq === requestSeq.current) {
+          setInitialLoading(false);
+          setRefreshing(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [fromIso, toIso, retryCount]);
 
   function prevWeek() {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 7);
-    setWeekStart(d);
+    setWeekStart((current) => shiftWeekStart(current, -1));
   }
 
   function nextWeek() {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + 7);
-    setWeekStart(d);
+    setWeekStart((current) => shiftWeekStart(current, 1));
   }
 
   function openCreate(employeeId: string, date: Date) {
     setEditingShift(null);
+    setFieldErrors({});
     setForm({
       employeeId,
       locationId: locations[0]?.id ?? "",
       date: date.toISOString().split("T")[0],
       startTime: "09:00",
       endTime: "17:00",
+      overnight: false,
       notes: "",
     });
     setModalOpen(true);
   }
 
   function openEdit(shift: Shift) {
+    const tz = shift.location?.timezone ?? defaultTimezone;
     const start = new Date(shift.startAt);
     setEditingShift(shift);
+    setFieldErrors({});
     setForm({
       employeeId: shift.employeeId,
       locationId: shift.location?.id ?? "",
       date: start.toISOString().split("T")[0],
-      startTime: start.toTimeString().slice(0, 5),
-      endTime: new Date(shift.endAt).toTimeString().slice(0, 5),
+      startTime: start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }),
+      endTime: new Date(shift.endAt).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: tz,
+      }),
+      overnight: new Date(shift.endAt).getDate() !== start.getDate(),
       notes: shift.notes ?? "",
     });
     setModalOpen(true);
   }
 
+  function validateForm(): FieldErrors {
+    const errors: FieldErrors = {};
+    if (!form.employeeId) errors.employeeId = "Employee is required";
+    if (!form.date) errors.date = "Date is required";
+    if (!form.startTime) errors.startTime = "Start time is required";
+    if (!form.endTime) errors.endTime = "End time is required";
+    if (form.notes.length > 500) errors.notes = "Notes must be 500 characters or fewer";
+    return errors;
+  }
+
   async function saveShift() {
-    const startAt = new Date(`${form.date}T${form.startTime}:00`);
-    const endAt = new Date(`${form.date}T${form.endTime}:00`);
+    if (isSaving) return;
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    const location = locations.find((l) => l.id === form.locationId);
+    const timezone = location?.timezone ?? defaultTimezone;
+
+    let startAt: Date;
+    let endAt: Date;
+    try {
+      const instants = buildShiftInstants({
+        date: form.date,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        timezone,
+        overnight: form.overnight,
+      });
+      startAt = instants.startAt;
+      endAt = instants.endAt;
+    } catch {
+      setFieldErrors({ date: "Invalid date or time" });
+      return;
+    }
+
+    if (endAt <= startAt) {
+      setFieldErrors({ endTime: "End time must be after start time" });
+      return;
+    }
 
     const payload = {
       employeeId: form.employeeId,
@@ -149,70 +253,158 @@ export function ScheduleCalendar({
       notes: form.notes || undefined,
     };
 
-    const res = await fetch(
-      editingShift ? `/api/workforce/shifts/${editingShift.id}` : "/api/workforce/shifts",
-      {
-        method: editingShift ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    const optimisticId = editingShift?.id ?? `temp-${Date.now()}`;
+    const employee = employees.find((e) => e.id === form.employeeId);
+    const previousShifts = shifts;
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => null);
-      toast.error(err?.error ?? "Failed to save shift");
-      return;
+    if (!editingShift) {
+      setShifts((current) => [
+        ...current,
+        {
+          id: optimisticId,
+          employeeId: form.employeeId,
+          startAt: payload.startAt,
+          endAt: payload.endAt,
+          notes: payload.notes,
+          employee: { id: form.employeeId, name: employee?.name ?? "" },
+          location: location ?? null,
+        },
+      ]);
+    } else {
+      setShifts((current) =>
+        current.map((s) =>
+          s.id === editingShift.id
+            ? {
+                ...s,
+                ...payload,
+                employee: { id: form.employeeId, name: employee?.name ?? s.employee.name },
+                location: location ?? null,
+              }
+            : s
+        )
+      );
     }
 
-    toast.success(editingShift ? "Shift updated" : "Shift created");
-    setModalOpen(false);
-    loadShifts();
+    setIsSaving(true);
+    setFieldErrors({});
+
+    try {
+      const res = await fetch(
+        editingShift ? `/api/workforce/shifts/${editingShift.id}` : "/api/workforce/shifts",
+        {
+          method: editingShift ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as {
+          error?: string;
+          fieldErrors?: Record<string, string[]>;
+        } | null;
+        setShifts(previousShifts);
+        if (err?.fieldErrors) {
+          const mapped: FieldErrors = {};
+          for (const [key, messages] of Object.entries(err.fieldErrors)) {
+            mapped[key] = messages[0] ?? "Invalid value";
+          }
+          setFieldErrors(mapped);
+        }
+        toast.error(err?.error ?? "Failed to save shift");
+        return;
+      }
+
+      const saved = (await res.json()) as Shift;
+      setShifts((current) =>
+        editingShift
+          ? current.map((s) => (s.id === editingShift.id ? saved : s))
+          : current.map((s) => (s.id === optimisticId ? saved : s))
+      );
+      toast.success(editingShift ? "Shift updated" : "Shift created");
+      setModalOpen(false);
+    } catch {
+      setShifts(previousShifts);
+      toast.error("Failed to save shift");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function deleteShift(id: string) {
-    const res = await fetch(`/api/workforce/shifts/${id}`, { method: "DELETE" });
-    if (!res.ok) {
+    if (isSaving) return;
+    const previousShifts = shifts;
+    setShifts((current) => current.filter((s) => s.id !== id));
+    setIsSaving(true);
+
+    try {
+      const res = await fetch(`/api/workforce/shifts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setShifts(previousShifts);
+        const err = (await res.json().catch(() => null)) as { error?: string } | null;
+        toast.error(err?.error ?? "Failed to cancel shift");
+        return;
+      }
+      toast.success("Shift cancelled");
+      setModalOpen(false);
+    } catch {
+      setShifts(previousShifts);
       toast.error("Failed to cancel shift");
-      return;
+    } finally {
+      setIsSaving(false);
     }
-    toast.success("Shift cancelled");
-    setModalOpen(false);
-    loadShifts();
   }
 
   function shiftsForCell(employeeId: string, day: Date) {
     return shifts.filter(
-      (s) =>
-        s.employeeId === employeeId &&
-        isSameDay(new Date(s.startAt), day)
+      (s) => s.employeeId === employeeId && isSameDay(new Date(s.startAt), day)
     );
   }
 
   const today = new Date();
+  const navDisabled = initialLoading || refreshing || isSaving;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prevWeek}>
+          <Button variant="outline" size="icon" onClick={prevWeek} disabled={navDisabled}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm font-medium text-slate-700">
             {formatDayHeader(weekDays[0])} – {formatDayHeader(weekDays[6])}
           </span>
-          <Button variant="outline" size="icon" onClick={nextWeek}>
+          <Button variant="outline" size="icon" onClick={nextWeek} disabled={navDisabled}>
             <ChevronRight className="h-4 w-4" />
           </Button>
+          {refreshing && (
+            <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-label="Refreshing schedule" />
+          )}
         </div>
-        <Button variant="outline" size="sm" onClick={() => setWeekStart(getWeekStart(new Date(), weekStartDay))}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={navDisabled}
+          onClick={() => setWeekStart(getInitialWeekStart(weekStartDay))}
+        >
           This Week
         </Button>
       </div>
 
+      {loadError && (
+        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{loadError}</span>
+          <Button variant="outline" size="sm" onClick={() => setRetryCount((c) => c + 1)}>
+            <RefreshCw className="mr-1 h-3 w-3" />
+            Retry
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="overflow-x-auto p-0">
-          {loading ? (
-            <p className="p-8 text-center text-sm text-slate-500">Loading schedule...</p>
+          {initialLoading ? (
+            <ScheduleSkeleton />
           ) : (
             <table className="w-full min-w-[800px] text-sm">
               <thead>
@@ -224,7 +416,7 @@ export function ScheduleCalendar({
                     <th
                       key={day.toISOString()}
                       className={cn(
-                        "px-2 py-3 text-center font-medium text-slate-600 min-w-[120px]",
+                        "min-w-[120px] px-2 py-3 text-center font-medium text-slate-600",
                         isSameDay(day, today) && "bg-blue-50 text-blue-700"
                       )}
                     >
@@ -234,50 +426,62 @@ export function ScheduleCalendar({
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => (
-                  <tr key={emp.id} className="border-b border-slate-100">
-                    <td className="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-slate-900">
-                      {emp.name}
+                {employees.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                      No active employees to schedule
                     </td>
-                    {weekDays.map((day) => {
-                      const cellShifts = shiftsForCell(emp.id, day);
-                      return (
-                        <td
-                          key={day.toISOString()}
-                          className={cn(
-                            "px-1 py-2 align-top",
-                            isSameDay(day, today) && "bg-blue-50/50"
-                          )}
-                        >
-                          <div className="space-y-1">
-                            {cellShifts.map((shift) => (
-                              <button
-                                key={shift.id}
-                                type="button"
-                                className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-left text-xs text-white hover:bg-slate-700"
-                                onClick={() => canManage && openEdit(shift)}
-                              >
-                                <div>{formatTime(shift.startAt)} – {formatTime(shift.endAt)}</div>
-                                {shift.location && (
-                                  <div className="text-slate-300">{shift.location.name}</div>
-                                )}
-                              </button>
-                            ))}
-                            {canManage && (
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-center rounded-md border border-dashed border-slate-200 py-1 text-slate-400 hover:border-slate-400 hover:text-slate-600"
-                                onClick={() => openCreate(emp.id, day)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
                   </tr>
-                ))}
+                ) : (
+                  employees.map((emp) => (
+                    <tr key={emp.id} className="border-b border-slate-100">
+                      <td className="sticky left-0 z-10 bg-white px-4 py-3 font-medium text-slate-900">
+                        {emp.name}
+                      </td>
+                      {weekDays.map((day) => {
+                        const cellShifts = shiftsForCell(emp.id, day);
+                        return (
+                          <td
+                            key={day.toISOString()}
+                            className={cn(
+                              "px-1 py-2 align-top",
+                              isSameDay(day, today) && "bg-blue-50/50",
+                              refreshing && "opacity-80"
+                            )}
+                          >
+                            <div className="space-y-1">
+                              {cellShifts.map((shift) => (
+                                <button
+                                  key={shift.id}
+                                  type="button"
+                                  className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-left text-xs text-white hover:bg-slate-700"
+                                  onClick={() => canManage && openEdit(shift)}
+                                >
+                                  <div>
+                                    {formatTime(shift.startAt, shift.location?.timezone ?? defaultTimezone)} –{" "}
+                                    {formatTime(shift.endAt, shift.location?.timezone ?? defaultTimezone)}
+                                  </div>
+                                  {shift.location && (
+                                    <div className="text-slate-300">{shift.location.name}</div>
+                                  )}
+                                </button>
+                              ))}
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center justify-center rounded-md border border-dashed border-slate-200 py-1 text-slate-400 hover:border-slate-400 hover:text-slate-600"
+                                  onClick={() => openCreate(emp.id, day)}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}
@@ -304,6 +508,9 @@ export function ScheduleCalendar({
                     ))}
                   </SelectContent>
                 </Select>
+                {fieldErrors.employeeId && (
+                  <p className="text-sm text-red-600">{fieldErrors.employeeId}</p>
+                )}
               </div>
               {locations.length > 0 && (
                 <div className="space-y-2">
@@ -328,6 +535,7 @@ export function ScheduleCalendar({
                   value={form.date}
                   onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
                 />
+                {fieldErrors.date && <p className="text-sm text-red-600">{fieldErrors.date}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -337,6 +545,9 @@ export function ScheduleCalendar({
                     value={form.startTime}
                     onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
                   />
+                  {fieldErrors.startTime && (
+                    <p className="text-sm text-red-600">{fieldErrors.startTime}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>End</Label>
@@ -345,7 +556,20 @@ export function ScheduleCalendar({
                     value={form.endTime}
                     onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
                   />
+                  {fieldErrors.endTime && (
+                    <p className="text-sm text-red-600">{fieldErrors.endTime}</p>
+                  )}
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="overnight"
+                  checked={form.overnight}
+                  onCheckedChange={(checked) =>
+                    setForm((f) => ({ ...f, overnight: checked === true }))
+                  }
+                />
+                <Label htmlFor="overnight">Overnight shift (end time is next day)</Label>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -354,17 +578,31 @@ export function ScheduleCalendar({
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                   rows={2}
                 />
+                {fieldErrors.notes && <p className="text-sm text-red-600">{fieldErrors.notes}</p>}
               </div>
               <div className="flex gap-2">
-                <Button onClick={saveShift} className="flex-1">
-                  {editingShift ? "Update" : "Create"}
+                <Button onClick={saveShift} className="flex-1" disabled={isSaving}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : editingShift ? (
+                    "Update"
+                  ) : (
+                    "Create"
+                  )}
                 </Button>
                 {editingShift && (
-                  <Button variant="destructive" onClick={() => deleteShift(editingShift.id)}>
+                  <Button
+                    variant="destructive"
+                    disabled={isSaving}
+                    onClick={() => deleteShift(editingShift.id)}
+                  >
                     Cancel Shift
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => setModalOpen(false)}>
+                <Button variant="outline" disabled={isSaving} onClick={() => setModalOpen(false)}>
                   Close
                 </Button>
               </div>

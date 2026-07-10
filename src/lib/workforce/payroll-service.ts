@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
 import { getBreakMinutes, getWorkedMinutes } from "./time-clock-service";
+import { getEffectiveCompensation } from "./employee-service";
+import { getWeekStart } from "./pay-period";
 import type { TimeEntry, TimeBreak, Shift, PayrollBonus } from "@prisma/client";
 
 type TimeEntryWithBreaks = TimeEntry & { breaks: TimeBreak[] };
@@ -7,6 +9,7 @@ type TimeEntryWithBreaks = TimeEntry & { breaks: TimeBreak[] };
 export type PayrollEmployeeRow = {
   employeeId: string;
   employeeName: string;
+  payType: string;
   hourlyWage: number;
   scheduledHours: number;
   actualHours: number;
@@ -32,11 +35,45 @@ export function computeEntryHours(entry: TimeEntryWithBreaks): {
   actualHours: number;
   breakHours: number;
 } {
-  const end = entry.clockOut ?? new Date();
+  if (entry.status === "ACTIVE" || !entry.clockOut) {
+    return { actualHours: 0, breakHours: getBreakMinutes(entry.breaks) / 60 };
+  }
+  const end = entry.clockOut;
   const totalHours = hoursFromMs(end.getTime() - entry.clockIn.getTime());
   const breakHours = getBreakMinutes(entry.breaks) / 60;
   const actualHours = getWorkedMinutes(entry, end) / 60;
   return { actualHours, breakHours: totalHours - actualHours };
+}
+
+export function computeWeeklyOvertimeHours(
+  entries: TimeEntryWithBreaks[],
+  weekStartDay: number,
+  overtimeThreshold: number
+): { regularHours: number; overtimeHours: number } {
+  const hoursByWeek = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (entry.status === "ACTIVE" || !entry.clockOut) continue;
+    const weekKey = getWeekStart(entry.clockIn, weekStartDay).toISOString();
+    const { actualHours } = computeEntryHours(entry);
+    hoursByWeek.set(weekKey, (hoursByWeek.get(weekKey) ?? 0) + actualHours);
+  }
+
+  let regularHours = 0;
+  let overtimeHours = 0;
+  for (const weekHours of hoursByWeek.values()) {
+    regularHours += Math.min(weekHours, overtimeThreshold);
+    overtimeHours += Math.max(0, weekHours - overtimeThreshold);
+  }
+
+  return { regularHours, overtimeHours };
+}
+
+function escapeCsvValue(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
 }
 
 export async function computePayrollSummary(params: {
@@ -44,8 +81,9 @@ export async function computePayrollSummary(params: {
   periodStart: Date;
   periodEnd: Date;
   overtimeThreshold: number;
+  weekStartDay?: number;
 }): Promise<PayrollEmployeeRow[]> {
-  const { businessId, periodStart, periodEnd, overtimeThreshold } = params;
+  const { businessId, periodStart, periodEnd, overtimeThreshold, weekStartDay = 0 } = params;
 
   const employees = await db.employeeProfile.findMany({
     where: { businessId, deletedAt: null, status: "ACTIVE" },
@@ -64,7 +102,8 @@ export async function computePayrollSummary(params: {
       where: {
         businessId,
         status: { not: "CANCELLED" },
-        startAt: { gte: periodStart, lte: periodEnd },
+        startAt: { lt: periodEnd },
+        endAt: { gt: periodStart },
       },
     }),
     db.payrollBonus.findMany({
@@ -112,7 +151,9 @@ export async function computePayrollSummary(params: {
     timeOffByEmployee.set(req.employeeId, list);
   }
 
-  return employees.map((emp) => {
+  const rows: PayrollEmployeeRow[] = [];
+
+  for (const emp of employees) {
     const empEntries = entriesByEmployee.get(emp.id) ?? [];
     const empShifts = shiftsByEmployee.get(emp.id) ?? [];
     const empBonuses = bonusesByEmployee.get(emp.id) ?? [];
@@ -129,6 +170,9 @@ export async function computePayrollSummary(params: {
       if (entry.status === "ACTIVE" || !entry.clockOut) {
         flags.push("Missing clock-out");
       }
+      for (const br of entry.breaks) {
+        if (!br.breakEnd) flags.push("Open break");
+      }
     }
 
     const scheduledHours = empShifts.reduce((sum, s) => sum + shiftHours(s), 0);
@@ -141,16 +185,41 @@ export async function computePayrollSummary(params: {
       flags.push("Approved time off");
     }
 
-    const hourlyWage = Number(emp.hourlyWage ?? 0);
-    const regularHours = Math.min(actualHours, overtimeThreshold);
-    const overtimeHours = Math.max(0, actualHours - overtimeThreshold);
-    const regularPay = regularHours * hourlyWage;
-    const overtimePay = overtimeHours * hourlyWage * 1.5;
-    const bonusTotal = empBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+    const compensation = await getEffectiveCompensation(emp.id, periodEnd);
+    const payType = compensation?.payType ?? (emp.hourlyWage ? "HOURLY" : "HOURLY");
+    const hourlyWage = Number(compensation?.hourlyRate ?? emp.hourlyWage ?? 0);
+    const otMultiplier = Number(compensation?.overtimeMultiplier ?? 1.5);
+    const otEligible = compensation?.overtimeEligible ?? true;
 
-    return {
+    let regularHours = 0;
+    let overtimeHours = 0;
+    let regularPay = 0;
+    let overtimePay = 0;
+    let totalPay = 0;
+
+    if (payType === "SALARY") {
+      const annual = Number(compensation?.annualSalary ?? 0);
+      const periodDays =
+        (periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+      totalPay = (annual / 365) * periodDays;
+      regularHours = actualHours;
+      flags.push("Salary employee");
+    } else {
+      const ot = computeWeeklyOvertimeHours(empEntries, weekStartDay, overtimeThreshold);
+      regularHours = ot.regularHours;
+      overtimeHours = otEligible ? ot.overtimeHours : 0;
+      regularPay = regularHours * hourlyWage;
+      overtimePay = overtimeHours * hourlyWage * otMultiplier;
+      totalPay = regularPay + overtimePay;
+    }
+
+    const bonusTotal = empBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+    totalPay += bonusTotal;
+
+    rows.push({
       employeeId: emp.id,
       employeeName: emp.name,
+      payType,
       hourlyWage,
       scheduledHours: Math.round(scheduledHours * 100) / 100,
       actualHours: Math.round(actualHours * 100) / 100,
@@ -160,15 +229,18 @@ export async function computePayrollSummary(params: {
       regularPay: Math.round(regularPay * 100) / 100,
       overtimePay: Math.round(overtimePay * 100) / 100,
       bonusTotal: Math.round(bonusTotal * 100) / 100,
-      totalPay: Math.round((regularPay + overtimePay + bonusTotal) * 100) / 100,
+      totalPay: Math.round(totalPay * 100) / 100,
       flags,
-    };
-  });
+    });
+  }
+
+  return rows;
 }
 
 export function payrollToCsv(rows: PayrollEmployeeRow[]): string {
   const headers = [
     "Employee",
+    "Pay Type",
     "Hourly Wage",
     "Scheduled Hrs",
     "Actual Hrs",
@@ -183,7 +255,8 @@ export function payrollToCsv(rows: PayrollEmployeeRow[]): string {
   ];
   const lines = rows.map((r) =>
     [
-      r.employeeName,
+      escapeCsvValue(r.employeeName),
+      r.payType,
       r.hourlyWage.toFixed(2),
       r.scheduledHours.toFixed(2),
       r.actualHours.toFixed(2),
@@ -194,7 +267,7 @@ export function payrollToCsv(rows: PayrollEmployeeRow[]): string {
       r.overtimePay.toFixed(2),
       r.bonusTotal.toFixed(2),
       r.totalPay.toFixed(2),
-      r.flags.join("; "),
+      escapeCsvValue(r.flags.join("; ")),
     ].join(",")
   );
   return [headers.join(","), ...lines].join("\n");

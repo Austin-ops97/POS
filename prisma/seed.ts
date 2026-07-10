@@ -449,6 +449,44 @@ async function main() {
     }
   }
 
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(9, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setHours(17, 0, 0, 0);
+
+  await db.shift.upsert({
+    where: { id: "demo-shift-1" },
+    create: {
+      id: "demo-shift-1",
+      businessId: business.id,
+      employeeId: "demo-cashier",
+      locationId: location.id,
+      startAt: weekStart,
+      endAt: weekEnd,
+      status: "SCHEDULED",
+      createdById: "demo-manager",
+      notes: "Opening shift",
+    },
+    update: {},
+  });
+
+  for (const emp of employees) {
+    await db.employeeCompensation.upsert({
+      where: { id: `${emp.id}-initial-comp` },
+      create: {
+        id: `${emp.id}-initial-comp`,
+        employeeId: emp.id,
+        payType: "HOURLY",
+        hourlyRate: emp.hourlyWage,
+        overtimeEligible: true,
+        effectiveFrom: new Date("2024-01-01"),
+        createdById: "demo-owner",
+      },
+      update: {},
+    });
+  }
+
   console.log("Seed completed successfully!");
   console.log("Demo business: Demo Market & Services");
   console.log("Demo location: Main Store");
