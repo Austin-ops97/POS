@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { timeOffReviewSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -13,8 +12,6 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     const { id } = await params;
     const body = await request.json();
     const data = timeOffReviewSchema.parse(body);

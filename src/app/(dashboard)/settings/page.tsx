@@ -14,7 +14,6 @@ import {
   FileText,
   ChevronRight,
   Layers,
-  Sparkles,
   CalendarClock,
 } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,12 +109,6 @@ const settingsSections = [
   {
     group: "Account",
     items: [
-      {
-        href: "/settings/billing",
-        title: "Subscription & Billing",
-        description: "Plan, trial, invoices, and billing portal",
-        icon: Sparkles,
-      },
       {
         href: "/settings/integrations",
         title: "Integrations",

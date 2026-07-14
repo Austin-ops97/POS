@@ -1,6 +1,8 @@
 # NexaPOS
 
-A cleaner, smarter POS for modern businesses. Universal Stripe-powered point of sale SaaS platform for retail, services, rentals, and restaurants.
+An authenticated, fully featured Stripe-powered POS platform for retail, services, rentals, and restaurants.
+
+Sign in once and land in a completely unlocked account — no trials, plans, or paywalls. Employee role permissions and multi-tenant isolation still apply.
 
 ## Features
 
@@ -11,7 +13,7 @@ A cleaner, smarter POS for modern businesses. Universal Stripe-powered point of 
 - **Employee Permissions** — Role-based access with PIN login for registers
 - **Reports & Analytics** — Sales dashboards, charts, and exportable reports
 - **Refunds & Receipts** — Full/partial refunds via Stripe with digital receipts
-- **SaaS Billing** — Stripe Billing for subscription plans
+- **Workforce** — Scheduling, time clock, PTO, and payroll exports
 
 ## Tech Stack
 
@@ -19,7 +21,7 @@ A cleaner, smarter POS for modern businesses. Universal Stripe-powered point of 
 - **Backend:** Next.js API Routes
 - **Database:** PostgreSQL with Prisma ORM
 - **Auth:** Clerk
-- **Payments:** Stripe (Connect, Terminal, Billing, Webhooks)
+- **Payments:** Stripe (Connect, Terminal, Webhooks)
 - **State:** Zustand
 - **Forms:** React Hook Form + Zod
 - **Charts:** Recharts
@@ -64,9 +66,12 @@ Required variables:
 
 ```bash
 npx prisma migrate dev
+npm run db:seed
 ```
 
-For production, use `npx prisma migrate deploy`. Do not seed production data.
+The seed only creates system roles and permissions — no demo merchant data.
+
+For production, use `npx prisma migrate deploy`. Do not seed production unless you intend to refresh system roles.
 
 ### 4. Stripe Webhook (Development)
 
@@ -84,16 +89,16 @@ Copy the webhook signing secret to `STRIPE_WEBHOOK_SECRET` in `.env`.
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Sign in; a blank business is provisioned automatically on first login.
 
 ## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── (marketing)/     # Legacy public URLs that redirect to the register
+│   ├── (marketing)/     # Minimal login landing page
 │   ├── (dashboard)/     # Authenticated app
-│   ├── onboarding/      # Business setup wizard
+│   ├── onboarding/      # Redirects to /dashboard
 │   └── api/             # API routes
 ├── components/
 │   ├── ui/              # UI primitives
@@ -113,9 +118,6 @@ Card payments use PaymentIntents created server-side. Webhooks confirm payment s
 
 ### Terminal
 Register card readers in Settings → Payments → Stripe Terminal. Use Stripe test readers only in development.
-
-### Billing
-SaaS subscriptions managed via Stripe Billing. Plans: Starter ($29), Pro ($79), Multi-Location ($149), Enterprise (custom).
 
 ## Security
 

@@ -1,14 +1,15 @@
 import { SignUp } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
+import { isClerkConfigured } from "@/lib/auth";
 
 export default function SignUpPage() {
-  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY) {
-    redirect("/onboarding");
+  if (!isClerkConfigured()) {
+    redirect("/dashboard");
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <SignUp fallbackRedirectUrl="/onboarding" signInUrl="/sign-in" />
+      <SignUp fallbackRedirectUrl="/dashboard" signInUrl="/sign-in" />
     </div>
   );
 }

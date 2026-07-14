@@ -53,17 +53,6 @@ export const receiptSettingsSchema = z.object({
   enableReceiptPrinting: z.boolean(),
 });
 
-/** Receipt fields collected during onboarding wizard. */
-export const onboardingReceiptSettingsSchema = z.object({
-  receiptFooter: z.string().optional(),
-  showCashierOnReceipt: z.boolean(),
-  showCustomerOnReceipt: z.boolean(),
-  showBusinessEmailOnReceipt: z.boolean(),
-  showBusinessPhoneOnReceipt: z.boolean(),
-  showSkuOnReceipt: z.boolean(),
-  enableReceiptPrinting: z.boolean(),
-});
-
 export const MODULE_SETTING_KEYS = [
   "RETAIL",
   "SERVICE",
@@ -209,47 +198,8 @@ export const businessTypeSchema = z.object({
   type: z.enum(["RETAIL", "SERVICE", "RENTAL", "RESTAURANT", "HYBRID"]),
 });
 
-export const onboardingTaxSchema = z.object({
-  name: z.string().min(1, "Tax name is required"),
-  rate: z.number().min(0).max(1),
-  appliesToProducts: z.boolean().optional(),
-  appliesToServices: z.boolean().optional(),
-});
-
-export const onboardingEmployeeSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  roleId: z.string().min(1),
-});
-
 export const createBusinessSchema = businessInfoSchema.extend({
   type: businessTypeSchema.shape.type.optional(),
   location: locationSchema.optional(),
   posConfig: posConfigSchema.optional(),
-});
-
-export const onboardingPatchSchema = z.object({
-  step: z.enum([
-    "WELCOME",
-    "BUSINESS_INFO",
-    "BUSINESS_TYPE",
-    "BUSINESS_ADDRESS",
-    "TAX_SETTINGS",
-    "RECEIPT_SETTINGS",
-    "STRIPE_CONNECT",
-    "IMPORT_PRODUCTS",
-    "INVITE_EMPLOYEES",
-    "COMPLETED",
-  ]),
-  businessProfile: businessProfileSchema.partial().optional(),
-  businessInfo: businessInfoSchema.partial().optional(),
-  businessType: businessTypeSchema.partial().optional(),
-  location: locationSchema.partial().optional(),
-  taxSettings: onboardingTaxSchema.partial().optional(),
-  receiptSettings: receiptSettingsSchema.partial().optional(),
-  posConfig: posConfigSchema.partial().optional(),
-  plan: z.enum(["STARTER", "PRO", "MULTI_LOCATION", "ENTERPRISE"]).optional(),
-  complete: z.boolean().optional(),
-  skipSetup: z.boolean().optional(),
-  autoSave: z.boolean().optional(),
 });

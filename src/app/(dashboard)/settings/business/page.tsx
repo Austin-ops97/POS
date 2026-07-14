@@ -28,8 +28,7 @@ export default async function BusinessSettingsPage() {
         <CardHeader>
           <CardTitle>Business profile</CardTitle>
           <CardDescription>
-            Update your business details from the onboarding wizard or contact support for
-            legal name changes.
+            Your company profile and branding details.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -54,8 +53,7 @@ export default async function BusinessSettingsPage() {
             <Input defaultValue={biz.email ?? ""} readOnly />
           </div>
           <p className="text-sm text-slate-500 sm:col-span-2">
-            Full business editing will be available in a future update. Changes made during
-            onboarding are reflected here.
+            Full business editing will be available in a future update.
           </p>
         </CardContent>
       </Card>

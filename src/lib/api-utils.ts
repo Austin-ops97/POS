@@ -3,12 +3,6 @@ import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { OrderServiceError } from "./order-service";
-import {
-  PlanLimitError,
-  SubscriptionRequiredError,
-  SubscriptionLoadError,
-  AdvancedReportsRequiredError,
-} from "./subscription-access";
 
 export type ApiErrorBody = {
   error: string;
@@ -106,55 +100,6 @@ export function handleApiError(error: unknown, context: string) {
 
   if (error instanceof OrderServiceError) {
     return apiError(error.message, error.statusCode, { code: "ORDER_ERROR", requestId });
-  }
-
-  if (error instanceof SubscriptionRequiredError) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        code: error.code,
-        requestId,
-        billingUrl: error.billingUrl,
-        status: error.access.status,
-      },
-      { status: 402 }
-    );
-  }
-
-  if (error instanceof SubscriptionLoadError) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        code: error.code,
-        requestId,
-        billingUrl: error.billingUrl,
-      },
-      { status: 503 }
-    );
-  }
-
-  if (error instanceof AdvancedReportsRequiredError) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        code: error.code,
-        requestId,
-        billingUrl: error.billingUrl,
-      },
-      { status: 403 }
-    );
-  }
-
-  if (error instanceof PlanLimitError) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        code: error.code,
-        requestId,
-        billingUrl: "/settings/billing",
-      },
-      { status: 403 }
-    );
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

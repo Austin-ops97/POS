@@ -137,11 +137,11 @@ export default async function OrderDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {order.items.map((item: { id: string; name: string; quantity: number; unitPrice: unknown; total: unknown; sku?: string }) => (
+                  {order.items.map((item) => (
                     <tr key={item.id} className="border-b border-slate-100">
                       <td className="py-3">
                         <p className="font-medium text-slate-900">{item.name}</p>
-                        {"sku" in item && item.sku && (
+                        {item.sku && (
                           <p className="text-xs text-slate-500">{item.sku}</p>
                         )}
                       </td>
@@ -246,7 +246,7 @@ export default async function OrderDetailPage({
                 <p className="text-sm text-slate-500">No payments recorded.</p>
               ) : (
                 <ul className="space-y-3">
-                  {order.payments.map((payment: { id: string; method: string; status: string; amount: unknown; cardLast4?: string; cardBrand?: string; createdAt?: Date | string }) => (
+                  {order.payments.map((payment) => (
                     <li
                       key={payment.id}
                       className="flex items-center justify-between"
@@ -254,17 +254,18 @@ export default async function OrderDetailPage({
                       <div>
                         <p className="font-medium text-slate-900">
                           {payment.method}
-                          {"cardLast4" in payment && payment.cardLast4 && ` · ${"cardBrand" in payment ? payment.cardBrand : ""} ${payment.cardLast4}`}
+                          {payment.cardLast4 &&
+                            ` · ${payment.cardBrand ?? ""} ${payment.cardLast4}`}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {"createdAt" in payment && payment.createdAt ? formatDate(payment.createdAt) : ""}
+                          {payment.createdAt ? formatDate(payment.createdAt) : ""}
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-slate-900">
                           {formatCurrency(Number(payment.amount))}
                         </p>
-                        <Badge variant={getPaymentStatusVariant(payment.status as Parameters<typeof getPaymentStatusVariant>[0])}>
+                        <Badge variant={getPaymentStatusVariant(payment.status)}>
                           {payment.status}
                         </Badge>
                       </div>

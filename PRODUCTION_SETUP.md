@@ -1,13 +1,13 @@
 # Production Setup
 
-This app is configured to run as a real POS system, not a demo storefront. The root URL redirects to the register, authenticated routes are protected by Clerk, and demo mode is disabled in code.
+NexaPOS runs as an authenticated, fully unlocked POS. After Clerk sign-in, users are provisioned automatically and land on the dashboard. There are no trials, subscription plans, or commercial paywalls.
 
 ## Required Services
 
 1. Vercel project connected to this GitHub repo.
 2. PostgreSQL database reachable from Vercel.
 3. Clerk application for sign-in and user sessions.
-4. Stripe account for payments, webhooks, Connect, Billing, and Terminal.
+4. Stripe account for merchant payments, webhooks, Connect, and Terminal.
 
 ## Vercel Environment Variables
 
@@ -20,19 +20,14 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_or_test_...
 CLERK_SECRET_KEY=sk_live_or_test_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/register
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
 
 STRIPE_SECRET_KEY=sk_live_or_test_...
 STRIPE_PUBLISHABLE_KEY=pk_live_or_test_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_or_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_CONNECT_CLIENT_ID=ca_...
-
-STRIPE_PRICE_STARTER=price_...
-STRIPE_PRICE_PRO=price_...
-STRIPE_PRICE_MULTI=price_...
-STRIPE_PRICE_ENTERPRISE=price_...
 
 NEXT_PUBLIC_APP_URL=https://your-production-domain.com
 ```
@@ -47,25 +42,31 @@ Run migrations against the production database before using the app:
 npx prisma migrate deploy
 ```
 
-Do not run the seed script in production unless you intentionally want sample products, customers, and orders.
+The `20260714180000_remove_demo_subscription_onboarding` migration removes confirmed demo seed records and drops the Subscription / onboarding schema. Review it before applying to production.
+
+Optional: seed system roles and permissions only (no merchant data):
+
+```bash
+npm run db:seed
+```
 
 ## Stripe Setup
 
-1. Create products and recurring prices in Stripe Billing, then copy their price IDs into the `STRIPE_PRICE_*` env vars.
-2. Configure a Stripe webhook endpoint:
+1. Configure a Stripe webhook endpoint:
 
 ```txt
 https://your-production-domain.com/api/webhooks/stripe
 ```
 
+2. Subscribe to Connect/payment events: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `account.updated`.
 3. Add the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 4. Enable Stripe Connect and set `STRIPE_CONNECT_CLIENT_ID`.
 5. For in-person card payments, configure Stripe Terminal locations/readers in Stripe and connect the merchant account through Settings -> Payments.
 
 ## First Use
 
-1. Open the deployed app.
+1. Open the deployed app (minimal login landing page).
 2. Sign up or sign in through Clerk.
-3. Complete onboarding to create the business, owner profile, default location, tax rate, settings, and initial products.
-4. Add real products, tax rates, employees, and payment hardware.
+3. The app automatically provisions a business, default location, Owner employee, settings, modules, tax rate, and Stripe Connect placeholder.
+4. Add products, tax rates, employees, and payment hardware in Settings.
 5. Open `/register` to start checkout.

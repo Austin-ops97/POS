@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server"
-import { canUseTerminal, PlanLimitError } from "@/lib/subscription-access";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getStripeOrThrow } from "@/lib/stripe";
-import type Stripe from "stripe";
 import { z } from "zod";
 
 type ReaderStatus = "ONLINE" | "OFFLINE" | "BUSY" | "NEEDS_UPDATE";
@@ -120,13 +117,6 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.MANAGE_STRIPE);
-
-    const subscription = await ensurePaidSubscription(ctx);
-    if (subscription && !canUseTerminal(subscription.plan)) {
-      throw new PlanLimitError(
-        "Stripe Terminal is not included in your current plan. Upgrade to Pro or higher."
-      );
-    }
 
     const body = await request.json();
     const parsed = terminalPostSchema.parse(body);

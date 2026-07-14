@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { toDecimal } from "@/lib/order-service";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -21,7 +20,6 @@ export async function POST(
 ) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_REFUND);
 
     const { id: orderId } = await params;

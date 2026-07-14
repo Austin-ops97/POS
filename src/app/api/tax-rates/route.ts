@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
-import { isDemoMode } from "@/lib/demo-mode";
 import { handleApiError } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 import { getTaxRatesForLocation } from "@/lib/order-service";
@@ -11,23 +9,9 @@ import { taxRateSchema } from "@/lib/validations";
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     const { searchParams } = new URL(request.url);
     const locationId =
       searchParams.get("locationId") ?? ctx.location?.id ?? undefined;
-
-    if (isDemoMode()) {
-      return NextResponse.json({
-        taxRates: [
-          {
-            name: "Sales Tax",
-            rate: 0.0825,
-            appliesToProducts: true,
-            appliesToServices: true,
-          },
-        ],
-      });
-    }
 
     if (!locationId) {
       return NextResponse.json({ taxRates: [] });
@@ -46,15 +30,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (isDemoMode()) {
-      return NextResponse.json(
-        { error: "Tax rates cannot be modified while sample data mode is disabled" },
-        { status: 400 }
-      );
-    }
-
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_LOCATIONS)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import {
   ensureReceiptForOrder,
   getReceiptData,
@@ -18,7 +17,6 @@ export async function GET(
 ) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const { id: orderId } = await params;
@@ -51,7 +49,6 @@ export async function POST(
 ) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const { id: orderId } = await params;

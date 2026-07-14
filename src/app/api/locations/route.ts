@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server"
-import { canAddLocation, getPlanEntitlements, PlanLimitError } from "@/lib/subscription-access";
 import { locationSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -11,7 +9,6 @@ import { handleApiError } from "@/lib/api-utils";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
 
     const locations = await db.location.findMany({
       where: {
@@ -30,7 +27,6 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_LOCATIONS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_LOCATIONS}`);
@@ -42,14 +38,6 @@ export async function POST(request: Request) {
     const locationCount = await db.location.count({
       where: { businessId: ctx.business.id, deletedAt: null },
     });
-
-    const subscription = await ensurePaidSubscription(ctx);
-    if (subscription && !canAddLocation(subscription.plan, locationCount)) {
-      const max = getPlanEntitlements(subscription.plan).maxLocations;
-      throw new PlanLimitError(
-        `Your ${subscription.plan} plan allows up to ${max} location${max === 1 ? "" : "s"}. Upgrade to add more.`
-      );
-    }
 
     const location = await db.location.create({
       data: {

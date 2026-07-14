@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { shiftSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { cancelShift, updateShift } from "@/lib/workforce/schedule-service";
@@ -11,8 +10,6 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_WORKFORCE}`);
     }
@@ -48,8 +45,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_WORKFORCE}`);
     }

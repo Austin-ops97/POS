@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { customerSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -12,7 +11,6 @@ type RouteParams = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     const { id } = await params;
 
     const customer = await db.customer.findFirst({
@@ -49,8 +47,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_CUSTOMERS}`);
     }

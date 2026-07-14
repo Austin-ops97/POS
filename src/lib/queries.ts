@@ -1,18 +1,3 @@
-import { isDemoMode } from "./demo-mode";
-import {
-  demoCategories,
-  demoCustomers,
-  demoDashboardStats,
-  demoEmployees,
-  demoInventory,
-  demoModules,
-  demoOrders,
-  demoProducts,
-  demoSettings,
-  demoStripeAccount,
-  demoSubscription,
-  demoTaxRates,
-} from "./demo-data";
 import { db } from "./db";
 import type { AuthContext } from "./auth";
 import { isStripeConfigured, getStripeOrThrow } from "./stripe";
@@ -166,36 +151,6 @@ async function getStripeBalanceSummary(businessId: string) {
 }
 
 export async function getDashboardData(ctx: AuthContext) {
-  if (isDemoMode()) {
-    return {
-      stats: {
-        ...demoDashboardStats,
-        yesterdaySales: 312.5,
-        weekSales: 1842.75,
-        monthSales: 6240.0,
-      },
-      recentOrders: demoOrders.slice(0, 10),
-      lowStock: demoDashboardStats.lowStock,
-      topProducts: demoDashboardStats.topProducts,
-      salesByDay: [
-        { date: "Mon", sales: 45 },
-        { date: "Tue", sales: 62 },
-        { date: "Wed", sales: 58 },
-        { date: "Thu", sales: 91 },
-        { date: "Fri", sales: 90 },
-        { date: "Sat", sales: 120 },
-        { date: "Sun", sales: 75 },
-      ],
-      stripe: {
-        available: 1240.5,
-        pending: 380.25,
-        upcomingDeposit: { amount: 380.25, arrivalDate: new Date().toISOString() },
-        connected: true,
-        status: "READY",
-      },
-    };
-  }
-
   const businessId = ctx.business.id;
   const locationId = ctx.location?.id;
   const ranges = getDateRanges();
@@ -305,7 +260,6 @@ export async function getDashboardData(ctx: AuthContext) {
 }
 
 export async function getProducts(ctx: AuthContext) {
-  if (isDemoMode()) return demoProducts;
   return db.product.findMany({
     where: { businessId: ctx.business.id, deletedAt: null },
     include: { category: true },
@@ -314,7 +268,6 @@ export async function getProducts(ctx: AuthContext) {
 }
 
 export async function getCategories(ctx: AuthContext) {
-  if (isDemoMode()) return demoCategories;
   return db.category.findMany({
     where: { businessId: ctx.business.id, deletedAt: null },
     orderBy: { name: "asc" },
@@ -322,7 +275,6 @@ export async function getCategories(ctx: AuthContext) {
 }
 
 export async function getOrders(ctx: AuthContext) {
-  if (isDemoMode()) return demoOrders;
   return db.order.findMany({
     where: { businessId: ctx.business.id },
     include: { customer: true, employee: true, payments: true },
@@ -332,7 +284,6 @@ export async function getOrders(ctx: AuthContext) {
 }
 
 export async function getOrderById(ctx: AuthContext, id: string) {
-  if (isDemoMode()) return demoOrders.find((o) => o.id === id) ?? null;
   return db.order.findFirst({
     where: { id, businessId: ctx.business.id },
     include: {
@@ -348,7 +299,6 @@ export async function getOrderById(ctx: AuthContext, id: string) {
 }
 
 export async function getCustomers(ctx: AuthContext) {
-  if (isDemoMode()) return demoCustomers;
   return db.customer.findMany({
     where: { businessId: ctx.business.id, deletedAt: null },
     orderBy: { firstName: "asc" },
@@ -356,13 +306,6 @@ export async function getCustomers(ctx: AuthContext) {
 }
 
 export async function getCustomerById(ctx: AuthContext, id: string) {
-  if (isDemoMode()) {
-    const customer = demoCustomers.find((c) => c.id === id);
-    if (!customer) return null;
-    const orders = demoOrders.filter((o) => o.customerId === id);
-    const totalSpent = orders.reduce((s, o) => s + o.total, 0);
-    return { ...customer, orders, totalSpent, orderCount: orders.length };
-  }
   const customer = await db.customer.findFirst({
     where: { id, businessId: ctx.business.id },
   });
@@ -376,7 +319,6 @@ export async function getCustomerById(ctx: AuthContext, id: string) {
 }
 
 export async function getInventory(ctx: AuthContext) {
-  if (isDemoMode()) return demoInventory;
   return db.inventoryItem.findMany({
     where: { businessId: ctx.business.id },
     include: { product: { include: { category: true } }, location: true },
@@ -385,7 +327,6 @@ export async function getInventory(ctx: AuthContext) {
 }
 
 export async function getEmployees(ctx: AuthContext) {
-  if (isDemoMode()) return demoEmployees;
   return db.employeeProfile.findMany({
     where: { businessId: ctx.business.id, deletedAt: null },
     select: {
@@ -405,69 +346,25 @@ export async function getEmployees(ctx: AuthContext) {
 }
 
 export async function getStripeSettings(ctx: AuthContext) {
-  if (isDemoMode()) {
-    return { stripeAccount: demoStripeAccount, subscription: demoSubscription };
-  }
-  const [stripeAccount, subscription] = await Promise.all([
-    db.stripeAccount.findUnique({ where: { businessId: ctx.business.id } }),
-    db.subscription.findUnique({ where: { businessId: ctx.business.id } }),
-  ]);
-  return { stripeAccount, subscription };
+  const stripeAccount = await db.stripeAccount.findUnique({
+    where: { businessId: ctx.business.id },
+  });
+  return { stripeAccount };
 }
 
 export async function getTaxRates(ctx: AuthContext) {
-  if (isDemoMode()) return demoTaxRates;
   return db.taxRate.findMany({ where: { businessId: ctx.business.id } });
 }
 
 export async function getModuleSettings(ctx: AuthContext) {
-  if (isDemoMode()) return demoModules;
   return db.moduleSetting.findMany({ where: { businessId: ctx.business.id } });
 }
 
 export async function getBusinessSettings(ctx: AuthContext) {
-  if (isDemoMode()) return demoSettings;
   return db.businessSetting.findUnique({ where: { businessId: ctx.business.id } });
 }
 
-export async function getReportsData(
-  ctx: AuthContext,
-  options?: { includeAdvanced?: boolean }
-) {
-  const includeAdvanced = options?.includeAdvanced ?? true;
-  if (isDemoMode()) {
-    return {
-      salesByDay: [
-        { date: "Mon", sales: 45, orders: 2 },
-        { date: "Tue", sales: 62, orders: 3 },
-        { date: "Wed", sales: 58, orders: 2 },
-        { date: "Thu", sales: 91, orders: 4 },
-        { date: "Fri", sales: 90, orders: 3 },
-        { date: "Sat", sales: 120, orders: 5 },
-        { date: "Sun", sales: 75, orders: 3 },
-      ],
-      topProducts: includeAdvanced
-        ? demoDashboardStats.topProducts.map((p) => ({
-            name: p.name,
-            revenue: p.revenue,
-            quantity: p.quantity,
-          }))
-        : [],
-      employeeSales: includeAdvanced
-        ? [
-            { name: "Chris Cashier", sales: 58.97, orders: 2 },
-            { name: "Maria Manager", sales: 32.46, orders: 1 },
-          ]
-        : [],
-      paymentMethods: includeAdvanced
-        ? [
-            { method: "Card", amount: 64.38 },
-            { method: "Cash", amount: 27.05 },
-          ]
-        : [],
-    };
-  }
-
+export async function getReportsData(ctx: AuthContext) {
   const businessId = ctx.business.id;
   const start = new Date();
   start.setDate(start.getDate() - 6);
@@ -542,37 +439,18 @@ export async function getReportsData(
     salesByDay: Array.from(dailyMap.values()).sort((a, b) =>
       a.date.localeCompare(b.date)
     ),
-    topProducts: includeAdvanced
-      ? Array.from(productMap.values())
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 10)
-      : [],
-    employeeSales: includeAdvanced
-      ? Array.from(employeeMap.values()).sort((a, b) => b.sales - a.sales)
-      : [],
-    paymentMethods: includeAdvanced
-      ? Array.from(paymentMap.entries()).map(([method, amount]) => ({
-          method,
-          amount,
-        }))
-      : [],
+    topProducts: Array.from(productMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10),
+    employeeSales: Array.from(employeeMap.values()).sort((a, b) => b.sales - a.sales),
+    paymentMethods: Array.from(paymentMap.entries()).map(([method, amount]) => ({
+      method,
+      amount,
+    })),
   };
 }
 
 export async function getEmployeeById(ctx: AuthContext, id: string) {
-  if (isDemoMode()) {
-    const employee = demoEmployees.find((e) => e.id === id);
-    if (!employee) return null;
-    return {
-      ...employee,
-      phone: null,
-      hourlyWage: 18,
-      ptoBalanceHours: 80,
-      ptoAnnualHours: 80,
-      locations: [],
-      role: { id: employee.role.name, name: employee.role.name },
-    };
-  }
   return db.employeeProfile.findFirst({
     where: { id, businessId: ctx.business.id, deletedAt: null },
     include: {
@@ -583,15 +461,6 @@ export async function getEmployeeById(ctx: AuthContext, id: string) {
 }
 
 export async function getWorkforceOverview(ctx: AuthContext) {
-  if (isDemoMode()) {
-    return {
-      clockedIn: [],
-      todayShifts: [],
-      pendingTimeOff: [],
-      activeEmployees: demoEmployees.length,
-    };
-  }
-
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
@@ -640,10 +509,6 @@ export async function getWorkforceOverview(ctx: AuthContext) {
 }
 
 export async function getEmployeeWorkforceSummary(ctx: AuthContext, employeeId: string) {
-  if (isDemoMode()) {
-    return { timeEntries: [], upcomingShifts: [], activeEntry: null };
-  }
-
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);

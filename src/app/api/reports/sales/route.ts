@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-utils";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription, ensureAdvancedReports } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.VIEW_REPORTS)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -16,10 +14,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = request.nextUrl;
     const scope = searchParams.get("scope") ?? "basic";
-
-    if (scope === "advanced") {
-      await ensureAdvancedReports(ctx);
-    }
 
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");

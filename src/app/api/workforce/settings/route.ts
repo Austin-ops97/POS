@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { workforceSettingsSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { ensureWorkforceSettings } from "@/lib/workforce/settings";
@@ -11,8 +10,6 @@ import { handleApiError } from "@/lib/api-utils";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     const settings = await ensureWorkforceSettings(ctx.business.id);
     return NextResponse.json(settings);
   } catch (error) {
@@ -23,8 +20,6 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_WORKFORCE}`);
     }

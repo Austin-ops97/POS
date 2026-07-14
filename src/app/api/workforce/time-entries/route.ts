@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
-import { timeEntryAdjustSchema } from "@/lib/validations/workforce";
-import { PERMISSIONS } from "@/lib/permissions";
-import { createAuditLog } from "@/lib/audit";
+import { requireAuth } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-utils";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     const { searchParams } = new URL(request.url);
     const from = searchParams.get("from");
     const to = searchParams.get("to");

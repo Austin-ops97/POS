@@ -9,7 +9,6 @@ export const PERMISSIONS = {
   MANAGE_CUSTOMERS: "manage_customers",
   VIEW_REPORTS: "view_reports",
   MANAGE_EMPLOYEES: "manage_employees",
-  MANAGE_BILLING: "manage_billing",
   MANAGE_STRIPE: "manage_stripe",
   MANAGE_LOCATIONS: "manage_locations",
   VIEW_WORKFORCE: "view_workforce",

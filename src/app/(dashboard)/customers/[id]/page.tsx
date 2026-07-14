@@ -24,9 +24,15 @@ export default async function CustomerDetailPage({
   const customer = await getCustomerById(ctx, id);
   if (!customer) notFound();
 
-  const orders = (customer as { orders?: Array<{ id: string; orderNumber: string; status: string; total: number | string; createdAt: Date | string }> }).orders ?? [];
+  const orders = customer.orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    status: o.status,
+    total: Number(o.total),
+    createdAt: o.createdAt,
+  }));
   const paidOrders = orders.filter((o) => o.status === "PAID" || o.status === "PARTIALLY_REFUNDED");
-  const totalSpent = (customer as { totalSpent?: number }).totalSpent ?? paidOrders.reduce((sum, o) => sum + Number(o.total), 0);
+  const totalSpent = customer.totalSpent ?? paidOrders.reduce((sum, o) => sum + o.total, 0);
   const avgOrder = paidOrders.length > 0 ? totalSpent / paidOrders.length : 0;
   const lastOrder = orders[0];
 

@@ -9,7 +9,6 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import { ROLE_PERMISSIONS, PERMISSIONS } from "../src/lib/permissions";
 
 const db = new PrismaClient();
@@ -74,9 +73,6 @@ async function main() {
     data: {
       name: "Audit Store",
       type: "RETAIL",
-      onboardingStep: "COMPLETED",
-      onboardingComplete: true,
-      demoMode: false,
     },
   });
 
@@ -94,9 +90,9 @@ async function main() {
     data: { businessId: business.id, enableCash: true },
   });
 
-  for (const mod of ["RETAIL", "SERVICE", "RENTAL", "inventory"]) {
+  for (const mod of ["RETAIL", "SERVICE", "RENTAL", "RESTAURANT", "LOYALTY", "GIFT_CARDS"]) {
     await db.moduleSetting.create({
-      data: { businessId: business.id, module: mod, enabled: mod !== "RENTAL" },
+      data: { businessId: business.id, module: mod, enabled: true },
     });
   }
 
@@ -104,16 +100,7 @@ async function main() {
     data: { businessId: business.id, status: "NOT_CONNECTED" },
   });
 
-  await db.subscription.create({
-    data: {
-      businessId: business.id,
-      plan: "STARTER",
-      status: "TRIALING",
-      trialEndsAt: new Date(Date.now() + 14 * 86400000),
-    },
-  });
-
-  const taxRate = await db.taxRate.create({
+  await db.taxRate.create({
     data: {
       businessId: business.id,
       locationId: location.id,

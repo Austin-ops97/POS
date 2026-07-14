@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAuth, requirePermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { getOrderById } from "@/lib/queries";
 import {
   ensureReceiptForOrder,
@@ -22,7 +21,6 @@ export default async function ReceiptPreviewPage({
   const { id } = await params;
   const { autoprint } = await searchParams;
   const ctx = await requireAuth();
-  await ensurePaidSubscription(ctx);
   await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
   const order = await getOrderById(ctx, id);

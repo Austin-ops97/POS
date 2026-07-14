@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { shiftSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createShift } from "@/lib/workforce/schedule-service";
@@ -10,8 +9,6 @@ import { handleApiError } from "@/lib/api-utils";
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (
       !hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE) &&
       !hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)
@@ -62,8 +59,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_WORKFORCE}`);
     }

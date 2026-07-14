@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { employeeUpdateSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { hashPin } from "@/lib/pin";
@@ -30,7 +29,6 @@ const employeeInclude = {
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     const { id } = await params;
 
     const employee = await db.employeeProfile.findFirst({
@@ -61,8 +59,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
     }
@@ -223,8 +219,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
     }

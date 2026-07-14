@@ -1,78 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser, requireAuth } from "@/lib/auth";
-import { isDemoMode } from "@/lib/demo-mode";
-import { demoJson, getDemoBusiness } from "@/lib/demo-api";
 import { createBusinessSchema, posConfigSchema } from "@/lib/validations";
-import { ROLE_PERMISSIONS, PERMISSIONS } from "@/lib/permissions";
-import { STRIPE_PLANS } from "@/lib/stripe";
+import { ensureRolesAndPermissions } from "@/lib/roles-permissions";
+import { defaultEnabledModules } from "@/lib/modules";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
 
-function formatPermissionName(key: string): string {
-  return key
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-async function ensureRolesAndPermissions() {
-  const permissionIds: Record<string, string> = {};
-
-  for (const key of Object.values(PERMISSIONS)) {
-    const permission = await db.permission.upsert({
-      where: { key },
-      create: {
-        key,
-        name: formatPermissionName(key),
-        description: `Permission: ${key}`,
-      },
-      update: {},
-    });
-    permissionIds[key] = permission.id;
-  }
-
-  const roleIds: Record<string, string> = {};
-
-  for (const [roleName, permissionKeys] of Object.entries(ROLE_PERMISSIONS)) {
-    const role = await db.role.upsert({
-      where: { name: roleName },
-      create: {
-        name: roleName,
-        description: `${roleName} role`,
-        isSystem: true,
-      },
-      update: {},
-    });
-    roleIds[roleName] = role.id;
-
-    for (const permKey of permissionKeys) {
-      const permissionId = permissionIds[permKey];
-      await db.rolePermission.upsert({
-        where: {
-          roleId_permissionId: { roleId: role.id, permissionId },
-        },
-        create: { roleId: role.id, permissionId },
-        update: {},
-      });
-    }
-  }
-
-  return roleIds;
-}
-
-function buildModuleSettings(posConfig: ReturnType<typeof posConfigSchema.parse>) {
-  return [
-    { module: "RETAIL", enabled: posConfig.sellPhysical ?? true },
-    { module: "SERVICE", enabled: posConfig.sellServices ?? false },
-    { module: "RENTAL", enabled: posConfig.rentItems ?? false },
-    { module: "inventory", enabled: posConfig.trackInventory ?? true },
-  ];
-}
-
 export async function GET() {
   try {
-    if (isDemoMode()) return demoJson(getDemoBusiness());
     const ctx = await requireAuth();
 
     const business = await db.business.findFirst({
@@ -88,7 +24,6 @@ export async function GET() {
           orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
         },
         stripeAccount: true,
-        subscription: true,
         taxRates: { where: { isActive: true }, take: 5 },
       },
     });
@@ -134,7 +69,7 @@ export async function POST(request: Request) {
       timezone: "America/New_York",
     };
 
-    const roleIds = await ensureRolesAndPermissions();
+    const roleIds = await ensureRolesAndPermissions(db);
     const ownerRoleId = roleIds["Owner"];
 
     if (!ownerRoleId) {
@@ -143,9 +78,6 @@ export async function POST(request: Request) {
 
     const ownerName =
       [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
-
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
     const business = await db.$transaction(async (tx) => {
       const created = await tx.business.create({
@@ -157,8 +89,6 @@ export async function POST(request: Request) {
           email: data.email || user.email,
           website: data.website || undefined,
           primaryColor: data.primaryColor,
-          onboardingStep: "BUSINESS_TYPE",
-          demoMode: false,
         },
       });
 
@@ -192,7 +122,7 @@ export async function POST(request: Request) {
       });
 
       await tx.moduleSetting.createMany({
-        data: buildModuleSettings(posConfig).map((setting) => ({
+        data: defaultEnabledModules().map((setting) => ({
           businessId: created.id,
           ...setting,
         })),
@@ -205,16 +135,6 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.subscription.create({
-        data: {
-          businessId: created.id,
-          plan: "STARTER",
-          status: "TRIALING",
-          stripePriceId: STRIPE_PLANS.STARTER.priceId,
-          trialEndsAt,
-        },
-      });
-
       const employee = await tx.employeeProfile.create({
         data: {
           businessId: created.id,
@@ -223,6 +143,7 @@ export async function POST(request: Request) {
           name: ownerName,
           email: user.email,
           status: "ACTIVE",
+          defaultLocationId: location.id,
         },
       });
 
@@ -252,7 +173,6 @@ export async function POST(request: Request) {
           moduleSettings: true,
           locations: true,
           stripeAccount: true,
-          subscription: true,
           employees: {
             where: { id: employee.id },
             include: { role: true },

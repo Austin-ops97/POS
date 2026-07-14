@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { handleApiError } from "@/lib/api-utils";
 
 export async function GET() {
   try {
-    const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
+    await requireAuth();
     const roles = await db.role.findMany({
       where: { isSystem: true },
       select: { id: true, name: true, description: true },

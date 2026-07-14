@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { timeClockActionSchema } from "@/lib/validations/workforce";
 import {
   findEmployeeByPin,
@@ -15,8 +14,6 @@ import { handleApiError } from "@/lib/api-utils";
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     const body = await request.json();
     const data = timeClockActionSchema.parse(body);
 
@@ -56,8 +53,6 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
-
     const activeEntry = await getActiveTimeEntry(ctx.employee.id);
     const clockState = getClockState(activeEntry);
     const todayHours = await getTodayHours(ctx.employee.id);

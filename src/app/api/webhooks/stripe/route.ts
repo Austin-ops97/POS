@@ -6,15 +6,7 @@ import {
   deductInventoryForOrderInTransaction,
   OrderServiceError,
 } from "@/lib/order-service";
-import {
-  handleInvoicePaymentFailed,
-  handleInvoicePaymentSucceeded,
-  handleInvoicePaymentActionRequired,
-  handleSubscriptionDeleted,
-  markWebhookEventProcessed,
-  syncSubscriptionFromCheckoutSession,
-  syncSubscriptionFromStripe,
-} from "@/lib/stripe-subscription-sync";
+import { markWebhookEventProcessed } from "@/lib/stripe-webhook-idempotency";
 import { captureMonitoringEvent } from "@/lib/monitoring";
 import { getStripeOrThrow } from "@/lib/stripe";
 import type { Order, Payment } from "@prisma/client";
@@ -368,16 +360,6 @@ async function handleAccountUpdated(account: Stripe.Account) {
   });
 }
 
-const BILLING_WEBHOOK_EVENTS = new Set([
-  "checkout.session.completed",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
-  "invoice.payment_succeeded",
-  "invoice.payment_failed",
-  "invoice.payment_action_required",
-]);
-
 const CONNECT_WEBHOOK_EVENTS = new Set([
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
@@ -398,27 +380,6 @@ async function dispatchWebhookEvent(event: Stripe.Event) {
       break;
     case "account.updated":
       await handleAccountUpdated(event.data.object as Stripe.Account);
-      break;
-    case "checkout.session.completed":
-      await syncSubscriptionFromCheckoutSession(
-        event.data.object as Stripe.Checkout.Session
-      );
-      break;
-    case "customer.subscription.created":
-    case "customer.subscription.updated":
-      await syncSubscriptionFromStripe(event.data.object as Stripe.Subscription);
-      break;
-    case "customer.subscription.deleted":
-      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
-      break;
-    case "invoice.payment_succeeded":
-      await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
-      break;
-    case "invoice.payment_failed":
-      await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
-      break;
-    case "invoice.payment_action_required":
-      await handleInvoicePaymentActionRequired(event.data.object as Stripe.Invoice);
       break;
     default:
       break;
@@ -454,10 +415,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 });
   }
 
-  const isBilling = BILLING_WEBHOOK_EVENTS.has(event.type);
-  const isConnect = CONNECT_WEBHOOK_EVENTS.has(event.type);
-
-  if (!isBilling && !isConnect) {
+  if (!CONNECT_WEBHOOK_EVENTS.has(event.type)) {
     return NextResponse.json({ received: true, skipped: true });
   }
 

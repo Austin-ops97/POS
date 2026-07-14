@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, hasPermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
-import { isDemoMode } from "@/lib/demo-mode";
-import { demoJson, demoCategories, getDemoProducts } from "@/lib/demo-api";
 import { productSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -14,11 +11,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim();
     const categoryId = searchParams.get("categoryId") ?? undefined;
-    if (isDemoMode()) {
-      return demoJson({ products: getDemoProducts(search, categoryId), categories: demoCategories });
-    }
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     const isActive = searchParams.get("isActive");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
@@ -91,7 +84,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_PRODUCTS)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_PRODUCTS}`);

@@ -121,7 +121,7 @@ Multi-tenant with `businessId` on all operational tables. Key models:
 
 1. **Stripe Connect** – Express accounts for merchant onboarding
 2. **PaymentIntents** – card-present via Terminal, card-not-present
-3. **Webhooks** – `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `account.updated`, `customer.subscription.*`
+3. **Webhooks** – `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `account.updated`
 4. **Stripe Billing** – SaaS plans (Starter, Pro, Multi-Location, Enterprise)
 5. **Stripe Terminal** – reader registration, connection tokens, simulated reader in dev
 6. **Refunds** – via Stripe API for card payments

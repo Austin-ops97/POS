@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAuthContext, isClerkConfigured } from "@/lib/auth";
-import { loadSubscriptionAccess } from "@/lib/subscription-server";
+import { ensureProvisionedBusinessForUser } from "@/lib/provision-business";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
-import { SubscriptionGate } from "@/components/dashboard/subscription-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -12,17 +11,15 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const ctx = await getAuthContext();
+  const provisioned = await ensureProvisionedBusinessForUser();
+  if (!provisioned) {
+    redirect(isClerkConfigured() ? "/sign-in" : "/sign-in");
+  }
 
+  const ctx = await getAuthContext(provisioned.businessId);
   if (!ctx) {
-    redirect("/onboarding");
+    redirect("/sign-in");
   }
-
-  if (!ctx.business.onboardingComplete) {
-    redirect("/onboarding");
-  }
-
-  const { access, loadFailed } = await loadSubscriptionAccess(ctx.business.id);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -33,9 +30,7 @@ export default async function DashboardLayout({
           locationName={ctx.location?.name}
           authEnabled={isClerkConfigured()}
         />
-        <SubscriptionGate access={access} loadFailed={loadFailed}>
-          <main className="flex-1 overflow-y-auto bg-slate-50 p-6">{children}</main>
-        </SubscriptionGate>
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-6">{children}</main>
       </div>
     </div>
   );

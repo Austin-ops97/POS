@@ -16,23 +16,6 @@ export type MonitoringEvent =
       eventType: string;
     }
   | {
-      type: "subscription_load_fallback";
-      businessId: string;
-      error: string;
-      environment: string;
-    }
-  | {
-      type: "billing_checkout_failure";
-      businessId: string;
-      plan?: string;
-      error: string;
-    }
-  | {
-      type: "billing_portal_failure";
-      businessId: string;
-      error: string;
-    }
-  | {
       type: "receipt_email_failure";
       businessId: string;
       orderId: string;

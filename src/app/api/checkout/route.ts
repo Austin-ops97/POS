@@ -2,9 +2,6 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
-import { isDemoMode } from "@/lib/demo-mode";
-import { demoJson, handleDemoCheckout } from "@/lib/demo-api";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createOrderRecord, serializeDecimal, verifyLocationAccess } from "@/lib/order-service";
 import { checkoutSchema } from "@/lib/validations";
@@ -15,17 +12,7 @@ const createOrderSchema = checkoutSchema.omit({ paymentMethod: true });
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    if (isDemoMode()) {
-      const result = handleDemoCheckout({ ...body, paymentMethod: "CASH" });
-      return demoJson({
-        id: result.order.id,
-        orderNumber: result.order.orderNumber,
-        order: result.order,
-        totals: result.totals,
-      });
-    }
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const parsed = createOrderSchema.parse(body);

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createAuditLog } from "@/lib/audit";
 import { getClientIp, handleApiError, jsonError } from "@/lib/api-utils";
 import { requireAuth, requirePermission } from "@/lib/auth";
-import { ensurePaidSubscription } from "@/lib/subscription-server";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
@@ -20,7 +19,6 @@ const holdOrderSchema = checkoutSchema.omit({ paymentMethod: true }).extend({
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    await ensurePaidSubscription(ctx);
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
 
     const body = await request.json();
