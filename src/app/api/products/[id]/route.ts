@@ -5,6 +5,11 @@ import { productSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
+import {
+  BarcodeAssignmentError,
+  syncProductPrimaryBarcode,
+} from "@/lib/product-barcode";
+import { isSafeImageUrl, sanitizeExternalText } from "@/lib/barcodes";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -22,6 +27,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       include: {
         category: true,
         variants: { where: { isActive: true } },
+        barcodes: true,
         inventoryItems: {
           where: { businessId: ctx.business.id },
           include: { location: { select: { id: true, name: true } } },
@@ -75,24 +81,45 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
-    const product = await db.product.update({
-      where: { id },
-      data: {
-        name: data.name,
-        description: data.description,
-        sku: data.sku,
-        barcode: data.barcode,
-        categoryId: data.categoryId,
-        brand: data.brand,
-        supplier: data.supplier,
-        price: data.price,
-        cost: data.cost,
-        type: data.type,
-        taxable: data.taxable,
-        trackInventory: data.trackInventory,
-        isActive: data.isActive,
-      },
-      include: { category: true },
+    const safeImage =
+      data.imageUrl !== undefined
+        ? data.imageUrl && isSafeImageUrl(data.imageUrl)
+          ? data.imageUrl
+          : null
+        : undefined;
+    const attribution = sanitizeExternalText(data.imageAttribution, 200);
+
+    const product = await db.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id },
+        data: {
+          name: data.name,
+          description: data.description,
+          sku: data.sku,
+          barcode: data.barcode,
+          categoryId: data.categoryId,
+          brand: data.brand,
+          supplier: data.supplier,
+          ...(safeImage !== undefined ? { imageUrl: safeImage } : {}),
+          price: data.price,
+          cost: data.cost,
+          type: data.type,
+          taxable: data.taxable,
+          trackInventory: data.trackInventory,
+          isActive: data.isActive,
+        },
+        include: { category: true, barcodes: true },
+      });
+
+      if (data.barcode !== undefined) {
+        await syncProductPrimaryBarcode(tx, {
+          businessId: ctx.business.id,
+          productId: id,
+          barcode: data.barcode,
+        });
+      }
+
+      return updated;
     });
 
     await createAuditLog({
@@ -101,11 +128,21 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       action: "UPDATE",
       entity: "Product",
       entityId: product.id,
-      details: data,
+      details: { ...data, imageAttribution: attribution },
     });
 
     return NextResponse.json(product);
   } catch (error) {
+    if (error instanceof BarcodeAssignmentError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "DUPLICATE_BARCODE",
+          existingProductId: error.existingProductId,
+        },
+        { status: 409 }
+      );
+    }
     return handleApiError(error, "PATCH /api/products/[id]");
   }
 }

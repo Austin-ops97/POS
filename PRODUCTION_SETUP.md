@@ -30,7 +30,14 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_CONNECT_CLIENT_ID=ca_...
 
 NEXT_PUBLIC_APP_URL=https://your-production-domain.com
+
+# Optional: external product barcode lookup (Open Facts)
+PRODUCT_LOOKUP_ENABLED=true
+PRODUCT_LOOKUP_USER_AGENT="NexaPOS/0.1.0 (support@your-domain.com)"
+PRODUCT_LOOKUP_CACHE_DAYS=30
 ```
+
+Camera barcode scanning requires HTTPS outside localhost (iPhone Safari, installed PWAs, Android Chrome).
 
 Use live Clerk and Stripe keys only when the store is ready to process real customers and payments.
 

@@ -35,11 +35,11 @@ export function ReportsContent({
 }: ReportsContentProps) {
   return (
     <Tabs defaultValue="sales" className="space-y-6">
-      <TabsList>
-        <TabsTrigger value="sales">Sales Summary</TabsTrigger>
-        <TabsTrigger value="products">Products</TabsTrigger>
-        <TabsTrigger value="employees">Employees</TabsTrigger>
-        <TabsTrigger value="payments">Payment Methods</TabsTrigger>
+      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 overflow-x-auto">
+        <TabsTrigger value="sales" className="min-h-11">Sales Summary</TabsTrigger>
+        <TabsTrigger value="products" className="min-h-11">Products</TabsTrigger>
+        <TabsTrigger value="employees" className="min-h-11">Employees</TabsTrigger>
+        <TabsTrigger value="payments" className="min-h-11">Payment Methods</TabsTrigger>
       </TabsList>
 
       <TabsContent value="sales" className="space-y-6">
@@ -48,15 +48,17 @@ export function ReportsContent({
             <CardTitle>Sales Over Time</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={320}>
+            <div className="h-[240px] w-full min-w-0 sm:h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={salesByDay}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `$${v}`} />
+                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `$${v}`} width={48} />
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                 <Line type="monotone" dataKey="sales" stroke="#0f172a" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -64,15 +66,17 @@ export function ReportsContent({
             <CardTitle>Orders by Day</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
+            <div className="h-[200px] w-full min-w-0 sm:h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesByDay}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" width={36} />
                 <Tooltip />
                 <Bar dataKey="orders" fill="#0f172a" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>

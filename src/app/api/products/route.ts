@@ -5,6 +5,11 @@ import { productSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
+import {
+  BarcodeAssignmentError,
+  syncProductPrimaryBarcode,
+} from "@/lib/product-barcode";
+import { isSafeImageUrl, sanitizeExternalText } from "@/lib/barcodes";
 
 export async function GET(request: Request) {
   try {
@@ -31,6 +36,16 @@ export async function GET(request: Request) {
                 { sku: { contains: search, mode: "insensitive" } },
                 { barcode: { contains: search, mode: "insensitive" } },
                 { brand: { contains: search, mode: "insensitive" } },
+                {
+                  barcodes: {
+                    some: {
+                      normalizedValue: {
+                        contains: search,
+                        mode: "insensitive",
+                      },
+                    },
+                  },
+                },
               ],
             }
           : {}),
@@ -38,6 +53,7 @@ export async function GET(request: Request) {
       include: {
         category: true,
         variants: { where: { isActive: true } },
+        barcodes: true,
         inventoryItems: {
           where: { businessId: ctx.business.id },
           select: {
@@ -110,6 +126,10 @@ export async function POST(request: Request) {
         ? (data.initialStock ?? 0)
         : 0;
 
+    const safeImage =
+      data.imageUrl && isSafeImageUrl(data.imageUrl) ? data.imageUrl : undefined;
+    const attribution = sanitizeExternalText(data.imageAttribution, 200);
+
     const product = await db.$transaction(async (tx) => {
       const created = await tx.product.create({
         data: {
@@ -121,6 +141,7 @@ export async function POST(request: Request) {
           categoryId: data.categoryId,
           brand: data.brand,
           supplier: data.supplier,
+          imageUrl: safeImage,
           price: data.price,
           cost: data.cost,
           type: data.type,
@@ -131,9 +152,21 @@ export async function POST(request: Request) {
         include: { category: true },
       });
 
+      if (data.barcode) {
+        await syncProductPrimaryBarcode(tx, {
+          businessId: ctx.business.id,
+          productId: created.id,
+          barcode: data.barcode,
+        });
+      }
+
       if (data.trackInventory) {
         const locations = await tx.location.findMany({
-          where: { businessId: ctx.business.id, isActive: true, deletedAt: null },
+          where: {
+            businessId: ctx.business.id,
+            isActive: true,
+            deletedAt: null,
+          },
         });
 
         const targetLocations =
@@ -152,6 +185,9 @@ export async function POST(request: Request) {
                 productId: created.id,
                 quantityOnHand: initialStock,
                 costPerUnit: data.cost,
+                ...(data.reorderPoint != null
+                  ? { reorderPoint: data.reorderPoint }
+                  : {}),
               },
             });
 
@@ -182,11 +218,26 @@ export async function POST(request: Request) {
       action: "CREATE",
       entity: "Product",
       entityId: product.id,
-      details: { name: product.name, sku: product.sku },
+      details: {
+        name: product.name,
+        sku: product.sku,
+        barcode: data.barcode,
+        imageAttribution: attribution,
+      },
     });
 
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
+    if (error instanceof BarcodeAssignmentError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "DUPLICATE_BARCODE",
+          existingProductId: error.existingProductId,
+        },
+        { status: 409 }
+      );
+    }
     return handleApiError(error, "POST /api/products");
   }
 }

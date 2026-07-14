@@ -197,9 +197,9 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
       </Card>
 
       {denyId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-4 pt-6">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+          <Card className="flex max-h-[min(92dvh,100%)] w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:max-h-[min(90dvh,900px)] sm:rounded-xl sm:pb-0">
+            <CardContent className="space-y-4 overflow-y-auto pt-6">
               <h3 className="text-lg font-semibold">Deny Request</h3>
               <textarea
                 className="w-full rounded-md border border-slate-200 p-3 text-sm"
@@ -208,7 +208,7 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
                 value={denyReason}
                 onChange={(e) => setDenyReason(e.target.value)}
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 pb-2 sm:pb-0">
                 <Button
                   variant="destructive"
                   disabled={!denyReason.trim()}

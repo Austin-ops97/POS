@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search, ScanBarcode, Moon, Sun } from "lucide-react";
+import { Search, ScanBarcode, Moon, Sun, Camera, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,18 @@ import { ProductGrid, type ProductGridItem } from "@/components/register/product
 import { CartPanel } from "@/components/register/cart-panel";
 import { PaymentModal, type PaymentModalState } from "@/components/register/payment-modal";
 import { CashTenderModal } from "@/components/register/cash-tender-modal";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
-import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
+import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
 
 type Category = { id: string; name: string };
 type Customer = { id: string; firstName: string; lastName?: string | null; email?: string | null };
@@ -63,6 +71,7 @@ function resolveLocationFromBusiness(biz: {
 export default function RegisterPage() {
   const [search, setSearch] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [products, setProducts] = useState<ProductGridItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState("all");
@@ -75,6 +84,7 @@ export default function RegisterPage() {
   const receiptEmailRef = useRef("");
   const skipReceiptRef = useRef(false);
 
+  const [cartOpen, setCartOpen] = useState(false);
   const [cashTenderOpen, setCashTenderOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CARD" | "CASH">("CASH");
@@ -241,22 +251,26 @@ export default function RegisterPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/products?search=${encodeURIComponent(code)}&barcode=${encodeURIComponent(code)}`);
+      // Exact local barcode lookup only — never call external catalog at checkout
+      const res = await fetch(
+        `/api/catalog/barcodes/${encodeURIComponent(code.trim())}?localOnly=true${
+          locationId ? `&locationId=${encodeURIComponent(locationId)}` : ""
+        }`
+      );
       if (res.ok) {
         const data = await res.json();
-        const list = data.products || data;
-        const found = list.find(
-          (p: { barcode?: string }) => p.barcode === code.trim()
-        );
-        if (found) {
+        if (data.status === "LOCAL_MATCH" && data.product) {
           handleSelectProduct({
-            id: found.id,
-            name: found.name,
-            price: Number(found.price),
-            sku: found.sku,
-            barcode: found.barcode,
-            categoryId: found.categoryId,
-            taxable: found.taxable,
+            id: data.product.id,
+            name: data.product.name,
+            price:
+              data.variant?.price != null
+                ? Number(data.variant.price)
+                : Number(data.product.price),
+            sku: data.variant?.sku ?? data.product.sku,
+            barcode: data.product.barcode,
+            categoryId: data.product.categoryId,
+            taxable: data.product.taxable,
           });
           setBarcode("");
           return;
@@ -265,7 +279,14 @@ export default function RegisterPage() {
     } catch {
       /* fall through */
     }
-    toast.error("Product not found for barcode");
+    toast.error("Barcode not found in this business", {
+      action: {
+        label: "Add product",
+        onClick: () => {
+          window.location.href = `/products/new?barcode=${encodeURIComponent(code.trim())}`;
+        },
+      },
+    });
     setBarcode("");
   };
 
@@ -711,49 +732,81 @@ export default function RegisterPage() {
       ? products
       : products.filter((p) => p.categoryId === activeCategory);
 
+  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+
+  const cartPanelProps = {
+    dark: darkCart,
+    taxRate: primaryTaxRate(taxRates),
+    onPayCash: handlePayCash,
+    onPayCard: handlePayCard,
+    onHold: handleHold,
+    onResumeHeld: handleResumeHeld,
+    onClear: clearCart,
+    onAddCustom: handleAddCustom,
+    onSelectCustomer: handleSelectCustomer,
+    onAddDiscount: handleAddDiscount,
+    disabled: processing || paymentOpen || cashTenderOpen,
+  };
+
   return (
-    <div className="-m-6 flex h-[calc(100vh-4rem)] overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-hidden bg-slate-50">
-        <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-5 py-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+    <div className="page-flush relative flex h-[calc(100dvh-3.5rem)] max-h-[calc(100dvh-3.5rem)] overflow-hidden sm:h-[calc(100dvh-4rem)] sm:max-h-[calc(100dvh-4rem)]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50">
+        <div className="flex flex-col gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-5">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <Input
               placeholder="Search products..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-12 pl-10 text-base"
+              enterKeyHint="search"
             />
           </div>
-          <div className="relative w-64">
-            <ScanBarcode className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-            <Input
-              ref={barcodeRef}
-              placeholder="Scan barcode..."
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleBarcodeSubmit(barcode);
-              }}
-              className="h-12 pl-10 text-base"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none lg:w-64">
+              <ScanBarcode className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <Input
+                ref={barcodeRef}
+                placeholder="Scan barcode..."
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleBarcodeSubmit(barcode);
+                }}
+                className="h-12 pl-10 text-base"
+                inputMode="numeric"
+                enterKeyHint="done"
+                autoComplete="off"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 shrink-0"
+              aria-label="Open camera barcode scanner"
+              onClick={() => setScannerOpen(true)}
+            >
+              <Camera className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="hidden h-12 w-12 shrink-0 lg:inline-flex"
+              onClick={() => setDarkCart(!darkCart)}
+              aria-label={darkCart ? "Use light cart panel" : "Use dark cart panel"}
+            >
+              {darkCart ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-12 w-12 shrink-0"
-            onClick={() => setDarkCart(!darkCart)}
-            title={darkCart ? "Light cart panel" : "Dark cart panel"}
-          >
-            {darkCart ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
         </div>
 
-        <div className="border-b border-slate-200 bg-white px-5 py-2">
+        <div className="border-b border-slate-200 bg-white px-3 py-2 sm:px-5">
           <Tabs value={activeCategory} onValueChange={setActiveCategory}>
             <TabsList className="h-11 w-full justify-start gap-1 overflow-x-auto bg-transparent p-0">
               <TabsTrigger
                 value="all"
-                className="h-10 rounded-lg px-5 text-sm data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+                className="h-10 min-h-10 shrink-0 rounded-lg px-4 text-sm data-[state=active]:bg-slate-900 data-[state=active]:text-white sm:px-5"
               >
                 All
               </TabsTrigger>
@@ -761,7 +814,7 @@ export default function RegisterPage() {
                 <TabsTrigger
                   key={cat.id}
                   value={cat.id}
-                  className="h-10 rounded-lg px-5 text-sm data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+                  className="h-10 min-h-10 shrink-0 rounded-lg px-4 text-sm data-[state=active]:bg-slate-900 data-[state=active]:text-white sm:px-5"
                 >
                   {cat.name}
                 </TabsTrigger>
@@ -770,7 +823,7 @@ export default function RegisterPage() {
           </Tabs>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-3 pb-24 sm:p-5 lg:pb-5">
           <ProductGrid
             products={filteredProducts}
             loading={loading}
@@ -779,21 +832,33 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      <div className={cn("w-[400px] shrink-0 xl:w-[440px]")}>
-        <CartPanel
-          dark={darkCart}
-          taxRate={primaryTaxRate(taxRates)}
-          onPayCash={handlePayCash}
-          onPayCard={handlePayCard}
-          onHold={handleHold}
-          onResumeHeld={handleResumeHeld}
-          onClear={clearCart}
-          onAddCustom={handleAddCustom}
-          onSelectCustomer={handleSelectCustomer}
-          onAddDiscount={handleAddDiscount}
-          disabled={processing || paymentOpen || cashTenderOpen}
-        />
+      <div className="hidden w-[min(400px,38vw)] shrink-0 xl:w-[440px] lg:block">
+        <CartPanel {...cartPanelProps} />
       </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+        <Button
+          type="button"
+          size="xl"
+          className="pointer-events-auto h-14 w-full shadow-lg"
+          onClick={() => setCartOpen(true)}
+          aria-label={`Open cart, ${itemCount} items, total ${formatCurrency(totals.total)}`}
+        >
+          <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+          <span>Cart · {itemCount}</span>
+          <span className="ml-auto font-bold">{formatCurrency(totals.total)}</span>
+        </Button>
+      </div>
+
+      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+        <SheetContent side="bottom" className="h-[min(92dvh,100%)] p-0 lg:hidden" showClose>
+          <SheetHeader className="sr-only">
+            <SheetTitle>Current sale cart</SheetTitle>
+            <SheetDescription>Review items and complete payment</SheetDescription>
+          </SheetHeader>
+          <CartPanel {...cartPanelProps} className="h-full border-0" />
+        </SheetContent>
+      </Sheet>
 
       <CashTenderModal
         open={cashTenderOpen}
@@ -840,6 +905,7 @@ export default function RegisterPage() {
                   clearCart();
                   checkoutInFlightRef.current = false;
                   setProcessing(false);
+                  setCartOpen(false);
                   if (!skipReceiptRef.current && receiptEmailRef.current.trim()) {
                     sendReceiptEmailSafe(orderId, receiptEmailRef.current);
                   }
@@ -855,6 +921,16 @@ export default function RegisterPage() {
               }
             : null
         }
+      />
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        continuous={false}
+        title="Scan to add to cart"
+        onScan={(result) => {
+          void handleBarcodeSubmit(result.rawValue);
+        }}
       />
     </div>
   );

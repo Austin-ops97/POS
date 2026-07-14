@@ -206,14 +206,15 @@ export function CartPanel({
                   <button
                     type="button"
                     onClick={() => removeItem(item.id)}
+                    aria-label={`Remove ${item.name}`}
                     className={cn(
-                      "rounded-lg p-1.5 transition-colors",
+                      "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors",
                       dark
                         ? "text-slate-400 hover:bg-slate-700 hover:text-red-400"
                         : "text-slate-400 hover:bg-slate-200 hover:text-red-600"
                     )}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
@@ -221,30 +222,34 @@ export function CartPanel({
                     <Button
                       variant={dark ? "secondary" : "outline"}
                       size="icon"
-                      className="h-10 w-10 rounded-lg"
+                      className="h-11 w-11 rounded-lg"
                       onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      aria-label={`Decrease quantity of ${item.name}`}
                     >
-                      <Minus className="h-4 w-4" />
+                      <Minus className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       min={1}
                       value={item.quantity}
                       onChange={(e) =>
                         updateQuantity(item.id, parseInt(e.target.value) || 1)
                       }
                       className={cn(
-                        "h-10 w-14 text-center text-base font-semibold",
+                        "h-11 w-14 text-center text-base font-semibold",
                         dark && "border-slate-600 bg-slate-700 text-white"
                       )}
+                      aria-label={`Quantity of ${item.name}`}
                     />
                     <Button
                       variant={dark ? "secondary" : "outline"}
                       size="icon"
-                      className="h-10 w-10 rounded-lg"
+                      className="h-11 w-11 rounded-lg"
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      aria-label={`Increase quantity of ${item.name}`}
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
                   <p className="text-lg font-bold">

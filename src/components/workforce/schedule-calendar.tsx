@@ -361,29 +361,93 @@ export function ScheduleCalendar({
     );
   }
 
+  function shiftsForDay(day: Date) {
+    return shifts
+      .filter((s) => isSameDay(new Date(s.startAt), day))
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }
+
   const today = new Date();
   const navDisabled = initialLoading || refreshing || isSaving;
 
+  function renderShiftButton(
+    shift: Shift,
+    options?: { showEmployee?: boolean; className?: string }
+  ) {
+    const tz = shift.location?.timezone ?? defaultTimezone;
+    return (
+      <button
+        key={shift.id}
+        type="button"
+        className={cn(
+          "w-full min-h-11 rounded-md bg-slate-900 px-3 py-2.5 text-left text-xs text-white hover:bg-slate-700",
+          options?.className
+        )}
+        onClick={() => canManage && openEdit(shift)}
+      >
+        {options?.showEmployee && (
+          <div className="font-medium text-white">{shift.employee.name}</div>
+        )}
+        <div>
+          {formatTime(shift.startAt, tz)} – {formatTime(shift.endAt, tz)}
+        </div>
+        {shift.location && <div className="text-slate-300">{shift.location.name}</div>}
+      </button>
+    );
+  }
+
+  function renderAddButton(employeeId: string, day: Date, className?: string) {
+    if (!canManage) return null;
+    return (
+      <button
+        type="button"
+        className={cn(
+          "flex min-h-11 w-full items-center justify-center rounded-md border border-dashed border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600",
+          className
+        )}
+        onClick={() => openCreate(employeeId, day)}
+        aria-label="Add shift"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prevWeek} disabled={navDisabled}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 min-h-11 min-w-11 shrink-0"
+            onClick={prevWeek}
+            disabled={navDisabled}
+            aria-label="Previous week"
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium text-slate-700">
+          <span className="truncate text-sm font-medium text-slate-700">
             {formatDayHeader(weekDays[0])} – {formatDayHeader(weekDays[6])}
           </span>
-          <Button variant="outline" size="icon" onClick={nextWeek} disabled={navDisabled}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 min-h-11 min-w-11 shrink-0"
+            onClick={nextWeek}
+            disabled={navDisabled}
+            aria-label="Next week"
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
           {refreshing && (
-            <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-label="Refreshing schedule" />
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" aria-label="Refreshing schedule" />
           )}
         </div>
         <Button
           variant="outline"
           size="sm"
+          className="h-11 min-h-11 shrink-0"
           disabled={navDisabled}
           onClick={() => setWeekStart(getInitialWeekStart(weekStartDay))}
         >
@@ -392,7 +456,7 @@ export function ScheduleCalendar({
       </div>
 
       {loadError && (
-        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span>{loadError}</span>
           <Button variant="outline" size="sm" onClick={() => setRetryCount((c) => c + 1)}>
             <RefreshCw className="mr-1 h-3 w-3" />
@@ -401,7 +465,59 @@ export function ScheduleCalendar({
         </div>
       )}
 
-      <Card>
+      {/* Mobile agenda / day list */}
+      <div className={cn("md:hidden", refreshing && "opacity-80")}>
+        {initialLoading ? (
+          <Card>
+            <CardContent className="p-0">
+              <ScheduleSkeleton />
+            </CardContent>
+          </Card>
+        ) : employees.length === 0 ? (
+          <Card>
+            <CardContent className="px-4 py-8 text-center text-sm text-slate-500">
+              No active employees to schedule
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {weekDays.map((day) => {
+              const dayShifts = shiftsForDay(day);
+              const isToday = isSameDay(day, today);
+              return (
+                <Card key={day.toISOString()}>
+                  <CardContent className="space-y-2 p-3">
+                    <div
+                      className={cn(
+                        "px-1 text-sm font-semibold text-slate-700",
+                        isToday && "text-blue-700"
+                      )}
+                    >
+                      {formatDayHeader(day)}
+                      {isToday && (
+                        <span className="ml-2 text-xs font-medium text-blue-600">Today</span>
+                      )}
+                    </div>
+                    {dayShifts.length === 0 ? (
+                      <p className="px-1 py-2 text-sm text-slate-400">No shifts</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {dayShifts.map((shift) =>
+                          renderShiftButton(shift, { showEmployee: true })
+                        )}
+                      </div>
+                    )}
+                    {renderAddButton(employees[0]?.id ?? "", day)}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop week grid */}
+      <Card className="hidden md:block">
         <CardContent className="overflow-x-auto p-0">
           {initialLoading ? (
             <ScheduleSkeleton />
@@ -450,31 +566,8 @@ export function ScheduleCalendar({
                             )}
                           >
                             <div className="space-y-1">
-                              {cellShifts.map((shift) => (
-                                <button
-                                  key={shift.id}
-                                  type="button"
-                                  className="w-full rounded-md bg-slate-900 px-2 py-1.5 text-left text-xs text-white hover:bg-slate-700"
-                                  onClick={() => canManage && openEdit(shift)}
-                                >
-                                  <div>
-                                    {formatTime(shift.startAt, shift.location?.timezone ?? defaultTimezone)} –{" "}
-                                    {formatTime(shift.endAt, shift.location?.timezone ?? defaultTimezone)}
-                                  </div>
-                                  {shift.location && (
-                                    <div className="text-slate-300">{shift.location.name}</div>
-                                  )}
-                                </button>
-                              ))}
-                              {canManage && (
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center justify-center rounded-md border border-dashed border-slate-200 py-1 text-slate-400 hover:border-slate-400 hover:text-slate-600"
-                                  onClick={() => openCreate(emp.id, day)}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </button>
-                              )}
+                              {cellShifts.map((shift) => renderShiftButton(shift))}
+                              {renderAddButton(emp.id, day)}
                             </div>
                           </td>
                         );
@@ -489,9 +582,9 @@ export function ScheduleCalendar({
       </Card>
 
       {modalOpen && canManage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="space-y-4 pt-6">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
+          <Card className="flex max-h-[min(92dvh,100%)] w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:max-h-[min(90dvh,900px)] sm:rounded-xl sm:pb-0">
+            <CardContent className="space-y-4 overflow-y-auto pt-6">
               <h3 className="text-lg font-semibold">
                 {editingShift ? "Edit Shift" : "New Shift"}
               </h3>
@@ -580,7 +673,7 @@ export function ScheduleCalendar({
                 />
                 {fieldErrors.notes && <p className="text-sm text-red-600">{fieldErrors.notes}</p>}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 pb-2 sm:pb-0">
                 <Button onClick={saveShift} className="flex-1" disabled={isSaving}>
                   {isSaving ? (
                     <>

@@ -81,6 +81,19 @@ enum InventoryMovementType {
   RETURN_TO_STOCK
 }
 
+enum InventoryScanMode {
+  RECEIVE
+  CYCLE_COUNT
+  DAMAGED
+  LOST
+}
+
+enum InventoryScanSessionStatus {
+  OPEN
+  APPLIED
+  CANCELLED
+}
+
 enum StripeAccountStatus {
   NOT_CONNECTED
   PENDING
@@ -218,26 +231,29 @@ model Business {
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
 
-  locations         Location[]
-  employees         EmployeeProfile[]
-  products          Product[]
-  categories        Category[]
-  customers         Customer[]
-  orders            Order[]
-  discounts         Discount[]
-  taxRates          TaxRate[]
-  inventoryItems    InventoryItem[]
-  stripeAccount     StripeAccount?
-  settings          BusinessSetting?
-  moduleSettings    ModuleSetting[]
-  auditLogs         AuditLog[]
-  registerSessions  RegisterSession[]
-  workforceSettings WorkforceSettings?
-  shifts            Shift[]
-  timeEntries       TimeEntry[]
-  timeOffRequests   TimeOffRequest[]
-  payrollBonuses    PayrollBonus[]
-  ptoLedgerEntries  PtoLedgerEntry[]
+  locations                 Location[]
+  employees                 EmployeeProfile[]
+  products                  Product[]
+  productBarcodes           ProductBarcode[]
+  categories                Category[]
+  customers                 Customer[]
+  orders                    Order[]
+  discounts                 Discount[]
+  taxRates                  TaxRate[]
+  inventoryItems            InventoryItem[]
+  inventoryScanSessions     InventoryScanSession[]
+  stripeAccount             StripeAccount?
+  settings                  BusinessSetting?
+  moduleSettings            ModuleSetting[]
+  auditLogs                 AuditLog[]
+  registerSessions          RegisterSession[]
+  workforceSettings         WorkforceSettings?
+  shifts                    Shift[]
+  timeEntries               TimeEntry[]
+  timeOffRequests           TimeOffRequest[]
+  payrollBonuses            PayrollBonus[]
+  ptoLedgerEntries          PtoLedgerEntry[]
+  barcodeMigrationConflicts BarcodeMigrationConflict[]
 
   @@index([createdAt])
 }
@@ -259,16 +275,17 @@ model Location {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  inventoryItems    InventoryItem[]
-  orders            Order[]
-  taxRates          TaxRate[]
-  terminalReaders   TerminalReader[]
-  registerSessions  RegisterSession[]
-  employeeLocations EmployeeLocation[]
-  defaultEmployees  EmployeeProfile[]  @relation("EmployeeDefaultLocation")
-  shifts            Shift[]
-  timeEntries       TimeEntry[]
+  business              Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryItems        InventoryItem[]
+  inventoryScanSessions InventoryScanSession[]
+  orders                Order[]
+  taxRates              TaxRate[]
+  terminalReaders       TerminalReader[]
+  registerSessions      RegisterSession[]
+  employeeLocations     EmployeeLocation[]
+  defaultEmployees      EmployeeProfile[]      @relation("EmployeeDefaultLocation")
+  shifts                Shift[]
+  timeEntries           TimeEntry[]
 
   @@index([businessId])
 }
@@ -394,6 +411,7 @@ model EmployeeProfile {
   timeOffReviews        TimeOffRequest[]           @relation("TimeOffReviewedBy")
   payrollBonuses        PayrollBonus[]
   payrollBonusesCreated PayrollBonus[]             @relation("PayrollBonusCreatedBy")
+  inventoryScanSessions InventoryScanSession[]
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -518,6 +536,7 @@ model Product {
   business       Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category       Category?              @relation(fields: [categoryId], references: [id])
   variants       ProductVariant[]
+  barcodes       ProductBarcode[]
   modifierGroups ProductModifierGroup[]
   inventoryItems InventoryItem[]
   orderItems     OrderItem[]
@@ -540,12 +559,119 @@ model ProductVariant {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  barcodes   ProductBarcode[]
   orderItems OrderItem[]
 
   @@index([productId])
   @@index([sku])
   @@index([barcode])
+}
+
+/// Exact barcode assignments. Uniqueness is per-business on normalizedValue.
+model ProductBarcode {
+  id              String   @id @default(cuid())
+  businessId      String
+  productId       String
+  variantId       String?
+  rawValue        String
+  normalizedValue String
+  format          String?
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, normalizedValue])
+  @@index([productId])
+  @@index([variantId])
+  @@index([businessId])
+}
+
+/// Public external catalog cache only — never merchant price/cost/stock.
+model ExternalProductCache {
+  id                String    @id @default(cuid())
+  normalizedBarcode String    @unique
+  source            String
+  productType       String?
+  name              String?
+  brand             String?
+  description       String?
+  packageSize       String?
+  imageUrl          String?
+  manufacturer      String?
+  categoryText      String?
+  rawPayload        Json?
+  confidence        Float?
+  isNegative        Boolean   @default(false)
+  fetchedAt         DateTime  @default(now())
+  expiresAt         DateTime
+  lastHitAt         DateTime?
+  lookupCount       Int       @default(0)
+
+  @@index([expiresAt])
+  @@index([source])
+}
+
+/// Duplicate barcodes discovered during ProductBarcode backfill (ops report).
+model BarcodeMigrationConflict {
+  id              String   @id @default(cuid())
+  businessId      String
+  normalizedValue String
+  rawValues       String[]
+  productIds      String[]
+  variantIds      String[]
+  note            String?
+  createdAt       DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([normalizedValue])
+}
+
+model InventoryScanSession {
+  id             String                     @id @default(cuid())
+  businessId     String
+  locationId     String
+  employeeId     String
+  mode           InventoryScanMode
+  status         InventoryScanSessionStatus @default(OPEN)
+  idempotencyKey String?                    @unique
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  appliedAt      DateTime?
+
+  business Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  lines    InventoryScanLine[]
+
+  @@index([businessId])
+  @@index([locationId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model InventoryScanLine {
+  id              String  @id @default(cuid())
+  sessionId       String
+  productId       String
+  variantId       String?
+  inventoryItemId String
+  normalizedCode  String
+  expectedQty     Int
+  scannedQty      Int     @default(0)
+  proposedDelta   Int
+
+  session InventoryScanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, inventoryItemId])
+  @@index([sessionId])
+  @@index([productId])
 }
 
 model ModifierGroup {

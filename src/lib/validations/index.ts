@@ -90,6 +90,8 @@ export const productSchema = z.object({
   categoryId: z.string().optional(),
   brand: z.string().optional(),
   supplier: z.string().optional(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageAttribution: z.string().max(200).optional(),
   price: z.number().min(0),
   cost: z.number().min(0).optional(),
   type: z.enum(["PHYSICAL", "SERVICE", "RENTAL", "DIGITAL", "CUSTOM"]).optional(),
@@ -97,6 +99,7 @@ export const productSchema = z.object({
   trackInventory: z.boolean().optional(),
   isActive: z.boolean().optional(),
   initialStock: z.number().int().min(0).optional(),
+  reorderPoint: z.number().int().min(0).optional(),
 });
 
 export const customerSchema = z.object({
