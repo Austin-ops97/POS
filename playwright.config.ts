@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 
@@ -17,25 +17,43 @@ export default defineConfig({
   projects: [
     {
       name: "phone-390",
-      use: { ...devices["iPhone 12"], viewport: { width: 390, height: 844 } },
+      use: {
+        browserName: "chromium",
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 3,
+      },
     },
     {
       name: "tablet-768",
-      use: { viewport: { width: 768, height: 1024 }, isMobile: true, hasTouch: true },
+      use: {
+        browserName: "chromium",
+        viewport: { width: 768, height: 1024 },
+        isMobile: true,
+        hasTouch: true,
+      },
     },
     {
       name: "tablet-1024",
-      use: { viewport: { width: 1024, height: 1366 }, hasTouch: true },
+      use: {
+        browserName: "chromium",
+        viewport: { width: 1024, height: 1366 },
+        hasTouch: true,
+      },
     },
     {
       name: "desktop-1440",
-      use: { viewport: { width: 1440, height: 900 } },
+      use: {
+        browserName: "chromium",
+        viewport: { width: 1440, height: 900 },
+      },
     },
   ],
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
     ? undefined
     : {
-        command: "npm run start",
+        command: "npx next start",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

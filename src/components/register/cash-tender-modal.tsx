@@ -122,7 +122,7 @@ export function CashTenderModal({
           type="button"
           onClick={onCancel}
           disabled={processing}
-          className="absolute right-4 top-4 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+          className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
           aria-label="Close"
         >
           <X className="h-5 w-5" />

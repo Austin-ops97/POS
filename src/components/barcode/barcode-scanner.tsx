@@ -285,8 +285,11 @@ export function BarcodeScanner({
         </p>
 
         {lastScanned && state === "ready" && (
-          <p className="absolute bottom-20 left-0 right-0 text-center font-mono text-xs text-emerald-300">
-            {lastScanned}
+          <p
+            className="absolute bottom-20 left-0 right-0 text-center font-mono text-xs text-emerald-300"
+            aria-live="polite"
+          >
+            Scanned {lastScanned}
           </p>
         )}
 
