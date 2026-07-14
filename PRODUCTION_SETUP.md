@@ -40,7 +40,7 @@ PRODUCT_LOOKUP_USER_AGENT="NexaPOS/0.1.0 (support@your-domain.com)"
 PRODUCT_LOOKUP_CACHE_DAYS=30
 ```
 
-If `DIRECT_URL` is omitted, the build script strips `-pooler` from `DATABASE_URL` automatically. Prefer setting `DIRECT_URL` explicitly in Vercel.
+If `DIRECT_URL` is omitted, the Prisma CLI helper derives it by removing `-pooler` from `DATABASE_URL`, then forces both `DATABASE_URL` and `DIRECT_URL` for the Prisma subprocess only. Prefer setting `DIRECT_URL` explicitly in Vercel. The Next.js app runtime continues to use the pooled `DATABASE_URL`.
 Camera barcode scanning requires HTTPS outside localhost (iPhone Safari, installed PWAs, Android Chrome).
 
 Use live Clerk and Stripe keys only when the store is ready to process real customers and payments.
