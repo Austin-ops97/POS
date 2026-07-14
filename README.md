@@ -55,7 +55,8 @@ Required variables:
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | PostgreSQL pooled connection string (Neon pooler OK) |
+| `DIRECT_URL` | PostgreSQL direct connection for migrations (Neon non-pooler host) |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | `CLERK_SECRET_KEY` | Clerk secret key |
 | `STRIPE_SECRET_KEY` | Stripe secret key |

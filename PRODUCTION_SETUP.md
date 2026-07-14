@@ -14,7 +14,10 @@ NexaPOS runs as an authenticated, fully unlocked POS. After Clerk sign-in, users
 Set these in Vercel under Project Settings -> Environment Variables.
 
 ```txt
-DATABASE_URL=postgresql://...
+# Neon pooled URL for the app runtime
+DATABASE_URL=postgresql://...-pooler....neon.tech/neondb?sslmode=require
+# Neon direct URL for Prisma migrations (hostname without -pooler)
+DIRECT_URL=postgresql://....neon.tech/neondb?sslmode=require
 
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_or_test_...
 CLERK_SECRET_KEY=sk_live_or_test_...
@@ -37,18 +40,20 @@ PRODUCT_LOOKUP_USER_AGENT="NexaPOS/0.1.0 (support@your-domain.com)"
 PRODUCT_LOOKUP_CACHE_DAYS=30
 ```
 
+If `DIRECT_URL` is omitted, the build script strips `-pooler` from `DATABASE_URL` automatically. Prefer setting `DIRECT_URL` explicitly in Vercel.
 Camera barcode scanning requires HTTPS outside localhost (iPhone Safari, installed PWAs, Android Chrome).
 
 Use live Clerk and Stripe keys only when the store is ready to process real customers and payments.
 
 ## Database Setup
 
-Run migrations against the production database before using the app:
+Run migrations against the production database before using the app (uses `DIRECT_URL` when set):
 
 ```bash
-npx prisma migrate deploy
+npm run build
+# or:
+node scripts/prisma-with-direct.mjs migrate deploy
 ```
-
 The `20260714180000_remove_demo_subscription_onboarding` migration removes confirmed demo seed records and drops the Subscription / onboarding schema. Review it before applying to production.
 
 Optional: seed system roles and permissions only (no merchant data):
