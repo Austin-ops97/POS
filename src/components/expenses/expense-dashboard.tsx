@@ -16,8 +16,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ExpenseStatusBadge } from "./status-badge";
-import { MonthlySpendChart, SpendBarChart, SpendPieChart } from "./expense-charts";
+import dynamic from "next/dynamic";
 import { Progress } from "@/components/ui/progress";
+
+const MonthlySpendChart = dynamic(
+  () => import("./expense-charts").then((m) => m.MonthlySpendChart),
+  { ssr: false, loading: () => <div className="h-[260px] animate-pulse rounded-xl bg-slate-100" /> }
+);
+const SpendBarChart = dynamic(
+  () => import("./expense-charts").then((m) => m.SpendBarChart),
+  { ssr: false, loading: () => <div className="h-[260px] animate-pulse rounded-xl bg-slate-100" /> }
+);
+const SpendPieChart = dynamic(
+  () => import("./expense-charts").then((m) => m.SpendPieChart),
+  { ssr: false, loading: () => <div className="h-[260px] animate-pulse rounded-xl bg-slate-100" /> }
+);
 
 type DashboardData = {
   cards: {

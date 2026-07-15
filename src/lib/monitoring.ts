@@ -1,7 +1,9 @@
 /**
- * Observability abstraction — structured logging today, Sentry-ready tomorrow.
- * Set SENTRY_DSN to enable future Sentry integration without changing call sites.
+ * Observability — structured logging + optional Sentry.
+ * Set SENTRY_DSN to enable remote error capture.
  */
+
+import * as Sentry from "@sentry/node";
 
 export type MonitoringEvent =
   | {
@@ -22,6 +24,20 @@ export type MonitoringEvent =
       error: string;
     };
 
+let sentryInitialized = false;
+
+function ensureSentry() {
+  const dsn = process.env.SENTRY_DSN?.trim();
+  if (!dsn || sentryInitialized) return Boolean(dsn && sentryInitialized);
+  Sentry.init({
+    dsn,
+    environment: process.env.NODE_ENV || "development",
+    tracesSampleRate: 0.05,
+  });
+  sentryInitialized = true;
+  return true;
+}
+
 function toLogPayload(event: MonitoringEvent): Record<string, unknown> {
   return {
     ...event,
@@ -35,12 +51,12 @@ export function reportToExternalMonitor(
   event: MonitoringEvent,
   level: "warning" | "error" = "error"
 ): void {
-  const sentryDsn = process.env.SENTRY_DSN?.trim();
-  if (!sentryDsn) return;
+  if (!ensureSentry()) return;
 
-  // Placeholder for Sentry SDK — keeps call sites stable until SDK is installed.
-  if (process.env.NODE_ENV === "development") {
-    console.debug("[monitoring] Sentry DSN set but SDK not installed:", level, event.type);
+  if (level === "warning") {
+    Sentry.captureMessage(`[${event.type}] ${JSON.stringify(event)}`, "warning");
+  } else {
+    Sentry.captureException(new Error(`[${event.type}] ${JSON.stringify(event)}`));
   }
 }
 
@@ -58,4 +74,12 @@ export function captureMonitoringEvent(
   }
 
   reportToExternalMonitor(event, level);
+}
+
+export function captureException(error: unknown, context?: string): void {
+  if (!ensureSentry()) return;
+  Sentry.withScope((scope) => {
+    if (context) scope.setTag("context", context);
+    Sentry.captureException(error);
+  });
 }

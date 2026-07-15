@@ -2,6 +2,9 @@ import { requireAuth } from "@/lib/auth";
 import { getEmployees } from "@/lib/queries";
 import { EmployeesTable } from "@/components/dashboard/employees-table";
 
+
+export const metadata = { title: "Employees" };
+
 export default async function EmployeesPage() {
   const ctx = await requireAuth();
   const employees = await getEmployees(ctx);

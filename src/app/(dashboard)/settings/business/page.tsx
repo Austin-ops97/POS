@@ -33,24 +33,24 @@ export default async function BusinessSettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
-            <Label>Business name</Label>
-            <Input defaultValue={biz.name} readOnly />
+            <Label htmlFor="business-name">Business name</Label>
+            <Input id="business-name" defaultValue={biz.name} readOnly />
           </div>
           <div className="space-y-2">
-            <Label>Legal name</Label>
-            <Input defaultValue={biz.legalName ?? ""} readOnly />
+            <Label htmlFor="legal-name">Legal name</Label>
+            <Input id="legal-name" defaultValue={biz.legalName ?? ""} readOnly />
           </div>
           <div className="space-y-2">
-            <Label>Type</Label>
-            <Input defaultValue={biz.type} readOnly />
+            <Label htmlFor="business-type">Type</Label>
+            <Input id="business-type" defaultValue={biz.type} readOnly />
           </div>
           <div className="space-y-2">
-            <Label>Phone</Label>
-            <Input defaultValue={biz.phone ?? ""} readOnly />
+            <Label htmlFor="business-phone">Phone</Label>
+            <Input id="business-phone" defaultValue={biz.phone ?? ""} readOnly />
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input defaultValue={biz.email ?? ""} readOnly />
+            <Label htmlFor="business-email">Email</Label>
+            <Input id="business-email" defaultValue={biz.email ?? ""} readOnly />
           </div>
           <p className="text-sm text-slate-500 sm:col-span-2">
             Full business editing will be available in a future update.

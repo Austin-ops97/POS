@@ -43,7 +43,7 @@ export default async function FinanceExpensesPage({
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
               Finance
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">All expenses</h1>
+            <h1 className="text-2xl font-bold text-slate-900">All expenses</h1>
           </div>
           <div className="flex gap-2">
             <Button asChild variant="outline" className="rounded-xl">

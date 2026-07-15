@@ -36,9 +36,9 @@ export function Topbar({
           </Button>
         ) : null}
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">
+          <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">
             {businessName || "NexaPOS"}
-          </h1>
+          </p>
         </div>
         {locationName ? (
           <div className="hidden min-w-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm text-slate-600 sm:flex">

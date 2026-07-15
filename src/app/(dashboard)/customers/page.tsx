@@ -2,6 +2,9 @@ import { requireAuth } from "@/lib/auth";
 import { getCustomers, getOrders } from "@/lib/queries";
 import { CustomersTable } from "@/components/dashboard/customers-table";
 
+
+export const metadata = { title: "Customers" };
+
 export default async function CustomersPage() {
   const ctx = await requireAuth();
   const [customers, orders] = await Promise.all([getCustomers(ctx), getOrders(ctx)]);

@@ -2,6 +2,9 @@ import { requireAuth } from "@/lib/auth";
 import { getProducts, getCategories, getInventory } from "@/lib/queries";
 import { ProductsTable } from "@/components/dashboard/products-table";
 
+
+export const metadata = { title: "Products" };
+
 export default async function ProductsPage() {
   const ctx = await requireAuth();
   const [products, categories, inventory] = await Promise.all([

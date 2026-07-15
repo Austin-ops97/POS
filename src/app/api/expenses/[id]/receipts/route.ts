@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { handleApiError, getClientIp } from "@/lib/api-utils";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
 import { attachReceipt } from "@/lib/expenses/receipt-service";
 
 type Params = { params: Promise<{ id: string }> };
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
-    const rl = checkRateLimit(`expense:receipt:${ctx.employee.id}`, 30, 60_000);
+    const rl = await checkRateLimitAsync(`expense:receipt:${ctx.employee.id}`, 30, 60_000);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many uploads", code: "RATE_LIMITED" },

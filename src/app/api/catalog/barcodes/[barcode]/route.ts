@@ -10,7 +10,7 @@ import {
 import { findBarcodeAssignment } from "@/lib/product-barcode";
 import { lookupExternalProduct } from "@/lib/product-lookup/service";
 import { barcodeLookupQuerySchema } from "@/lib/validations/barcode";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
 import type {
   BarcodeLookupResponse,
   InventorySummary,
@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       throw new Error(`Missing permission: ${PERMISSIONS.VIEW_PRODUCTS}`);
     }
 
-    const rate = checkRateLimit(
+    const rate = await checkRateLimitAsync(
       `barcode-lookup:${ctx.business.id}:${ctx.employee.id}`,
       120,
       60_000
@@ -151,7 +151,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       );
     }
 
-    const externalRate = checkRateLimit(
+    const externalRate = await checkRateLimitAsync(
       `barcode-external:${ctx.business.id}`,
       30,
       60_000

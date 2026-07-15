@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-utils";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import { ocrParseSchema } from "@/lib/validations/expenses";
 import { parseOcrPayload } from "@/lib/expenses/receipt-service";
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     if (!hasPermission(ctx, PERMISSIONS.CREATE_EXPENSE)) {
       throw new Error(`Missing permission: ${PERMISSIONS.CREATE_EXPENSE}`);
     }
-    const rl = checkRateLimit(`expense:ocr:${ctx.employee.id}`, 40, 60_000);
+    const rl = await checkRateLimitAsync(`expense:ocr:${ctx.employee.id}`, 40, 60_000);
     if (!rl.ok) {
       return NextResponse.json(
         { error: "Too many OCR requests", code: "RATE_LIMITED" },

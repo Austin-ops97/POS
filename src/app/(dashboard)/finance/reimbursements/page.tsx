@@ -29,7 +29,7 @@ export default async function ReimbursementsPage() {
     <div className="space-y-6">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Finance</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Reimbursements</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Reimbursements</h1>
         <p className="mt-1 text-sm text-slate-500">
           Approved out-of-pocket spend waiting to be reimbursed, plus recent payouts.
         </p>

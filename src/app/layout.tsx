@@ -1,16 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Outfit, Fraunces } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const outfit = Outfit({
+  variable: "--font-sans-face",
+  subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "NexaPOS",
+  title: {
+    default: "NexaPOS",
+    template: "%s · NexaPOS",
+  },
   description:
     "Point of sale, inventory, payments, customers, employees, and reports.",
   applicationName: "NexaPOS",
@@ -35,8 +43,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#f8fafc" },
   ],
 };
 
@@ -57,8 +65,13 @@ export default function RootLayout({
   );
 
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full min-h-dvh">{clerkEnabled ? <ClerkProvider>{content}</ClerkProvider> : content}</body>
+    <html
+      lang="en"
+      className={`${outfit.variable} ${fraunces.variable} h-full antialiased`}
+    >
+      <body className="min-h-full min-h-dvh">
+        {clerkEnabled ? <ClerkProvider>{content}</ClerkProvider> : content}
+      </body>
     </html>
   );
 }

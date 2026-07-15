@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: |
+          DATABASE_URL="postgresql://user:pass@localhost:5432/db?pgbouncer=true"
+          DIRECT_URL="postgresql://user:pass@localhost:5432/db"
+          export DATABASE_URL DIRECT_URL
+          npm ci
+      - name: Generate Prisma client
+        run: |
+          DATABASE_URL="postgresql://user:pass@localhost:5432/db?pgbouncer=true"
+          DIRECT_URL="postgresql://user:pass@localhost:5432/db"
+          export DATABASE_URL DIRECT_URL
+          npx prisma generate
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test

@@ -42,7 +42,7 @@ export default async function CompanyCardDetailPage({
         <Link href="/finance/cards">Back to cards</Link>
       </Button>
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold text-slate-900">
           {card.name} ····{card.lastFour}
         </h1>
         <p className="text-sm text-slate-500">

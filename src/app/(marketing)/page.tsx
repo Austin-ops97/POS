@@ -1,8 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { isClerkConfigured } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+
+export const metadata = {
+  title: "NexaPOS — Point of sale for the whole store",
+  description:
+    "Fast retail checkout, inventory, workforce, and expenses. Sign in and unlock everything.",
+};
 
 export default async function HomePage() {
   if (isClerkConfigured()) {
@@ -16,41 +23,44 @@ export default async function HomePage() {
   const signupHref = isClerkConfigured() ? "/sign-up" : "/dashboard";
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-slate-950">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_#1e3a5f_0%,_transparent_55%),linear-gradient(180deg,#0f172a_0%,#020617_100%)]"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:48px_48px]"
-        aria-hidden="true"
-      />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0b1628]">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <Image
+          src="/marketing-hero.svg"
+          alt=""
+          fill
+          priority
+          unoptimized
+          className="object-cover opacity-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b1628]/95 via-[#0b1628]/75 to-[#0b1628]/40" />
+      </div>
 
-      <main className="relative flex flex-1 flex-col items-center justify-center px-6 py-16">
-        <div className="mx-auto w-full max-w-lg text-center">
-          <div className="mb-8 flex items-center justify-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-xl font-bold text-slate-900">
-              N
-            </div>
-            <span className="text-3xl font-semibold tracking-tight text-white">
-              NexaPOS
-            </span>
-          </div>
-          <h1 className="text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
+      <main className="relative flex flex-1 flex-col justify-center px-6 py-16 sm:px-10 lg:px-16">
+        <div className="mx-auto w-full max-w-3xl animate-[fadeRise_0.7s_ease-out_both]">
+          <p className="font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
+            NexaPOS
+          </p>
+          <h1 className="mt-5 max-w-2xl text-balance text-2xl font-medium text-slate-100 sm:text-3xl">
             Point of sale for the whole store.
           </h1>
-          <p className="mx-auto mt-4 max-w-md text-base text-slate-300">
-            Checkout, inventory, and team tools in one place — unlock everything when you sign in.
+          <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">
+            Ring up sales, track stock, schedule the team, and run expenses —
+            unlocked the moment you sign in.
           </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" className="min-w-[140px] bg-white text-slate-900 hover:bg-slate-100">
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              asChild
+              size="lg"
+              className="min-w-[148px] bg-white text-[#0b1628] hover:bg-slate-100"
+            >
               <Link href={loginHref}>Log in</Link>
             </Button>
             <Button
               asChild
               size="lg"
               variant="outline"
-              className="min-w-[140px] border-slate-500 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              className="min-w-[148px] border-slate-400/60 bg-transparent text-white hover:bg-white/10 hover:text-white"
             >
               <Link href={signupHref}>Sign up</Link>
             </Button>

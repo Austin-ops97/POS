@@ -3,6 +3,9 @@ import { getOrders } from "@/lib/queries";
 import { OrdersTable, type OrderRow } from "@/components/dashboard/orders-table";
 import type { OrderStatus } from "@prisma/client";
 
+
+export const metadata = { title: "Orders" };
+
 export default async function OrdersPage() {
   const ctx = await requireAuth();
   const orders = await getOrders(ctx);

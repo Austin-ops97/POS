@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isStripeConfigured, getStripePublishableKey } from "@/lib/stripe";
+import { isClerkConfigured } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export async function GET() {
     app: { status: string };
     database: { status: string; latencyMs?: number };
     stripe: { configured: boolean; publishableKeyPresent: boolean };
+    auth: { clerkConfigured: boolean };
   } = {
     status: "healthy",
     app: { status: "ok" },
@@ -18,6 +20,7 @@ export async function GET() {
       configured: isStripeConfigured(),
       publishableKeyPresent: Boolean(getStripePublishableKey()),
     },
+    auth: { clerkConfigured: isClerkConfigured() },
   };
 
   let httpStatus = 200;
@@ -35,9 +38,15 @@ export async function GET() {
     httpStatus = 503;
   }
 
-  if (!checks.stripe.configured) {
-    checks.status = checks.status === "unhealthy" ? "unhealthy" : "degraded";
-    if (httpStatus === 200) httpStatus = 503;
+  // Stripe optional — mark degraded in body, but keep HTTP 200 for load balancers
+  // when the database is healthy (payments may be intentionally unset).
+  if (!checks.stripe.configured && checks.status === "healthy") {
+    checks.status = "degraded";
+  }
+
+  if (!checks.auth.clerkConfigured && process.env.NODE_ENV === "production") {
+    checks.status = "unhealthy";
+    httpStatus = 503;
   }
 
   return NextResponse.json(checks, { status: httpStatus });

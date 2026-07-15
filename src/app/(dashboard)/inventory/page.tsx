@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { PERMISSIONS } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
+
+export const metadata = { title: "Inventory" };
+
 export default async function InventoryPage() {
   const ctx = await requireAuth();
   const [items, locations] = await Promise.all([

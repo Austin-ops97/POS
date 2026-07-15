@@ -27,6 +27,9 @@ import { formatOrderStatus, getOrderStatusVariant } from "@/lib/status-utils";
 import { hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 
+
+export const metadata = { title: "Dashboard" };
+
 export default async function DashboardPage() {
   const ctx = await requireAuth();
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =

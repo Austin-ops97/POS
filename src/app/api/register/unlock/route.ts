@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { findEmployeeByPin } from "@/lib/workforce/time-clock-service";
 import { handleApiError } from "@/lib/api-utils";
 import { db } from "@/lib/db";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
 import {
   buildCashierCookieValue,
   cashierCookieOptions,
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
 
-    const rate = checkRateLimit(
+    const rate = await checkRateLimitAsync(
       `register:unlock:${ctx.business.id}:${ctx.employee.id}`,
       20,
       60_000
