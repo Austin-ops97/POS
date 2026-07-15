@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, hasPermission } from "@/lib/auth";
+import { requireAuth, hasPermission, requireAnyPermission } from "@/lib/auth";
 import { employeeSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { hashPin } from "@/lib/pin";
@@ -10,6 +10,13 @@ import { handleApiError } from "@/lib/api-utils";
 export async function GET() {
   try {
     const ctx = await requireAuth();
+    await requireAnyPermission(ctx, [
+      PERMISSIONS.MANAGE_EMPLOYEES,
+      PERMISSIONS.VIEW_WORKFORCE,
+      PERMISSIONS.MANAGE_WORKFORCE,
+    ]);
+
+    const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
 
     const employees = await db.employeeProfile.findMany({
       where: {
@@ -27,7 +34,10 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    const sanitized = employees.map(({ pinHash: _pinHash, ...employee }) => employee);
+    const sanitized = employees.map(({ pinHash: _pinHash, hourlyWage, ...employee }) => ({
+      ...employee,
+      ...(canViewCompensation ? { hourlyWage } : {}),
+    }));
 
     return NextResponse.json(sanitized);
   } catch (error) {

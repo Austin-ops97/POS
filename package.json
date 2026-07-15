@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/provision-business.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts src/lib/workforce/workforce.test.ts src/lib/barcodes.test.ts src/lib/inventory-scan.test.ts src/lib/product-lookup/service.test.ts src/components/barcode/decoder.test.ts src/lib/barcode-api.test.ts src/lib/expenses/expenses.test.ts",
+    "test": "tsx --test src/lib/provision-business.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts src/lib/workforce/workforce.test.ts src/lib/barcodes.test.ts src/lib/inventory-scan.test.ts src/lib/product-lookup/service.test.ts src/components/barcode/decoder.test.ts src/lib/barcode-api.test.ts src/lib/expenses/expenses.test.ts src/lib/security-hardening.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:public": "playwright test e2e/responsive.spec.ts --grep \"responsive public smoke\"",

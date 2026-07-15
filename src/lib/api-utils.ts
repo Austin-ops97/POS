@@ -122,6 +122,12 @@ export function handleApiError(error: unknown, context: string) {
     if (error.message === "Unauthorized") {
       return apiError("Unauthorized", 401, { code: "UNAUTHORIZED", requestId });
     }
+    if (error.message === "Register PIN unlock required") {
+      return apiError(error.message, 401, {
+        code: "REGISTER_PIN_REQUIRED",
+        requestId,
+      });
+    }
     if (error.message.startsWith("Missing permission:")) {
       const perm = error.message.replace("Missing permission: ", "");
       return apiError(`You do not have permission: ${perm}`, 403, {

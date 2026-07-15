@@ -5,15 +5,24 @@ import { getInventory } from "@/lib/queries";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
 import { Button } from "@/components/ui/button";
 import { PERMISSIONS } from "@/lib/permissions";
+import { db } from "@/lib/db";
 
 export default async function InventoryPage() {
   const ctx = await requireAuth();
-  const items = await getInventory(ctx);
+  const [items, locations] = await Promise.all([
+    getInventory(ctx),
+    db.location.findMany({
+      where: { businessId: ctx.business.id, deletedAt: null, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   const rows = items.map((item: {
     id: string;
     quantityOnHand: number;
     reorderPoint: number;
+    locationId: string;
     product: { name: string; sku?: string | null };
     location?: { name: string };
   }) => ({
@@ -22,6 +31,7 @@ export default async function InventoryPage() {
     sku: item.product.sku ?? null,
     quantityOnHand: item.quantityOnHand,
     reorderPoint: item.reorderPoint,
+    locationId: item.locationId,
     locationName: item.location?.name ?? "Main Store",
   }));
 
@@ -56,7 +66,7 @@ export default async function InventoryPage() {
           </Button>
         )}
       </div>
-      <InventoryTable items={rows} />
+      <InventoryTable items={rows} locations={locations} />
     </div>
   );
 }

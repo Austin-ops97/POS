@@ -9,6 +9,7 @@ import {
   serializeDecimal,
   verifyLocationAccess,
 } from "@/lib/order-service";
+import { resolveRegisterCashier } from "@/lib/register-cashier";
 import { checkoutSchema } from "@/lib/validations";
 import { z } from "zod";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
+    const cashier = await resolveRegisterCashier(ctx, request);
 
     const body = await request.json();
     const parsed = holdOrderSchema.parse(body);
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
     const { order, totals } = await createOrderRecord({
       businessId: ctx.business.id,
       locationId: parsed.locationId,
-      employeeId: ctx.employee.id,
+      employeeId: cashier.id,
       customerId: parsed.customerId,
       items: parsed.items,
       discounts: parsed.discounts,
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
 
     await createAuditLog({
       businessId: ctx.business.id,
-      employeeId: ctx.employee.id,
+      employeeId: cashier.id,
       action: "CREATE",
       entity: "Order",
       entityId: order.id,
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
         orderNumber: order.orderNumber,
         total: totals.total,
         status: "HELD",
+        cashierName: cashier.name,
       },
       ipAddress: getClientIp(request),
     });

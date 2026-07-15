@@ -1,20 +1,35 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { hasPermission, requireAuth, requireAnyPermission } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-utils";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export async function GET(request: Request) {
   try {
     const ctx = await requireAuth();
+    await requireAnyPermission(ctx, [
+      PERMISSIONS.VIEW_WORKFORCE,
+      PERMISSIONS.MANAGE_TIME_ENTRIES,
+      PERMISSIONS.MANAGE_WORKFORCE,
+    ]);
+
     const { searchParams } = new URL(request.url);
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const employeeId = searchParams.get("employeeId");
+    const canManage =
+      hasPermission(ctx, PERMISSIONS.MANAGE_TIME_ENTRIES) ||
+      hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE);
 
     const entries = await db.timeEntry.findMany({
       where: {
         businessId: ctx.business.id,
-        ...(employeeId ? { employeeId } : {}),
+        // Non-managers can only see their own entries.
+        ...(canManage
+          ? employeeId
+            ? { employeeId }
+            : {}
+          : { employeeId: ctx.employee.id }),
         ...(from || to
           ? {
               clockIn: {

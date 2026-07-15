@@ -1,19 +1,21 @@
 # NexaPOS
 
-An authenticated, fully featured Stripe-powered POS platform for retail, services, rentals, and restaurants.
+An authenticated Stripe-powered POS platform for retail checkout, inventory, workforce, and expenses.
 
 Sign in once and land in a completely unlocked account — no trials, plans, or paywalls. Employee role permissions and multi-tenant isolation still apply.
 
 ## Features
 
 - **Fast Checkout** — Tablet-optimized register with barcode scanning and category tabs
-- **Stripe Payments** — PaymentIntents, Stripe Terminal, Tap to Pay, Connect onboarding
-- **Inventory Management** — Stock tracking, transfers, adjustments, low-stock alerts
+- **Stripe Payments** — PaymentIntents, Connect onboarding, and Terminal reader registration in Settings
+- **Cash Drawer Sessions** — Open/close register floats tied to cash sales and refunds
+- **Inventory Management** — Stock tracking, location transfers, adjustments, low-stock alerts
 - **Multi-Location** — Manage multiple stores from one account
-- **Employee Permissions** — Role-based access with PIN login for registers
-- **Reports & Analytics** — Sales dashboards, charts, and exportable reports
+- **Employee Permissions** — Role-based access with PIN unlock for registers
+- **Reports & Analytics** — Sales dashboards, charts, and CSV export
 - **Refunds & Receipts** — Full/partial refunds via Stripe with digital receipts
 - **Workforce** — Scheduling, time clock, PTO, and payroll exports
+- **Expenses / Finance** — Company cards, approvals, budgets, and receipt capture
 
 ## Tech Stack
 
@@ -21,7 +23,7 @@ Sign in once and land in a completely unlocked account — no trials, plans, or 
 - **Backend:** Next.js API Routes
 - **Database:** PostgreSQL with Prisma ORM
 - **Auth:** Clerk
-- **Payments:** Stripe (Connect, Terminal, Webhooks)
+- **Payments:** Stripe (Connect, Terminal APIs, Webhooks)
 - **State:** Zustand
 - **Forms:** React Hook Form + Zod
 - **Charts:** Recharts
@@ -42,6 +44,8 @@ git clone <repo-url>
 cd nexapos
 npm install
 ```
+
+For local development without Clerk, set `ALLOW_DEV_AUTH_BYPASS=true` (never in production).
 
 ### 2. Environment Variables
 
@@ -66,13 +70,13 @@ Required variables:
 ### 3. Database Setup
 
 ```bash
-npx prisma migrate dev
+npx prisma migrate deploy
+# or during local schema iteration:
+# npx prisma migrate dev
 npm run db:seed
 ```
 
 The seed only creates system roles and permissions — no demo merchant data.
-
-For production, use `npx prisma migrate deploy`. Do not seed production unless you intend to refresh system roles.
 
 ### 4. Stripe Webhook (Development)
 
@@ -97,7 +101,7 @@ Open [http://localhost:3000](http://localhost:3000). Sign in; a blank business i
 ```
 src/
 ├── app/
-│   ├── (marketing)/     # Minimal login landing page
+│   ├── (marketing)/     # Landing / auth entry
 │   ├── (dashboard)/     # Authenticated app
 │   ├── onboarding/      # Redirects to /dashboard
 │   └── api/             # API routes
@@ -115,10 +119,10 @@ src/
 Merchants connect their Stripe account via Settings → Payments. Uses Stripe Connect Express accounts.
 
 ### PaymentIntents
-Card payments use PaymentIntents created server-side. Webhooks confirm payment success — the frontend never marks orders as paid.
+Card payments on the register use Stripe Elements / PaymentIntents created server-side. Webhooks confirm payment success — the frontend never marks orders as paid.
 
 ### Terminal
-Register card readers in Settings → Payments → Stripe Terminal. Use Stripe test readers only in development.
+Register and manage Stripe Terminal readers in Settings → Payments. Connection tokens are available via API for future reader-present checkout. Register checkout today uses online card entry, not Tap to Pay on phone.
 
 ## Security
 
@@ -127,24 +131,15 @@ Register card readers in Settings → Payments → Stripe Terminal. Use Stripe t
 - Backend recalculates all order totals
 - Role-based access control (RBAC)
 - All queries scoped by `businessId`
-- Employee PINs hashed with bcrypt
+- Employee PINs hashed with bcrypt; register PIN unlock uses a signed httpOnly cookie for sale attribution
 - Audit logging for sensitive actions
+- Production refuses to run without Clerk unless an explicit local-only bypass is set
 
 ## Deployment
 
 Designed for deployment on:
 
 - **Frontend/API:** Vercel
-- **Database:** Supabase, Railway, or any PostgreSQL provider
+- **Database:** Neon, Supabase, Railway, or any PostgreSQL provider
 - **Auth:** Clerk (hosted)
 - **Payments:** Stripe (hosted)
-
-```bash
-npm run build
-```
-
-See [PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md) for the Vercel, database, Clerk, and Stripe checklist.
-
-## License
-
-Private — All rights reserved.

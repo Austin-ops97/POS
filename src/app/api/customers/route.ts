@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, hasPermission } from "@/lib/auth";
+import { requireAuth, hasPermission, requireAnyPermission } from "@/lib/auth";
 import { customerSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -11,6 +11,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim();
     const ctx = await requireAuth();
+    await requireAnyPermission(ctx, [
+      PERMISSIONS.MANAGE_CUSTOMERS,
+      PERMISSIONS.PROCESS_SALE,
+      PERMISSIONS.OPEN_REGISTER,
+    ]);
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
 

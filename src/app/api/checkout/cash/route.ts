@@ -12,6 +12,7 @@ import {
   updateRegisterSessionCashSales,
 } from "@/lib/order-service";
 import { toDecimal } from "@/lib/order-service";
+import { resolveRegisterCashier } from "@/lib/register-cashier";
 import { z } from "zod";
 
 const cashPaymentSchema = z.object({
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
+    const cashier = await resolveRegisterCashier(ctx, request);
 
     const settings = await db.businessSetting.findUnique({
       where: { businessId: ctx.business.id },
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
         tx,
         ctx.business.id,
         order.id,
-        ctx.employee.id
+        cashier.id
       );
 
       return { payment, updatedOrder };
@@ -116,18 +118,19 @@ export async function POST(request: Request) {
     await updateRegisterSessionCashSales(
       ctx.business.id,
       order.locationId,
-      ctx.employee.id,
+      cashier.id,
       orderTotal
     );
 
     await createAuditLog({
       businessId: ctx.business.id,
-      employeeId: ctx.employee.id,
+      employeeId: cashier.id,
       action: "PAYMENT",
       entity: "Order",
       entityId: order.id,
       details: {
         method: "CASH",
+        cashierName: cashier.name,
         amount: orderTotal,
         amountTendered,
         change: amountTendered !== undefined ? amountTendered - orderTotal : undefined,

@@ -88,8 +88,12 @@ export async function listExpenses(
   const where: Prisma.ExpenseWhereInput = {
     businessId: ctx.business.id,
     deletedAt: null,
-    ...(viewAll ? {} : { employeeId: ctx.employee.id }),
-    ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+    // Own-only viewers cannot override the employee filter via query params (IDOR).
+    ...(viewAll
+      ? query.employeeId
+        ? { employeeId: query.employeeId }
+        : {}
+      : { employeeId: ctx.employee.id }),
     ...(query.categoryId ? { categoryId: query.categoryId } : {}),
     ...(query.companyCardId ? { companyCardId: query.companyCardId } : {}),
     ...(query.status ? { status: query.status } : {}),

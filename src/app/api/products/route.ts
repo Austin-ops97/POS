@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, hasPermission } from "@/lib/auth";
+import { requireAuth, hasPermission, requireAnyPermission } from "@/lib/auth";
 import { productSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -17,9 +17,17 @@ export async function GET(request: Request) {
     const search = searchParams.get("search")?.trim();
     const categoryId = searchParams.get("categoryId") ?? undefined;
     const ctx = await requireAuth();
+    await requireAnyPermission(ctx, [
+      PERMISSIONS.VIEW_PRODUCTS,
+      PERMISSIONS.MANAGE_PRODUCTS,
+      PERMISSIONS.PROCESS_SALE,
+      PERMISSIONS.OPEN_REGISTER,
+    ]);
     const isActive = searchParams.get("isActive");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const view = searchParams.get("view");
+    const lean = view === "register";
 
     const products = await db.product.findMany({
       where: {
@@ -50,33 +58,77 @@ export async function GET(request: Request) {
             }
           : {}),
       },
-      include: {
-        category: true,
-        variants: { where: { isActive: true } },
-        barcodes: true,
-        modifierGroups: {
-          include: {
-            modifierGroup: {
+      include: lean
+        ? {
+            category: { select: { id: true, name: true } },
+            variants: {
+              where: { isActive: true },
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                barcode: true,
+                price: true,
+              },
+            },
+            barcodes: {
+              select: {
+                id: true,
+                rawValue: true,
+                normalizedValue: true,
+                isPrimary: true,
+              },
+            },
+            modifierGroups: {
               include: {
-                options: {
-                  where: { isActive: true },
-                  orderBy: { name: "asc" },
+                modifierGroup: {
+                  include: {
+                    options: {
+                      where: { isActive: true },
+                      orderBy: { name: "asc" as const },
+                    },
+                  },
                 },
               },
             },
+            inventoryItems: {
+              where: { businessId: ctx.business.id },
+              select: {
+                id: true,
+                locationId: true,
+                quantityOnHand: true,
+                quantityReserved: true,
+                reorderPoint: true,
+              },
+            },
+          }
+        : {
+            category: true,
+            variants: { where: { isActive: true } },
+            barcodes: true,
+            modifierGroups: {
+              include: {
+                modifierGroup: {
+                  include: {
+                    options: {
+                      where: { isActive: true },
+                      orderBy: { name: "asc" as const },
+                    },
+                  },
+                },
+              },
+            },
+            inventoryItems: {
+              where: { businessId: ctx.business.id },
+              select: {
+                id: true,
+                locationId: true,
+                quantityOnHand: true,
+                quantityReserved: true,
+                reorderPoint: true,
+              },
+            },
           },
-        },
-        inventoryItems: {
-          where: { businessId: ctx.business.id },
-          select: {
-            id: true,
-            locationId: true,
-            quantityOnHand: true,
-            quantityReserved: true,
-            reorderPoint: true,
-          },
-        },
-      },
       orderBy: { name: "asc" },
       take: limit,
       skip: offset,
@@ -85,7 +137,11 @@ export async function GET(request: Request) {
     const serialized = products.map((product) => ({
       ...product,
       price: Number(product.price),
-      cost: product.cost != null ? Number(product.cost) : null,
+      cost: lean
+        ? undefined
+        : product.cost != null
+          ? Number(product.cost)
+          : null,
       modifierGroups: product.modifierGroups
         .map((pm) => pm.modifierGroup)
         .filter((g) => g.isActive)
@@ -103,25 +159,37 @@ export async function GET(request: Request) {
         })),
     }));
 
+    const productWhere = {
+      businessId: ctx.business.id,
+      deletedAt: null,
+      ...(categoryId ? { categoryId } : {}),
+      ...(isActive !== null && isActive !== ""
+        ? { isActive: isActive === "true" }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { sku: { contains: search, mode: "insensitive" as const } },
+              { barcode: { contains: search, mode: "insensitive" as const } },
+              { brand: { contains: search, mode: "insensitive" as const } },
+              {
+                barcodes: {
+                  some: {
+                    normalizedValue: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
     const total = await db.product.count({
-      where: {
-        businessId: ctx.business.id,
-        deletedAt: null,
-        ...(categoryId ? { categoryId } : {}),
-        ...(isActive !== null && isActive !== ""
-          ? { isActive: isActive === "true" }
-          : {}),
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: "insensitive" } },
-                { sku: { contains: search, mode: "insensitive" } },
-                { barcode: { contains: search, mode: "insensitive" } },
-                { brand: { contains: search, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-      },
+      where: productWhere,
     });
 
     return NextResponse.json({ products: serialized, total, limit, offset });

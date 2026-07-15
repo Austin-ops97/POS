@@ -15,11 +15,6 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 
 const MODULES = [
   { key: "RETAIL" as const, name: "Retail", description: "Physical product sales and inventory" },
-  { key: "SERVICE" as const, name: "Services", description: "Bookable services and appointments" },
-  { key: "RENTAL" as const, name: "Rentals", description: "Item rentals and returns" },
-  { key: "RESTAURANT" as const, name: "Restaurant", description: "Table service, modifiers, and kitchen" },
-  { key: "LOYALTY" as const, name: "Loyalty", description: "Points and rewards programs" },
-  { key: "GIFT_CARDS" as const, name: "Gift Cards", description: "Sell and redeem gift cards" },
   {
     key: "EXPENSES" as const,
     name: "Expenses",
@@ -144,6 +139,9 @@ export function ModulesSettings({ settings }: ModulesSettingsProps) {
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? "Saving..." : "Save Changes"}
       </Button>
+      <p className="text-sm text-slate-500">
+        Additional verticals (services, rentals, loyalty, gift cards) will appear here when available.
+      </p>
     </form>
   );
 }

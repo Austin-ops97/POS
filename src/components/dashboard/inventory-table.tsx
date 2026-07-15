@@ -23,6 +23,7 @@ export type InventoryRow = {
   sku: string | null;
   quantityOnHand: number;
   reorderPoint: number;
+  locationId: string;
   locationName: string;
 };
 
@@ -31,7 +32,8 @@ type AdjustType =
   | "DAMAGED"
   | "LOST"
   | "RECEIVED"
-  | "RETURN_TO_STOCK";
+  | "RETURN_TO_STOCK"
+  | "TRANSFER";
 
 const ADJUSTMENT_TYPES: { value: AdjustType; label: string }[] = [
   { value: "MANUAL_ADJUSTMENT", label: "Manual adjustment" },
@@ -39,6 +41,7 @@ const ADJUSTMENT_TYPES: { value: AdjustType; label: string }[] = [
   { value: "RETURN_TO_STOCK", label: "Return to stock" },
   { value: "DAMAGED", label: "Damaged" },
   { value: "LOST", label: "Lost" },
+  { value: "TRANSFER", label: "Transfer to location" },
 ];
 
 function AdjustForm({
@@ -50,6 +53,10 @@ function AdjustForm({
   setAdjustQty,
   reason,
   setReason,
+  toLocationId,
+  setToLocationId,
+  locations,
+  sourceLocationId,
   saving,
   onSave,
   onCancel,
@@ -62,6 +69,10 @@ function AdjustForm({
   setAdjustQty: (v: string) => void;
   reason: string;
   setReason: (v: string) => void;
+  toLocationId: string;
+  setToLocationId: (v: string) => void;
+  locations: Array<{ id: string; name: string }>;
+  sourceLocationId: string;
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
@@ -69,6 +80,9 @@ function AdjustForm({
   const typeId = `${idPrefix}-type-${itemId}`;
   const qtyId = `${idPrefix}-qty-${itemId}`;
   const reasonId = `${idPrefix}-reason-${itemId}`;
+  const locationFieldId = `${idPrefix}-location-${itemId}`;
+  const destLocations = locations.filter((l) => l.id !== sourceLocationId);
+  const isTransfer = adjustType === "TRANSFER";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
@@ -78,7 +92,7 @@ function AdjustForm({
           value={adjustType}
           onValueChange={(v) => setAdjustType(v as AdjustType)}
         >
-          <SelectTrigger id={typeId} className="w-full sm:w-44">
+          <SelectTrigger id={typeId} className="w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -90,8 +104,25 @@ function AdjustForm({
           </SelectContent>
         </Select>
       </div>
+      {isTransfer ? (
+        <div className="w-full space-y-2 sm:w-auto">
+          <Label htmlFor={locationFieldId}>Destination</Label>
+          <Select value={toLocationId} onValueChange={setToLocationId}>
+            <SelectTrigger id={locationFieldId} className="w-full sm:w-48">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              {destLocations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id}>
+                  {loc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
       <div className="w-full space-y-2 sm:w-auto">
-        <Label htmlFor={qtyId}>Quantity change</Label>
+        <Label htmlFor={qtyId}>{isTransfer ? "Quantity to transfer" : "Quantity change"}</Label>
         <Input
           id={qtyId}
           type="number"
@@ -100,7 +131,7 @@ function AdjustForm({
           value={adjustQty}
           onChange={(e) => setAdjustQty(e.target.value)}
           className="w-full sm:w-28"
-          placeholder="+/-"
+          placeholder={isTransfer ? "Qty" : "+/-"}
           disabled={saving}
         />
       </div>
@@ -121,7 +152,7 @@ function AdjustForm({
           disabled={saving}
           onClick={onSave}
         >
-          {saving ? "Saving..." : "Save"}
+          {saving ? "Saving..." : isTransfer ? "Transfer" : "Save"}
         </Button>
         <Button
           size="sm"
@@ -137,12 +168,19 @@ function AdjustForm({
   );
 }
 
-export function InventoryTable({ items }: { items: InventoryRow[] }) {
+export function InventoryTable({
+  items,
+  locations = [],
+}: {
+  items: InventoryRow[];
+  locations?: Array<{ id: string; name: string }>;
+}) {
   const router = useRouter();
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustType, setAdjustType] = useState<AdjustType>("MANUAL_ADJUSTMENT");
   const [reason, setReason] = useState("");
+  const [toLocationId, setToLocationId] = useState("");
   const [saving, setSaving] = useState(false);
 
   function resetAdjust() {
@@ -150,6 +188,7 @@ export function InventoryTable({ items }: { items: InventoryRow[] }) {
     setAdjustQty("");
     setAdjustType("MANUAL_ADJUSTMENT");
     setReason("");
+    setToLocationId("");
   }
 
   function startAdjust(itemId: string) {
@@ -157,6 +196,7 @@ export function InventoryTable({ items }: { items: InventoryRow[] }) {
     setAdjustQty("");
     setAdjustType("MANUAL_ADJUSTMENT");
     setReason("");
+    setToLocationId("");
   }
 
   async function handleSave(itemId: string) {
@@ -166,43 +206,64 @@ export function InventoryTable({ items }: { items: InventoryRow[] }) {
       return;
     }
 
-    const payload: {
-      inventoryItemId: string;
-      quantity: number;
-      type: AdjustType;
-      reason?: string;
-    } = {
-      inventoryItemId: itemId,
-      quantity,
-      type: adjustType,
-    };
-
-    const trimmedReason = reason.trim();
-    if (trimmedReason) {
-      payload.reason = trimmedReason;
-    }
-
     setSaving(true);
     try {
-      const res = await fetch("/api/inventory/adjust", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (adjustType === "TRANSFER") {
+        if (quantity < 1) {
+          toast.error("Transfer quantity must be positive");
+          return;
+        }
+        if (!toLocationId) {
+          toast.error("Select a destination location");
+          return;
+        }
+        const res = await fetch("/api/inventory/transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inventoryItemId: itemId,
+            toLocationId,
+            quantity,
+            reason: reason.trim() || undefined,
+          }),
+        });
+        if (!res.ok) {
+          const err = (await res.json().catch(() => null)) as { error?: string } | null;
+          toast.error(err?.error ?? "Failed to transfer inventory");
+          return;
+        }
+        toast.success("Inventory transferred");
+      } else {
+        const payload: {
+          inventoryItemId: string;
+          quantity: number;
+          type: Exclude<AdjustType, "TRANSFER">;
+          reason?: string;
+        } = {
+          inventoryItemId: itemId,
+          quantity,
+          type: adjustType,
+        };
+        const trimmedReason = reason.trim();
+        if (trimmedReason) payload.reason = trimmedReason;
 
-      if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        toast.error(err?.error ?? "Failed to adjust inventory");
-        return;
+        const res = await fetch("/api/inventory/adjust", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = (await res.json().catch(() => null)) as { error?: string } | null;
+          toast.error(err?.error ?? "Failed to adjust inventory");
+          return;
+        }
+        toast.success("Inventory updated");
       }
 
-      toast.success("Inventory updated");
       resetAdjust();
       router.refresh();
     } catch {
-      toast.error("Failed to adjust inventory");
+      toast.error("Failed to update inventory");
     } finally {
       setSaving(false);
     }
@@ -277,6 +338,10 @@ export function InventoryTable({ items }: { items: InventoryRow[] }) {
                     setAdjustQty={setAdjustQty}
                     reason={reason}
                     setReason={setReason}
+                    toLocationId={toLocationId}
+                    setToLocationId={setToLocationId}
+                    locations={locations}
+                    sourceLocationId={item.locationId}
                     saving={saving}
                     onSave={() => handleSave(item.id)}
                     onCancel={resetAdjust}
@@ -351,6 +416,10 @@ export function InventoryTable({ items }: { items: InventoryRow[] }) {
                           setAdjustQty={setAdjustQty}
                           reason={reason}
                           setReason={setReason}
+                          toLocationId={toLocationId}
+                          setToLocationId={setToLocationId}
+                          locations={locations}
+                          sourceLocationId={item.locationId}
                           saving={saving}
                           onSave={() => handleSave(item.id)}
                           onCancel={resetAdjust}

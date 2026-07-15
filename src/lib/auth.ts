@@ -25,6 +25,18 @@ export function isClerkConfigured(): boolean {
   );
 }
 
+/**
+ * Local single-user auth is only allowed when Clerk is unset AND
+ * ALLOW_DEV_AUTH_BYPASS=true AND we are not in production.
+ */
+export function allowDevAuthBypass(): boolean {
+  return (
+    !isClerkConfigured() &&
+    process.env.ALLOW_DEV_AUTH_BYPASS === "true" &&
+    process.env.NODE_ENV !== "production"
+  );
+}
+
 async function getSingleUser() {
   return db.user.upsert({
     where: { clerkId: SINGLE_USER_CLERK_ID },
@@ -39,7 +51,10 @@ async function getSingleUser() {
 }
 
 export async function getAuthUser() {
-  if (!isClerkConfigured()) return getSingleUser();
+  if (!isClerkConfigured()) {
+    if (!allowDevAuthBypass()) return null;
+    return getSingleUser();
+  }
 
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
@@ -73,7 +88,11 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
 
   const employee = await db.employeeProfile.findFirst({
     where: {
-      ...(isClerkConfigured() ? { userId: user.id } : {}),
+      // Always scope to the authenticated user when Clerk is on.
+      // Dev bypass still picks the earliest ACTIVE employee for local single-user mode.
+      ...(isClerkConfigured() || !allowDevAuthBypass()
+        ? { userId: user.id }
+        : {}),
       ...(businessId ? { businessId } : {}),
       status: "ACTIVE",
       deletedAt: null,
@@ -137,5 +156,21 @@ export async function requirePermission(
 ): Promise<void> {
   if (!hasPermission(ctx, permission)) {
     throw new Error(`Missing permission: ${permission}`);
+  }
+}
+
+export function hasAnyPermission(
+  ctx: AuthContext,
+  permissions: string[]
+): boolean {
+  return permissions.some((permission) => hasPermission(ctx, permission));
+}
+
+export async function requireAnyPermission(
+  ctx: AuthContext,
+  permissions: string[]
+): Promise<void> {
+  if (!hasAnyPermission(ctx, permissions)) {
+    throw new Error(`Missing permission: ${permissions.join(" | ")}`);
   }
 }

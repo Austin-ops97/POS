@@ -19,6 +19,7 @@ import {
   type ModifierGroupChoice,
 } from "@/components/register/modifier-picker-dialog";
 import { RegisterPinLock } from "@/components/register/register-pin-lock";
+import { CashDrawerControls } from "@/components/register/cash-drawer-controls";
 import {
   Sheet,
   SheetContent,
@@ -228,6 +229,8 @@ export default function RegisterPage() {
       if (search) params.set("search", search);
       if (activeCategory !== "all") params.set("categoryId", activeCategory);
       params.set("isActive", "true");
+      params.set("view", "register");
+      params.set("limit", "100");
 
       const res = await fetch(`/api/products?${params}`);
       if (!res.ok) throw new Error("Failed to load products");
@@ -737,6 +740,7 @@ export default function RegisterPage() {
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <Input
               placeholder="Search products..."
+              aria-label="Search products"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-12 pl-10 text-base"
@@ -744,11 +748,16 @@ export default function RegisterPage() {
             />
           </div>
           <div className="flex items-center gap-2">
+            <CashDrawerControls
+              locationId={locationId}
+              unlocked={!requirePin || registerUnlocked}
+            />
             <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none lg:w-64">
               <ScanBarcode className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
               <Input
                 ref={barcodeRef}
                 placeholder="Scan barcode..."
+                aria-label="Scan barcode"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
                 onKeyDown={(e) => {

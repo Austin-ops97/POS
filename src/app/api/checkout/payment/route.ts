@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { serializeDecimal, validateOrderInventoryAvailability } from "@/lib/order-service";
 import { getStripeOrThrow } from "@/lib/stripe";
 import { toDecimal } from "@/lib/order-service";
+import { resolveRegisterCashier } from "@/lib/register-cashier";
 import { z } from "zod";
 
 const paymentIntentSchema = z.object({
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const ctx = await requireAuth();
     await requirePermission(ctx, PERMISSIONS.PROCESS_SALE);
+    const cashier = await resolveRegisterCashier(ctx, request);
 
     const { orderId } = paymentIntentSchema.parse(body);
 
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
 
     await createAuditLog({
       businessId: ctx.business.id,
-      employeeId: ctx.employee.id,
+      employeeId: cashier.id,
       action: "PAYMENT",
       entity: "Payment",
       entityId: payment.id,
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
         orderId: order.id,
         paymentIntentId: paymentIntent.id,
         amount: Number(order.total),
+        cashierName: cashier.name,
       },
       ipAddress: getClientIp(request),
     });
