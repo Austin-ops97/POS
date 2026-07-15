@@ -7,6 +7,7 @@ import { findPossibleDuplicates } from "./duplicate-detection";
 import { logExpenseAudit } from "./audit";
 import { notifyEmployee, notifyManagers } from "./notifications";
 import { parseReceiptText } from "./ocr";
+import { persistReceiptBlob } from "@/lib/storage/receipt-storage";
 import { z } from "zod";
 
 export async function attachReceipt(
@@ -25,11 +26,19 @@ export async function attachReceipt(
       ? "PDF"
       : "IMAGE");
 
-  const contentHash = hashReceiptPayload({
-    storageUrl: data.storageUrl,
-    contentHash: data.contentHash,
+  const persisted = await persistReceiptBlob({
+    businessId: ctx.business.id,
+    expenseId,
     fileName: data.fileName,
-    sizeBytes: data.sizeBytes,
+    mimeType: data.mimeType,
+    storageUrl: data.storageUrl,
+  });
+
+  const contentHash = hashReceiptPayload({
+    storageUrl: persisted.storageUrl,
+    contentHash: persisted.contentHash || data.contentHash,
+    fileName: data.fileName,
+    sizeBytes: persisted.sizeBytes,
   });
 
   const duplicates = await findPossibleDuplicates(ctx.business.id, {
@@ -46,8 +55,8 @@ export async function attachReceipt(
       kind,
       fileName: data.fileName,
       mimeType: data.mimeType,
-      sizeBytes: data.sizeBytes,
-      storageUrl: data.storageUrl,
+      sizeBytes: persisted.sizeBytes,
+      storageUrl: persisted.storageUrl,
       pageNumber: data.pageNumber ?? 1,
       width: data.width,
       height: data.height,

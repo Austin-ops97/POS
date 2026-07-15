@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import type { AuthContext } from "./auth";
 import { isStripeConfigured, getStripeOrThrow } from "./stripe";
@@ -47,41 +48,54 @@ async function aggregateSales(
   locationId: string | undefined,
   range: DateRange
 ) {
-  const orders = await db.order.findMany({
-    where: {
-      businessId,
-      ...(locationId ? { locationId } : {}),
-      paidAt: { gte: range.start, lte: range.end },
-      status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
-    },
-    include: {
-      payments: { where: { status: "SUCCEEDED" } },
-      refunds: { select: { amount: true } },
-    },
-  });
+  const orderWhere = {
+    businessId,
+    ...(locationId ? { locationId } : {}),
+    paidAt: { gte: range.start, lte: range.end },
+    status: { in: ["PAID" as const, "PARTIALLY_REFUNDED" as const] },
+  };
 
-  let sales = 0;
+  const [orderAgg, paymentGroups, refundAgg] = await Promise.all([
+    db.order.aggregate({
+      where: orderWhere,
+      _sum: { total: true },
+      _count: true,
+    }),
+    db.payment.groupBy({
+      by: ["method"],
+      where: {
+        businessId,
+        status: "SUCCEEDED",
+        order: orderWhere,
+      },
+      _sum: { amount: true },
+    }),
+    db.refund.aggregate({
+      where: {
+        businessId,
+        order: orderWhere,
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const sales = Number(orderAgg._sum.total ?? 0);
+  const transactions = orderAgg._count;
   let cardSales = 0;
   let cashSales = 0;
-  let refundTotal = 0;
-
-  for (const order of orders) {
-    sales += Number(order.total);
-    refundTotal += order.refunds.reduce((s, r) => s + Number(r.amount), 0);
-    for (const payment of order.payments) {
-      const amount = Number(payment.amount);
-      if (payment.method === "CARD") cardSales += amount;
-      else if (payment.method === "CASH") cashSales += amount;
-    }
+  for (const row of paymentGroups) {
+    const amount = Number(row._sum.amount ?? 0);
+    if (row.method === "CARD") cardSales += amount;
+    else if (row.method === "CASH") cashSales += amount;
   }
 
   return {
     sales,
-    transactions: orders.length,
-    aov: orders.length > 0 ? sales / orders.length : 0,
+    transactions,
+    aov: transactions > 0 ? sales / transactions : 0,
     cardSales,
     cashSales,
-    refundTotal,
+    refundTotal: Number(refundAgg._sum.amount ?? 0),
   };
 }
 
@@ -193,14 +207,30 @@ export async function getDashboardData(ctx: AuthContext) {
         items: { select: { name: true, quantity: true, total: true } },
       },
     }),
-    db.inventoryItem.findMany({
-      where: {
-        businessId,
-        ...(locationId ? { locationId } : {}),
-        product: { trackInventory: true, isActive: true, deletedAt: null },
-      },
-      include: { product: { select: { name: true } } },
-    }),
+    (async () => {
+      const lowIds = await db.$queryRaw<{ id: string }[]>`
+        SELECT i.id
+        FROM "InventoryItem" i
+        INNER JOIN "Product" p ON p.id = i."productId"
+        WHERE i."businessId" = ${businessId}
+          ${locationId ? Prisma.sql`AND i."locationId" = ${locationId}` : Prisma.empty}
+          AND p."trackInventory" = true
+          AND p."isActive" = true
+          AND p."deletedAt" IS NULL
+          AND i."quantityOnHand" <= i."reorderPoint"
+        ORDER BY i."quantityOnHand" ASC
+        LIMIT 5
+      `;
+      if (lowIds.length === 0) return [];
+      const items = await db.inventoryItem.findMany({
+        where: { id: { in: lowIds.map((r) => r.id) } },
+        include: { product: { select: { name: true } } },
+      });
+      const order = new Map(lowIds.map((r, idx) => [r.id, idx]));
+      return items.sort(
+        (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)
+      );
+    })(),
     getStripeBalanceSummary(businessId),
     db.product.count({
       where: { businessId, deletedAt: null, isActive: true },
@@ -244,10 +274,7 @@ export async function getDashboardData(ctx: AuthContext) {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
 
-  const lowStock = lowStockItems
-    .filter((item) => item.quantityOnHand <= item.reorderPoint)
-    .sort((a, b) => a.quantityOnHand - b.quantityOnHand)
-    .slice(0, 5);
+  const lowStock = lowStockItems;
 
   const salesByDay = Array.from(dailyMap.values()).sort((a, b) =>
     a.date.localeCompare(b.date)

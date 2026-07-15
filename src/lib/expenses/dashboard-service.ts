@@ -172,32 +172,35 @@ export async function getExpenseDashboard(ctx: AuthContext) {
       include: { category: { select: { id: true, name: true } } },
       take: 12,
     }),
-    Promise.all(
-      cards.map(async (card) => {
-        const spent = await db.expense.aggregate({
+    cards.length
+      ? db.expense.groupBy({
+          by: ["companyCardId"],
           where: {
             businessId: ctx.business.id,
             deletedAt: null,
-            companyCardId: card.id,
+            companyCardId: { in: cards.map((c) => c.id) },
             purchaseDate: { gte: start, lt: end },
             status: { notIn: ["REJECTED", "DRAFT", "ARCHIVED"] },
           },
           _sum: { total: true },
-        });
-        return {
-          ...card,
-          spent: Number(spent._sum.total ?? 0),
-          limit: card.monthlyLimit != null ? Number(card.monthlyLimit) : null,
-        };
-      })
-    ),
+        })
+      : Promise.resolve([] as Array<{ companyCardId: string | null; _sum: { total: unknown } }>),
   ]);
+
+  const spendByCard = new Map(
+    cardSpend.map((row) => [row.companyCardId, Number(row._sum.total ?? 0)])
+  );
+  const cardSpendRows = cards.map((card) => ({
+    ...card,
+    spent: spendByCard.get(card.id) ?? 0,
+    limit: card.monthlyLimit != null ? Number(card.monthlyLimit) : null,
+  }));
 
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
   const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
   const locationMap = new Map(locations.map((l) => [l.id, l.name]));
 
-  const companyCardBalance = cardSpend.reduce((sum, c) => {
+  const companyCardBalance = cardSpendRows.reduce((sum, c) => {
     if (c.limit == null) return sum;
     return sum + Math.max(0, c.limit - c.spent);
   }, 0);
@@ -245,7 +248,7 @@ export async function getExpenseDashboard(ctx: AuthContext) {
       })),
     },
     recentActivity: recent,
-    cardUtilization: cardSpend,
+    cardUtilization: cardSpendRows,
     budgets: budgets.map((b) => ({
       id: b.id,
       category: b.category.name,

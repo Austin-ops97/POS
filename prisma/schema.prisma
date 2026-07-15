@@ -250,6 +250,12 @@ model Business {
   categories                Category[]
   customers                 Customer[]
   orders                    Order[]
+  payments                  Payment[]
+  refunds                   Refund[]
+  receipts                  Receipt[]
+  inventoryMovements        InventoryMovement[]
+  terminalReaders           TerminalReader[]
+  modifierGroups            ModifierGroup[]
   discounts                 Discount[]
   taxRates                  TaxRate[]
   inventoryItems            InventoryItem[]
@@ -577,9 +583,11 @@ model Product {
   orderItems     OrderItem[]
 
   @@index([businessId])
+  @@index([businessId, deletedAt])
   @@index([sku])
   @@index([barcode])
   @@index([createdAt])
+  @@unique([businessId, sku])
 }
 
 model ProductVariant {
@@ -722,6 +730,7 @@ model ModifierGroup {
 
   options  ModifierOption[]
   products ProductModifierGroup[]
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
 }
@@ -787,6 +796,7 @@ model InventoryMovement {
   createdAt       DateTime              @default(now())
 
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([inventoryItemId])
@@ -817,6 +827,7 @@ model Customer {
   orders   Order[]
 
   @@index([businessId])
+  @@index([businessId, deletedAt])
   @@index([email])
   @@index([phone])
 }
@@ -853,6 +864,8 @@ model Order {
 
   @@unique([businessId, orderNumber])
   @@index([businessId])
+  @@index([businessId, paidAt])
+  @@index([businessId, status, createdAt])
   @@index([locationId])
   @@index([status])
   @@index([createdAt])
@@ -899,7 +912,8 @@ model Payment {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([orderId])
@@ -922,6 +936,7 @@ model Refund {
   order    Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   employee EmployeeProfile? @relation(fields: [employeeId], references: [id])
   items    RefundItem[]
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([orderId])
@@ -1005,7 +1020,8 @@ model Receipt {
   printedAt     DateTime?
   createdAt     DateTime  @default(now())
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([orderId])
@@ -1080,6 +1096,7 @@ model TerminalReader {
   updatedAt      DateTime     @updatedAt
 
   location Location? @relation(fields: [locationId], references: [id])
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([locationId])
@@ -1218,6 +1235,7 @@ model TimeEntry {
   breaks     TimeBreak[]
 
   @@index([businessId])
+  @@index([businessId, status])
   @@index([employeeId])
   @@index([clockIn])
   @@index([status])

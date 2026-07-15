@@ -50,3 +50,7 @@ next-env.d.ts
 
 /src/generated/prisma
 .env*
+
+# local receipt object storage
+.data/
+
