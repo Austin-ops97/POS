@@ -54,6 +54,18 @@ export async function GET(request: Request) {
         category: true,
         variants: { where: { isActive: true } },
         barcodes: true,
+        modifierGroups: {
+          include: {
+            modifierGroup: {
+              include: {
+                options: {
+                  where: { isActive: true },
+                  orderBy: { name: "asc" },
+                },
+              },
+            },
+          },
+        },
         inventoryItems: {
           where: { businessId: ctx.business.id },
           select: {
@@ -69,6 +81,27 @@ export async function GET(request: Request) {
       take: limit,
       skip: offset,
     });
+
+    const serialized = products.map((product) => ({
+      ...product,
+      price: Number(product.price),
+      cost: product.cost != null ? Number(product.cost) : null,
+      modifierGroups: product.modifierGroups
+        .map((pm) => pm.modifierGroup)
+        .filter((g) => g.isActive)
+        .map((g) => ({
+          id: g.id,
+          name: g.name,
+          required: g.required,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: g.options.map((o) => ({
+            id: o.id,
+            name: o.name,
+            priceAdjustment: Number(o.priceAdjustment),
+          })),
+        })),
+    }));
 
     const total = await db.product.count({
       where: {
@@ -91,7 +124,7 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({ products, total, limit, offset });
+    return NextResponse.json({ products: serialized, total, limit, offset });
   } catch (error) {
     return handleApiError(error, "GET /api/products");
   }

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { BarcodeLookupResponse } from "@/lib/barcode-lookup-types";
 
 type LocationOption = { id: string; name: string };
@@ -80,6 +81,7 @@ export function InventoryScanClient({
   const [external, setExternal] = useState<ExternalSuggestion | null>(null);
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [conflictConfirmOpen, setConflictConfirmOpen] = useState(false);
 
   const isSessionMode =
     mode === "RECEIVE" ||
@@ -231,10 +233,7 @@ export function InventoryScanClient({
       if (res.status === 409) {
         const data = await res.json();
         if (data.code === "CONFLICTS") {
-          const ok = window.confirm(
-            "Stock changed since scanning began. Apply using current quantities?"
-          );
-          if (ok) await applySession(true);
+          setConflictConfirmOpen(true);
           return;
         }
         toast.error(data.error ?? "Conflict applying session");
@@ -542,6 +541,19 @@ export function InventoryScanClient({
         onScan={(r) => void onScan(r)}
         continuous={isSessionMode || mode === "FIND"}
         title={mode ? MODE_LABELS[mode] : "Scan barcode"}
+      />
+
+      <ConfirmDialog
+        open={conflictConfirmOpen}
+        onOpenChange={setConflictConfirmOpen}
+        title="Stock changed"
+        description="Stock changed since scanning began. Apply using current quantities?"
+        confirmLabel="Apply anyway"
+        loading={busy}
+        onConfirm={async () => {
+          setConflictConfirmOpen(false);
+          await applySession(true);
+        }}
       />
     </div>
   );

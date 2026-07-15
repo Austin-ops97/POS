@@ -10,6 +10,7 @@ type TopbarProps = {
   locationName?: string;
   authEnabled?: boolean;
   onMenuClick?: () => void;
+  searchSlot?: React.ReactNode;
 };
 
 export function Topbar({
@@ -17,6 +18,7 @@ export function Topbar({
   locationName,
   authEnabled = true,
   onMenuClick,
+  searchSlot,
 }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 pt-[env(safe-area-inset-top)] sm:h-16 sm:px-5 lg:px-6">
@@ -45,6 +47,9 @@ export function Topbar({
           </div>
         ) : null}
       </div>
+      {searchSlot ? (
+        <div className="mx-1 flex min-w-0 flex-1 justify-center sm:mx-3">{searchSlot}</div>
+      ) : null}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <Button asChild size="default" className="hidden sm:inline-flex">
           <Link href="/register">

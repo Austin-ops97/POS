@@ -112,7 +112,7 @@ const settingsSections = [
       {
         href: "/settings/integrations",
         title: "Integrations",
-        description: "Third-party apps and extensions",
+        description: "Stripe Connect today; more connectors later",
         icon: Puzzle,
       },
       {

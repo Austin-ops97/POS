@@ -10,6 +10,9 @@ async function main() {
 
   console.log("Seed completed successfully!");
   console.log(`System roles: ${Object.keys(roleIds).join(", ")}`);
+  console.log(
+    "Demo catalog is available in-app via Dashboard → Load demo catalog (POST /api/business/demo-catalog)."
+  );
 }
 
 main()

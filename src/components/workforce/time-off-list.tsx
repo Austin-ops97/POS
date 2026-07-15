@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Check, X } from "lucide-react";
+import { Plus, Check, X, CalendarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/dashboard/empty-state";
 import { formatDate } from "@/lib/utils";
 
 type TimeOffRequest = {
@@ -80,78 +81,115 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
     }
   }
 
+  function RequestActions({ req }: { req: TimeOffRequest }) {
+    if (req.status !== "PENDING") return null;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {canApprove && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => review(req.id, "APPROVED")}>
+              <Check className="h-3 w-3" aria-hidden="true" />
+              Approve
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setDenyId(req.id)}>
+              <X className="h-3 w-3" aria-hidden="true" />
+              Deny
+            </Button>
+          </>
+        )}
+        {!canApprove && req.employee.id === currentEmployeeId && (
+          <Button size="sm" variant="ghost" onClick={() => review(req.id, "CANCELLED")}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   function RequestTable({ items }: { items: TimeOffRequest[] }) {
     if (loading) {
-      return <p className="p-8 text-center text-sm text-slate-500">Loading...</p>;
+      return (
+        <div className="space-y-3 p-4" aria-busy="true" aria-label="Loading">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+          ))}
+        </div>
+      );
     }
     if (items.length === 0) {
-      return <p className="p-8 text-center text-sm text-slate-500">No requests found</p>;
+      return (
+        <div className="p-4">
+          <EmptyState
+            icon={CalendarOff}
+            title="No time-off requests"
+            description="When you or your team submit requests, they will show up here."
+            actionLabel="Request time off"
+            actionHref="/workforce/time-off/new"
+          />
+        </div>
+      );
     }
     return (
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
-            {canApprove && <th className="px-4 py-3 font-medium">Employee</th>}
-            <th className="px-4 py-3 font-medium">Dates</th>
-            <th className="px-4 py-3 font-medium">Type</th>
-            <th className="px-4 py-3 font-medium">Hours</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+      <>
+        <ul className="space-y-3 p-4 md:hidden">
           {items.map((req) => (
-            <tr key={req.id} className="border-b border-slate-100">
-              {canApprove && (
-                <td className="px-4 py-3 font-medium">{req.employee.name}</td>
-              )}
-              <td className="px-4 py-3 text-slate-600">
-                {formatDate(req.startDate)} – {formatDate(req.endDate)}
-              </td>
-              <td className="px-4 py-3">{req.type}</td>
-              <td className="px-4 py-3">{Number(req.hoursRequested)}h</td>
-              <td className="px-4 py-3">
+            <li key={req.id} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {canApprove ? (
+                    <p className="font-semibold text-slate-900">{req.employee.name}</p>
+                  ) : null}
+                  <p className="text-sm text-slate-600">
+                    {formatDate(req.startDate)} – {formatDate(req.endDate)}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {req.type} · {Number(req.hoursRequested)}h
+                  </p>
+                </div>
                 <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
-              </td>
-              <td className="px-4 py-3">
-                {req.status === "PENDING" && (
-                  <div className="flex gap-2">
-                    {canApprove && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => review(req.id, "APPROVED")}
-                        >
-                          <Check className="h-3 w-3" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDenyId(req.id)}
-                        >
-                          <X className="h-3 w-3" />
-                          Deny
-                        </Button>
-                      </>
-                    )}
-                    {!canApprove && req.employee.id === currentEmployeeId && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => review(req.id, "CANCELLED")}
-                      >
-                        Cancel
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </td>
-            </tr>
+              </div>
+              <div className="mt-3">
+                <RequestActions req={req} />
+              </div>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ul>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                {canApprove && <th className="px-4 py-3 font-medium">Employee</th>}
+                <th className="px-4 py-3 font-medium">Dates</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Hours</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((req) => (
+                <tr key={req.id} className="border-b border-slate-100">
+                  {canApprove && (
+                    <td className="px-4 py-3 font-medium">{req.employee.name}</td>
+                  )}
+                  <td className="px-4 py-3 text-slate-600">
+                    {formatDate(req.startDate)} – {formatDate(req.endDate)}
+                  </td>
+                  <td className="px-4 py-3">{req.type}</td>
+                  <td className="px-4 py-3">{Number(req.hoursRequested)}h</td>
+                  <td className="px-4 py-3">
+                    <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <RequestActions req={req} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
     );
   }
 
@@ -163,7 +201,7 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
       <div className="flex justify-end">
         <Button asChild>
           <Link href="/workforce/time-off/new">
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" aria-hidden="true" />
             Request Time Off
           </Link>
         </Button>

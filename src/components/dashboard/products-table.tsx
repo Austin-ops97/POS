@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatCurrency } from "@/lib/utils";
 
 export type ProductRow = {
@@ -39,15 +40,11 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ProductRow | null>(null);
 
-  async function handleDelete(product: ProductRow) {
-    if (
-      !window.confirm(
-        `Delete "${product.name}"? This will deactivate the product.`
-      )
-    ) {
-      return;
-    }
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const product = pendingDelete;
     setDeletingId(product.id);
     try {
       const res = await fetch(`/api/products/${product.id}`, {
@@ -59,6 +56,7 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
         return;
       }
       toast.success("Product deleted");
+      setPendingDelete(null);
       router.refresh();
     } catch {
       toast.error("Failed to delete product");
@@ -164,7 +162,7 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => handleDelete(product)}
+                      onClick={() => setPendingDelete(product)}
                       disabled={deletingId === product.id}
                       aria-label={`Delete ${product.name}`}
                       className="text-red-600"
@@ -215,7 +213,7 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDelete(product)}
+                          onClick={() => setPendingDelete(product)}
                           disabled={deletingId === product.id}
                           aria-label={`Delete ${product.name}`}
                         >
@@ -230,6 +228,23 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete product?"
+        description={
+          pendingDelete
+            ? `Delete "${pendingDelete.name}"? This will deactivate the product.`
+            : ""
+        }
+        confirmLabel="Delete"
+        variant="destructive"
+        loading={Boolean(deletingId)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

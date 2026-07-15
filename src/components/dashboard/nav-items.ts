@@ -79,3 +79,35 @@ export function isNavItemActive(pathname: string, href: string): boolean {
   }
   return pathname.startsWith(href);
 }
+
+export type NavVisibility = {
+  /** When false, hide the Finance section entirely. */
+  expensesEnabled: boolean;
+  /** When false, hide Workforce until the business has multiple staff. */
+  showWorkforce: boolean;
+};
+
+export function filterNavSections(
+  sections: NavSection[],
+  visibility: NavVisibility
+): NavSection[] {
+  return sections
+    .map((section) => {
+      if (section.id === "finance" && !visibility.expensesEnabled) {
+        return null;
+      }
+      if (section.id === "main") {
+        return {
+          ...section,
+          items: section.items.filter((item) => {
+            if (item.href === "/workforce" && !visibility.showWorkforce) {
+              return false;
+            }
+            return true;
+          }),
+        };
+      }
+      return section;
+    })
+    .filter((section): section is NavSection => section != null);
+}

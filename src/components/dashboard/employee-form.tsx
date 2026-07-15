@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const employeeFormSchema = employeeUpdateSchema.extend({
   pin: z.union([z.string().length(4), z.literal("")]).optional(),
@@ -62,6 +63,7 @@ export function EmployeeForm({
   const router = useRouter();
   const isEdit = !!employeeId;
   const [dirty, setDirty] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const createSchema = isEdit ? employeeFormSchema : employeeSchema.merge(employeeFormSchema);
@@ -207,7 +209,10 @@ export function EmployeeForm({
   }
 
   function handleCancel() {
-    if (dirty && !window.confirm("You have unsaved changes. Leave anyway?")) return;
+    if (dirty) {
+      setLeaveConfirmOpen(true);
+      return;
+    }
     router.back();
   }
 
@@ -510,6 +515,19 @@ export function EmployeeForm({
           Cancel
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        onOpenChange={setLeaveConfirmOpen}
+        title="Leave without saving?"
+        description="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        variant="destructive"
+        onConfirm={() => {
+          setLeaveConfirmOpen(false);
+          router.back();
+        }}
+      />
     </form>
   );
 }

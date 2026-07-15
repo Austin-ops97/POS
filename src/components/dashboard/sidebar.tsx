@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   NAV_SECTIONS,
+  filterNavSections,
   isNavItemActive,
+  type NavVisibility,
 } from "@/components/dashboard/nav-items";
 import {
   Sheet,
@@ -18,17 +20,23 @@ import {
 type SidebarNavProps = {
   onNavigate?: () => void;
   className?: string;
+  visibility?: NavVisibility;
 };
 
-export function SidebarNav({ onNavigate, className }: SidebarNavProps) {
+export function SidebarNav({
+  onNavigate,
+  className,
+  visibility = { expensesEnabled: true, showWorkforce: true },
+}: SidebarNavProps) {
   const pathname = usePathname();
+  const sections = filterNavSections(NAV_SECTIONS, visibility);
 
   return (
     <nav
       className={cn("flex-1 space-y-4 overflow-y-auto p-3 sm:p-4", className)}
       aria-label="Main"
     >
-      {NAV_SECTIONS.map((section) => (
+      {sections.map((section) => (
         <div key={section.id} className="space-y-1">
           {section.label ? (
             <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
@@ -76,11 +84,11 @@ function BrandHeader() {
 }
 
 /** Permanent sidebar for large screens. */
-export function DesktopSidebar() {
+export function DesktopSidebar({ visibility }: { visibility?: NavVisibility }) {
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex xl:w-64">
       <BrandHeader />
-      <SidebarNav />
+      <SidebarNav visibility={visibility} />
     </aside>
   );
 }
@@ -88,10 +96,11 @@ export function DesktopSidebar() {
 type MobileNavProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  visibility?: NavVisibility;
 };
 
 /** Drawer navigation for phones and tablets in portrait. */
-export function MobileNav({ open, onOpenChange }: MobileNavProps) {
+export function MobileNav({ open, onOpenChange, visibility }: MobileNavProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-[min(20rem,100%)] p-0 lg:hidden" showClose>
@@ -100,7 +109,10 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
           <SheetDescription>Primary application navigation</SheetDescription>
         </SheetHeader>
         <BrandHeader />
-        <SidebarNav onNavigate={() => onOpenChange(false)} />
+        <SidebarNav
+          visibility={visibility}
+          onNavigate={() => onOpenChange(false)}
+        />
       </SheetContent>
     </Sheet>
   );

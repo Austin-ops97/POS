@@ -10,6 +10,15 @@ import { ProductGrid, type ProductGridItem } from "@/components/register/product
 import { CartPanel } from "@/components/register/cart-panel";
 import { PaymentModal, type PaymentModalState } from "@/components/register/payment-modal";
 import { CashTenderModal } from "@/components/register/cash-tender-modal";
+import { CustomItemDialog } from "@/components/register/custom-item-dialog";
+import { DiscountDialog } from "@/components/register/discount-dialog";
+import { CustomerPickerDialog } from "@/components/register/customer-picker-dialog";
+import { HeldOrdersDialog, type HeldOrderSummary } from "@/components/register/held-orders-dialog";
+import {
+  ModifierPickerDialog,
+  type ModifierGroupChoice,
+} from "@/components/register/modifier-picker-dialog";
+import { RegisterPinLock } from "@/components/register/register-pin-lock";
 import {
   Sheet,
   SheetContent,
@@ -24,7 +33,8 @@ import { isValidReceiptEmail } from "@/lib/register/receipt-email";
 import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
 
 type Category = { id: string; name: string };
-type Customer = { id: string; firstName: string; lastName?: string | null; email?: string | null };
+
+const REGISTER_SESSION_KEY = "nexapos.register.session";
 
 type CheckoutOrderPayload = {
   id?: string;
@@ -102,6 +112,17 @@ export default function RegisterPage() {
     orderId: string;
   } | null>(null);
 
+  const [customItemOpen, setCustomItemOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [heldOrdersOpen, setHeldOrdersOpen] = useState(false);
+  const [modifierProduct, setModifierProduct] = useState<ProductGridItem | null>(null);
+  const [requirePin, setRequirePin] = useState(false);
+  const [pinChecked, setPinChecked] = useState(false);
+  const [registerUnlocked, setRegisterUnlocked] = useState(false);
+  const [cashierName, setCashierName] = useState<string | null>(null);
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
+
   const barcodeRef = useRef<HTMLInputElement>(null);
   const {
     items,
@@ -142,12 +163,41 @@ export default function RegisterPage() {
           const biz = await bizRes.json();
           const loc = resolveLocationFromBusiness(biz);
           setLocationId(loc);
+          const settings = biz.settings ?? null;
+          const pinRequired = Boolean(settings?.requirePinAtRegister);
+          setRequirePin(pinRequired);
+          if (settings?.sessionTimeoutMinutes) {
+            setSessionTimeoutMinutes(Number(settings.sessionTimeoutMinutes));
+          }
+          if (!pinRequired) {
+            setRegisterUnlocked(true);
+          } else {
+            try {
+              const raw = sessionStorage.getItem(REGISTER_SESSION_KEY);
+              if (raw) {
+                const session = JSON.parse(raw) as {
+                  employeeName: string;
+                  expiresAt: number;
+                };
+                if (session.expiresAt > Date.now()) {
+                  setCashierName(session.employeeName);
+                  setRegisterUnlocked(true);
+                } else {
+                  sessionStorage.removeItem(REGISTER_SESSION_KEY);
+                }
+              }
+            } catch {
+              sessionStorage.removeItem(REGISTER_SESSION_KEY);
+            }
+          }
         }
       } catch {
-        /* location resolved on checkout */
+        setRegisterUnlocked(true);
+      } finally {
+        setPinChecked(true);
       }
     }
-    init();
+    void init();
   }, []);
 
   useEffect(() => {
@@ -194,6 +244,7 @@ export default function RegisterPage() {
           imageUrl?: string;
           type?: string;
           taxable?: boolean;
+          modifierGroups?: ModifierGroupChoice[];
         }) => ({
           id: p.id,
           name: p.name,
@@ -204,6 +255,7 @@ export default function RegisterPage() {
           imageUrl: p.imageUrl,
           type: p.type,
           taxable: p.taxable,
+          modifierGroups: p.modifierGroups,
         })
       );
       setProducts(productList);
@@ -230,16 +282,29 @@ export default function RegisterPage() {
     return () => clearTimeout(timer);
   }, [fetchProducts]);
 
-  const handleSelectProduct = (product: ProductGridItem) => {
+  const addProductToCart = (
+    product: ProductGridItem,
+    modifiers?: { name: string; priceAdjustment: number }[]
+  ) => {
+    const adjustment = (modifiers || []).reduce((sum, m) => sum + m.priceAdjustment, 0);
     addItem({
       productId: product.id,
       name: product.name,
       sku: product.sku || undefined,
       quantity: 1,
-      unitPrice: product.price,
+      unitPrice: product.price + adjustment,
       taxable: product.taxable ?? true,
       type: product.type,
+      modifiers,
     });
+  };
+
+  const handleSelectProduct = (product: ProductGridItem) => {
+    if (product.modifierGroups && product.modifierGroups.length > 0) {
+      setModifierProduct(product);
+      return;
+    }
+    addProductToCart(product);
   };
 
   const handleBarcodeSubmit = async (code: string) => {
@@ -584,39 +649,13 @@ export default function RegisterPage() {
     }
   };
 
-  const handleResumeHeld = async () => {
+  const handleResumeHeld = () => {
+    setHeldOrdersOpen(true);
+  };
+
+  const loadHeldOrderById = async (selected: HeldOrderSummary) => {
     setProcessing(true);
     try {
-      const res = await fetch("/api/orders?status=HELD&limit=20");
-      if (!res.ok) throw new Error("Failed to load held orders");
-      const data = await res.json();
-      const heldOrders: Array<{
-        id: string;
-        orderNumber: string;
-        total: number;
-      }> = data.orders || [];
-      if (heldOrders.length === 0) {
-        toast.error("No held orders");
-        return;
-      }
-      const list = heldOrders
-        .map(
-          (o, i) =>
-            `${i + 1}. ${o.orderNumber} — $${Number(o.total).toFixed(2)}`
-        )
-        .join("\n");
-      const pick = window.prompt(`Enter held order number:\n${list}`);
-      if (!pick) return;
-      const index = parseInt(pick, 10) - 1;
-      const selected =
-        index >= 0 && index < heldOrders.length
-          ? heldOrders[index]
-          : heldOrders.find((o) => o.orderNumber === pick.trim());
-      if (!selected) {
-        toast.error("Invalid selection");
-        return;
-      }
-
       const orderRes = await fetch(`/api/orders/${selected.id}`);
       if (!orderRes.ok) throw new Error("Failed to load order");
       const orderData = await orderRes.json();
@@ -628,6 +667,7 @@ export default function RegisterPage() {
           order.customer.id,
           `${order.customer.firstName}${order.customer.lastName ? ` ${order.customer.lastName}` : ""}`
         );
+        if (order.customer.email) setCustomerEmail(order.customer.email);
       }
       if (order.notes) setNotes(order.notes);
 
@@ -640,6 +680,7 @@ export default function RegisterPage() {
           quantity: number;
           unitPrice: number;
           product?: { type?: string };
+          modifiers?: { name: string; priceAdjustment: number }[] | null;
         }) => ({
           productId: item.productId,
           variantId: item.variantId,
@@ -649,11 +690,13 @@ export default function RegisterPage() {
           unitPrice: Number(item.unitPrice),
           taxable: true,
           type: item.product?.type,
+          modifiers: item.modifiers ?? undefined,
         })
       );
 
       loadHeldOrder(order.id, cartItems);
       toast.success(`Resumed ${order.orderNumber}`);
+      setCartOpen(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to resume order");
     } finally {
@@ -661,71 +704,9 @@ export default function RegisterPage() {
     }
   };
 
-  const handleAddCustom = () => {
-    const name = window.prompt("Item name");
-    if (!name) return;
-    const priceStr = window.prompt("Item price");
-    if (!priceStr) return;
-    const price = parseFloat(priceStr);
-    if (isNaN(price) || price < 0) {
-      toast.error("Invalid price");
-      return;
-    }
-    addItem({
-      name,
-      quantity: 1,
-      unitPrice: price,
-      taxable: true,
-      type: "CUSTOM",
-    });
-  };
-
-  const handleAddDiscount = () => {
-    const type = window.prompt("Discount type: percentage or fixed", "percentage");
-    if (!type) return;
-    const valueStr = window.prompt("Discount value");
-    if (!valueStr) return;
-    const value = parseFloat(valueStr);
-    if (isNaN(value) || value <= 0) {
-      toast.error("Invalid discount value");
-      return;
-    }
-    const isPercentage = type.toLowerCase().startsWith("p");
-    addDiscount({
-      id: `disc-${Date.now()}`,
-      name: isPercentage ? `${value}% Off` : `$${value} Off`,
-      type: isPercentage ? "PERCENTAGE" : "FIXED_AMOUNT",
-      value,
-    });
-  };
-
-  const handleSelectCustomer = async () => {
-    const query = window.prompt("Search customer by name, email, or phone");
-    if (!query) return;
-    try {
-      const res = await fetch(
-        `/api/customers?search=${encodeURIComponent(query)}`
-      );
-      if (!res.ok) throw new Error("Search failed");
-      const data = await res.json();
-      const customers: Customer[] = data.customers || data;
-      if (customers.length === 0) {
-        toast.error("No customers found");
-        return;
-      }
-      const c = customers[0];
-      setCustomer(
-        c.id,
-        `${c.firstName}${c.lastName ? ` ${c.lastName}` : ""}`
-      );
-      if (c.email) {
-        setCustomerEmail(c.email);
-      }
-      toast.success("Customer selected");
-    } catch {
-      toast.error("Failed to search customers");
-    }
-  };
+  const handleAddCustom = () => setCustomItemOpen(true);
+  const handleAddDiscount = () => setDiscountOpen(true);
+  const handleSelectCustomer = () => setCustomerOpen(true);
 
   const filteredProducts =
     activeCategory === "all"
@@ -932,6 +913,95 @@ export default function RegisterPage() {
           void handleBarcodeSubmit(result.rawValue);
         }}
       />
+
+      <CustomItemDialog
+        open={customItemOpen}
+        onOpenChange={setCustomItemOpen}
+        onSubmit={({ name, unitPrice }) => {
+          addItem({
+            name,
+            quantity: 1,
+            unitPrice,
+            taxable: true,
+            type: "CUSTOM",
+          });
+        }}
+      />
+
+      <DiscountDialog
+        open={discountOpen}
+        onOpenChange={setDiscountOpen}
+        onSubmit={addDiscount}
+      />
+
+      <CustomerPickerDialog
+        open={customerOpen}
+        onOpenChange={setCustomerOpen}
+        hasCustomer={Boolean(customerId)}
+        onClear={() => {
+          setCustomer(null, null);
+          setCustomerEmail(undefined);
+          setCustomerOpen(false);
+          toast.success("Customer removed");
+        }}
+        onSelect={(c) => {
+          setCustomer(
+            c.id,
+            `${c.firstName}${c.lastName ? ` ${c.lastName}` : ""}`
+          );
+          if (c.email) setCustomerEmail(c.email);
+          toast.success("Customer selected");
+        }}
+      />
+
+      <HeldOrdersDialog
+        open={heldOrdersOpen}
+        onOpenChange={setHeldOrdersOpen}
+        onSelect={(order) => {
+          void loadHeldOrderById(order);
+        }}
+      />
+
+      {modifierProduct ? (
+        <ModifierPickerDialog
+          open={Boolean(modifierProduct)}
+          onOpenChange={(open) => {
+            if (!open) setModifierProduct(null);
+          }}
+          productName={modifierProduct.name}
+          basePrice={modifierProduct.price}
+          groups={modifierProduct.modifierGroups || []}
+          onConfirm={(modifiers) => {
+            addProductToCart(modifierProduct, modifiers);
+            setModifierProduct(null);
+          }}
+        />
+      ) : null}
+
+      {pinChecked && requirePin && !registerUnlocked ? (
+        <RegisterPinLock
+          onUnlocked={(employee) => {
+            const expiresAt = Date.now() + sessionTimeoutMinutes * 60 * 1000;
+            sessionStorage.setItem(
+              REGISTER_SESSION_KEY,
+              JSON.stringify({
+                employeeId: employee.id,
+                employeeName: employee.name,
+                expiresAt,
+              })
+            );
+            setCashierName(employee.name);
+            setRegisterUnlocked(true);
+            toast.success(`Unlocked for ${employee.name}`);
+          }}
+        />
+      ) : null}
+
+      {cashierName && requirePin ? (
+        <div className="absolute right-3 top-3 z-20 hidden rounded-lg bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm lg:block">
+          Cashier: {cashierName}
+        </div>
+      ) : null}
     </div>
   );
 }

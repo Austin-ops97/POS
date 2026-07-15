@@ -164,6 +164,9 @@ export async function getDashboardData(ctx: AuthContext) {
     weekOrders,
     lowStockItems,
     stripe,
+    productCount,
+    paidSaleCount,
+    employeeCount,
   ] = await Promise.all([
     aggregateSales(businessId, locationId, ranges.today),
     aggregateSales(businessId, locationId, ranges.yesterday),
@@ -199,6 +202,18 @@ export async function getDashboardData(ctx: AuthContext) {
       include: { product: { select: { name: true } } },
     }),
     getStripeBalanceSummary(businessId),
+    db.product.count({
+      where: { businessId, deletedAt: null, isActive: true },
+    }),
+    db.order.count({
+      where: {
+        businessId,
+        status: { in: ["PAID", "PARTIALLY_REFUNDED"] },
+      },
+    }),
+    db.employeeProfile.count({
+      where: { businessId, deletedAt: null, status: "ACTIVE" },
+    }),
   ]);
 
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
@@ -256,6 +271,15 @@ export async function getDashboardData(ctx: AuthContext) {
     topProducts,
     salesByDay,
     stripe,
+    setup: {
+      hasCustomBusinessName:
+        Boolean(ctx.business.name) &&
+        ctx.business.name.trim().toLowerCase() !== "my business",
+      hasProducts: productCount > 0,
+      stripeConnected: Boolean(stripe.connected),
+      hasPaidSale: paidSaleCount > 0,
+    },
+    employeeCount,
   };
 }
 

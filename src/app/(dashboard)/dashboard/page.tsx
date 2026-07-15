@@ -19,14 +19,17 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesChart } from "@/components/dashboard/sales-chart";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatOrderStatus, getOrderStatusVariant } from "@/lib/status-utils";
+import { hasPermission } from "@/lib/auth";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
-  const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe } =
+  const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
 
   const chartData =
@@ -66,6 +69,11 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      <SetupChecklist
+        status={setup}
+        canSeedDemo={hasPermission(ctx, PERMISSIONS.MANAGE_PRODUCTS)}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyState } from "@/components/dashboard/empty-state";
 import { formatCurrency } from "@/lib/utils";
 import type { PayPeriod } from "@/lib/workforce/pay-period";
 
@@ -169,53 +170,98 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
       </div>
 
       <Card>
-        <CardContent className="overflow-x-auto p-0">
+        <CardContent className="p-0">
           {loading ? (
-            <p className="p-8 text-center text-sm text-slate-500">Loading payroll...</p>
+            <div className="space-y-3 p-4" aria-busy="true" aria-label="Loading payroll">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={Wallet}
+                title="No payroll rows"
+                description="Add employees with wages and time entries to see payroll for this period."
+                actionLabel="View employees"
+                actionHref="/employees"
+              />
+            </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
-                  <th className="px-4 py-3 font-medium">Employee</th>
-                  <th className="px-4 py-3 font-medium">Sched</th>
-                  <th className="px-4 py-3 font-medium">Actual</th>
-                  <th className="px-4 py-3 font-medium">Breaks</th>
-                  <th className="px-4 py-3 font-medium">Regular</th>
-                  <th className="px-4 py-3 font-medium">OT</th>
-                  <th className="px-4 py-3 font-medium">Bonuses</th>
-                  <th className="px-4 py-3 font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Flags</th>
-                  <th className="px-4 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <ul className="space-y-3 p-4 md:hidden">
                 {rows.map((row) => (
-                  <tr key={row.employeeId} className="border-b border-slate-100">
-                    <td className="px-4 py-3 font-medium">{row.employeeName}</td>
-                    <td className="px-4 py-3">{row.scheduledHours.toFixed(1)}</td>
-                    <td className="px-4 py-3">{row.actualHours.toFixed(1)}</td>
-                    <td className="px-4 py-3">{row.breakHours.toFixed(1)}</td>
-                    <td className="px-4 py-3">{formatCurrency(row.regularPay)}</td>
-                    <td className="px-4 py-3">{formatCurrency(row.overtimePay)}</td>
-                    <td className="px-4 py-3">{formatCurrency(row.bonusTotal)}</td>
-                    <td className="px-4 py-3 font-medium">{formatCurrency(row.totalPay)}</td>
-                    <td className="px-4 py-3 text-xs text-amber-700">
-                      {row.flags.join(", ") || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setBonusModal(row)}
-                      >
-                        <Plus className="h-3 w-3" />
+                  <li
+                    key={row.employeeId}
+                    className="rounded-xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{row.employeeName}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {row.actualHours.toFixed(1)}h actual · {row.scheduledHours.toFixed(1)}h sched
+                        </p>
+                        {row.flags.length > 0 ? (
+                          <p className="mt-1 text-xs text-amber-700">{row.flags.join(", ")}</p>
+                        ) : null}
+                      </div>
+                      <p className="font-bold text-slate-900">{formatCurrency(row.totalPay)}</p>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button size="sm" variant="outline" onClick={() => setBonusModal(row)}>
+                        <Plus className="h-3 w-3" aria-hidden="true" />
                         Bonus
                       </Button>
-                    </td>
-                  </tr>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                      <th className="px-4 py-3 font-medium">Employee</th>
+                      <th className="px-4 py-3 font-medium">Sched</th>
+                      <th className="px-4 py-3 font-medium">Actual</th>
+                      <th className="px-4 py-3 font-medium">Breaks</th>
+                      <th className="px-4 py-3 font-medium">Regular</th>
+                      <th className="px-4 py-3 font-medium">OT</th>
+                      <th className="px-4 py-3 font-medium">Bonuses</th>
+                      <th className="px-4 py-3 font-medium">Total</th>
+                      <th className="px-4 py-3 font-medium">Flags</th>
+                      <th className="px-4 py-3 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.employeeId} className="border-b border-slate-100">
+                        <td className="px-4 py-3 font-medium">{row.employeeName}</td>
+                        <td className="px-4 py-3">{row.scheduledHours.toFixed(1)}</td>
+                        <td className="px-4 py-3">{row.actualHours.toFixed(1)}</td>
+                        <td className="px-4 py-3">{row.breakHours.toFixed(1)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.regularPay)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.overtimePay)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.bonusTotal)}</td>
+                        <td className="px-4 py-3 font-medium">{formatCurrency(row.totalPay)}</td>
+                        <td className="px-4 py-3 text-xs text-amber-700">
+                          {row.flags.join(", ") || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setBonusModal(row)}
+                          >
+                            <Plus className="h-3 w-3" aria-hidden="true" />
+                            Bonus
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
