@@ -28,6 +28,18 @@ export const PERMISSIONS = {
   REVIEW_TIME_OFF: "review_time_off",
   MANAGE_WORKFORCE_SETTINGS: "manage_workforce_settings",
   REQUEST_TIME_OFF: "request_time_off",
+  // Expense management
+  CREATE_EXPENSE: "create_expense",
+  VIEW_OWN_EXPENSES: "view_own_expenses",
+  VIEW_TEAM_EXPENSES: "view_team_expenses",
+  APPROVE_EXPENSES: "approve_expenses",
+  MANAGE_EXPENSE_CARDS: "manage_expense_cards",
+  MANAGE_EXPENSE_CATEGORIES: "manage_expense_categories",
+  VIEW_EXPENSE_REPORTS: "view_expense_reports",
+  EXPORT_EXPENSES: "export_expenses",
+  MANAGE_EXPENSE_BUDGETS: "manage_expense_budgets",
+  MANAGE_EXPENSE_SETTINGS: "manage_expense_settings",
+  REIMBURSE_EXPENSES: "reimburse_expenses",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -70,6 +82,28 @@ const PRODUCT_OPS: PermissionKey[] = [
   PERMISSIONS.MANAGE_PRODUCTS,
 ];
 
+const EXPENSE_EMPLOYEE: PermissionKey[] = [
+  PERMISSIONS.CREATE_EXPENSE,
+  PERMISSIONS.VIEW_OWN_EXPENSES,
+];
+
+const EXPENSE_MANAGER: PermissionKey[] = [
+  ...EXPENSE_EMPLOYEE,
+  PERMISSIONS.VIEW_TEAM_EXPENSES,
+  PERMISSIONS.APPROVE_EXPENSES,
+  PERMISSIONS.VIEW_EXPENSE_REPORTS,
+];
+
+const EXPENSE_FINANCE: PermissionKey[] = [
+  ...EXPENSE_MANAGER,
+  PERMISSIONS.MANAGE_EXPENSE_CARDS,
+  PERMISSIONS.MANAGE_EXPENSE_CATEGORIES,
+  PERMISSIONS.EXPORT_EXPENSES,
+  PERMISSIONS.MANAGE_EXPENSE_BUDGETS,
+  PERMISSIONS.MANAGE_EXPENSE_SETTINGS,
+  PERMISSIONS.REIMBURSE_EXPENSES,
+];
+
 export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Owner: Object.values(PERMISSIONS),
   Admin: [
@@ -90,6 +124,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     ...WORKFORCE_HR,
     ...WORKFORCE_PAYROLL,
     PERMISSIONS.REQUEST_TIME_OFF,
+    ...EXPENSE_FINANCE,
   ],
   Manager: [
     PERMISSIONS.OPEN_REGISTER,
@@ -110,6 +145,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.REVIEW_TIME_OFF,
     PERMISSIONS.APPROVE_TIME_OFF,
     PERMISSIONS.REQUEST_TIME_OFF,
+    ...EXPENSE_MANAGER,
   ],
   Cashier: [
     PERMISSIONS.OPEN_REGISTER,
@@ -119,14 +155,26 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_CUSTOMERS,
     PERMISSIONS.VIEW_WORKFORCE,
     PERMISSIONS.REQUEST_TIME_OFF,
+    ...EXPENSE_EMPLOYEE,
   ],
   "Inventory Staff": [
     ...PRODUCT_OPS,
     ...INVENTORY_OPS,
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.REQUEST_TIME_OFF,
+    ...EXPENSE_EMPLOYEE,
   ],
-  "Reports Viewer": [PERMISSIONS.VIEW_REPORTS, PERMISSIONS.REQUEST_TIME_OFF],
+  "Reports Viewer": [
+    PERMISSIONS.VIEW_REPORTS,
+    PERMISSIONS.REQUEST_TIME_OFF,
+    PERMISSIONS.VIEW_OWN_EXPENSES,
+    PERMISSIONS.VIEW_EXPENSE_REPORTS,
+  ],
+  Finance: [
+    PERMISSIONS.VIEW_REPORTS,
+    PERMISSIONS.VIEW_PAYROLL,
+    ...EXPENSE_FINANCE,
+  ],
 };
 
 /** @deprecated Use APPROVE_TIME_OFF or REVIEW_TIME_OFF */

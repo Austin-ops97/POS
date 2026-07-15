@@ -20,6 +20,11 @@ const MODULES = [
   { key: "RESTAURANT" as const, name: "Restaurant", description: "Table service, modifiers, and kitchen" },
   { key: "LOYALTY" as const, name: "Loyalty", description: "Points and rewards programs" },
   { key: "GIFT_CARDS" as const, name: "Gift Cards", description: "Sell and redeem gift cards" },
+  {
+    key: "EXPENSES" as const,
+    name: "Expenses",
+    description: "Company cards, reimbursements, receipts, and approvals",
+  },
 ];
 
 const MODULE_ALIASES: Record<string, (typeof MODULE_SETTING_KEYS)[number]> = {
@@ -32,6 +37,8 @@ const MODULE_ALIASES: Record<string, (typeof MODULE_SETTING_KEYS)[number]> = {
   restaurant: "RESTAURANT",
   loyalty: "LOYALTY",
   gift_cards: "GIFT_CARDS",
+  expenses: "EXPENSES",
+  finance: "EXPENSES",
 };
 
 function normalizeModuleKey(module: string): (typeof MODULE_SETTING_KEYS)[number] {

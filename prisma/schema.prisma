@@ -143,6 +143,17 @@ enum AuditAction {
   TIME_ENTRY_ADJUSTMENT
   TIME_OFF_REVIEW
   PAYROLL_BONUS
+  EXPENSE_CREATE
+  EXPENSE_UPDATE
+  EXPENSE_SUBMIT
+  EXPENSE_APPROVE
+  EXPENSE_REJECT
+  EXPENSE_REIMBURSE
+  EXPENSE_FLAG
+  EXPENSE_COMMENT
+  COMPANY_CARD_CHANGE
+  EXPENSE_BUDGET_CHANGE
+  EXPENSE_CATEGORY_CHANGE
 }
 
 enum PayPeriodType {
@@ -255,6 +266,17 @@ model Business {
   payrollBonuses            PayrollBonus[]
   ptoLedgerEntries          PtoLedgerEntry[]
   barcodeMigrationConflicts BarcodeMigrationConflict[]
+  expenseCategories         ExpenseCategory[]
+  expenseVendors            ExpenseVendor[]
+  companyCards              CompanyCard[]
+  expenses                  Expense[]
+  expenseBudgets            ExpenseBudget[]
+  expenseNotifications      ExpenseNotification[]
+  expenseAuditEvents        ExpenseAuditEvent[]
+  companyCardTransactions   CompanyCardTransaction[]
+  expenseSavedFilters       ExpenseSavedFilter[]
+  expenseSettings           ExpenseSettings?
+  expenseTags               ExpenseTag[]
 
   @@index([createdAt])
 }
@@ -287,6 +309,7 @@ model Location {
   defaultEmployees      EmployeeProfile[]      @relation("EmployeeDefaultLocation")
   shifts                Shift[]
   timeEntries           TimeEntry[]
+  expenses              Expense[]
 
   @@index([businessId])
 }
@@ -413,6 +436,17 @@ model EmployeeProfile {
   payrollBonuses        PayrollBonus[]
   payrollBonusesCreated PayrollBonus[]             @relation("PayrollBonusCreatedBy")
   inventoryScanSessions InventoryScanSession[]
+  assignedCompanyCards  CompanyCard[]              @relation("CompanyCardAssignee")
+  companyCardsCreated   CompanyCard[]              @relation("CompanyCardCreatedBy")
+  expenses              Expense[]                  @relation("ExpenseEmployee")
+  expensesSubmitted     Expense[]                  @relation("ExpenseSubmittedBy")
+  expenseApprovals      ExpenseApprovalEvent[]
+  expenseComments       ExpenseComment[]
+  expenseFlagsRaised    ExpenseFlag[]
+  expenseNotifications  ExpenseNotification[]
+  expenseAuditEvents    ExpenseAuditEvent[]
+  expenseSavedFilters   ExpenseSavedFilter[]
+  cardTransactions      CompanyCardTransaction[]
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -1246,4 +1280,504 @@ model PayrollBonus {
   @@index([businessId])
   @@index([employeeId])
   @@index([payPeriodStart, payPeriodEnd])
+}
+
+// ─── Expense Management ──────────────────────────────────────────────────────
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  NEEDS_MORE_INFO
+  REIMBURSED
+  PAID
+  ARCHIVED
+}
+
+enum ExpensePaymentMethod {
+  COMPANY_CARD
+  PERSONAL_CARD
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum CompanyCardType {
+  CREDIT
+  DEBIT
+  VIRTUAL
+  CHARGE
+}
+
+enum CompanyCardStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+enum ExpenseFlagType {
+  DUPLICATE
+  LARGE_PURCHASE
+  WEEKEND
+  AFTER_HOURS
+  WRONG_CATEGORY
+  SPLIT_TRANSACTION
+  REPEATED_IDENTICAL
+  OUT_OF_POLICY
+  MISSING_RECEIPT
+  MANUAL
+}
+
+enum ExpenseFlagSeverity {
+  INFO
+  WARNING
+  HIGH
+}
+
+enum ExpenseNotificationType {
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  RECEIPT_MISSING
+  MANAGER_COMMENTED
+  BUDGET_EXCEEDED
+  PENDING_APPROVAL
+  LARGE_PURCHASE
+  SUSPICIOUS_PURCHASE
+  REQUEST_CHANGES
+  REIMBURSEMENT_PAID
+}
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum CardTransactionSource {
+  MANUAL
+  STRIPE
+  AMEX
+  CHASE
+  CAPITAL_ONE
+  BREX
+  RAMP
+  PLAID
+  OTHER
+}
+
+enum ExpenseReceiptKind {
+  IMAGE
+  PDF
+}
+
+model ExpenseSettings {
+  id                      String   @id @default(cuid())
+  businessId              String   @unique
+  largePurchaseThreshold  Decimal  @default(500) @db.Decimal(12, 2)
+  requireReceiptAbove     Decimal  @default(25) @db.Decimal(12, 2)
+  afterHoursStart         Int      @default(20)
+  afterHoursEnd           Int      @default(6)
+  weekendFlagsEnabled     Boolean  @default(true)
+  autoSubmitOnCreate      Boolean  @default(false)
+  defaultCurrency         String   @default("USD")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model ExpenseCategory {
+  id          String    @id @default(cuid())
+  businessId  String
+  name        String
+  slug        String
+  description String?
+  isSystem    Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  business       Business                      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses       Expense[]
+  budgets        ExpenseBudget[]
+  vendors        ExpenseVendor[]
+  allowedOnCards CompanyCardAllowedCategory[]
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+  @@index([businessId, isActive])
+}
+
+model ExpenseVendor {
+  id           String    @id @default(cuid())
+  businessId   String
+  name         String
+  normalizedName String
+  categoryId   String?
+  address      String?
+  phone        String?
+  website      String?
+  notes        String?
+  isFavorite   Boolean   @default(false)
+  purchaseCount Int      @default(0)
+  totalSpend   Decimal   @default(0) @db.Decimal(14, 2)
+  averageSpend Decimal   @default(0) @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  expenses Expense[]
+
+  @@unique([businessId, normalizedName])
+  @@index([businessId])
+  @@index([businessId, name])
+}
+
+model CompanyCard {
+  id                 String            @id @default(cuid())
+  businessId         String
+  name               String
+  lastFour           String
+  bank               String?
+  cardType           CompanyCardType   @default(CREDIT)
+  assignedEmployeeId String?
+  monthlyLimit       Decimal?          @db.Decimal(12, 2)
+  dailyLimit         Decimal?          @db.Decimal(12, 2)
+  status             CompanyCardStatus @default(ACTIVE)
+  notes              String?
+  /// Future sync provider key (stripe, amex, plaid, etc.)
+  syncProvider       String?
+  syncExternalId     String?
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+
+  business         Business                      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignedEmployee EmployeeProfile?              @relation("CompanyCardAssignee", fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  createdBy        EmployeeProfile?              @relation("CompanyCardCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  allowedCategories CompanyCardAllowedCategory[]
+  expenses         Expense[]
+  transactions     CompanyCardTransaction[]
+
+  @@index([businessId])
+  @@index([businessId, lastFour])
+  @@index([assignedEmployeeId])
+  @@index([status])
+}
+
+model CompanyCardAllowedCategory {
+  id         String @id @default(cuid())
+  cardId     String
+  categoryId String
+
+  card     CompanyCard     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, categoryId])
+}
+
+/// Abstraction layer for card feeds (manual today; Stripe/Amex/Plaid later).
+model CompanyCardTransaction {
+  id              String                @id @default(cuid())
+  businessId      String
+  companyCardId   String?
+  employeeId      String?
+  source          CardTransactionSource @default(MANUAL)
+  externalId      String?
+  merchantName    String
+  amount          Decimal               @db.Decimal(12, 2)
+  currency        String                @default("USD")
+  purchasedAt     DateTime
+  rawPayload      Json?
+  matchedExpenseId String?              @unique
+  postedAt        DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+
+  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  companyCard  CompanyCard?     @relation(fields: [companyCardId], references: [id], onDelete: SetNull)
+  employee     EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  matchedExpense Expense?       @relation(fields: [matchedExpenseId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, source, externalId])
+  @@index([businessId])
+  @@index([companyCardId])
+  @@index([purchasedAt])
+}
+
+model Expense {
+  id                 String               @id @default(cuid())
+  businessId         String
+  employeeId         String
+  submittedById      String?
+  categoryId         String?
+  vendorId           String?
+  companyCardId      String?
+  locationId         String?
+  department         String?
+  project            String?
+  jobNumber          String?
+  merchant           String
+  amount             Decimal              @db.Decimal(12, 2)
+  tax                Decimal              @default(0) @db.Decimal(12, 2)
+  tip                Decimal              @default(0) @db.Decimal(12, 2)
+  total              Decimal              @db.Decimal(12, 2)
+  currency           String               @default("USD")
+  purchaseDate       DateTime             @db.Date
+  paymentMethod      ExpensePaymentMethod @default(COMPANY_CARD)
+  mileageMiles       Decimal?             @db.Decimal(10, 2)
+  mileageRate        Decimal?             @db.Decimal(8, 4)
+  notes              String?
+  status             ExpenseStatus        @default(DRAFT)
+  missingReceipt     Boolean              @default(false)
+  receiptReminderAt  DateTime?
+  reimbursedAt       DateTime?
+  reimbursedAmount   Decimal?             @db.Decimal(12, 2)
+  paidAt             DateTime?
+  approvedAt         DateTime?
+  rejectedAt         DateTime?
+  submittedAt        DateTime?
+  archivedAt         DateTime?
+  contentHash        String?
+  ocrRawText         String?
+  ocrConfidence      Decimal?             @db.Decimal(5, 2)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deletedAt          DateTime?
+
+  business         Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee         EmployeeProfile         @relation("ExpenseEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  submittedBy      EmployeeProfile?        @relation("ExpenseSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  category         ExpenseCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  vendor           ExpenseVendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  companyCard      CompanyCard?            @relation(fields: [companyCardId], references: [id], onDelete: SetNull)
+  location         Location?               @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  receipts         ExpenseReceipt[]
+  lineItems        ExpenseLineItem[]
+  tags             ExpenseTagAssignment[]
+  comments         ExpenseComment[]
+  approvalEvents   ExpenseApprovalEvent[]
+  flags            ExpenseFlag[]
+  matchedTransaction CompanyCardTransaction?
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([businessId, purchaseDate])
+  @@index([employeeId])
+  @@index([categoryId])
+  @@index([vendorId])
+  @@index([companyCardId])
+  @@index([locationId])
+  @@index([merchant])
+  @@index([total])
+  @@index([contentHash])
+  @@index([deletedAt])
+}
+
+model ExpenseReceipt {
+  id            String             @id @default(cuid())
+  expenseId     String
+  kind          ExpenseReceiptKind @default(IMAGE)
+  fileName      String
+  mimeType      String
+  sizeBytes     Int
+  /// Data URL or storage URL — never store full PAN/card numbers from OCR into notes alone.
+  storageUrl    String
+  pageNumber    Int                @default(1)
+  width         Int?
+  height        Int?
+  contentHash   String?
+  ocrText       String?
+  enhanced      Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  deletedAt     DateTime?
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+  @@index([contentHash])
+}
+
+model ExpenseLineItem {
+  id          String   @id @default(cuid())
+  expenseId   String
+  description String
+  quantity    Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal? @db.Decimal(12, 2)
+  amount      Decimal  @db.Decimal(12, 2)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model ExpenseTag {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  color      String?  @default("#64748b")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business    Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignments ExpenseTagAssignment[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+model ExpenseTagAssignment {
+  id        String @id @default(cuid())
+  expenseId String
+  tagId     String
+
+  expense Expense    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  tag     ExpenseTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, tagId])
+}
+
+model ExpenseComment {
+  id         String   @id @default(cuid())
+  expenseId  String
+  authorId   String
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  expense Expense         @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  author  EmployeeProfile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model ExpenseApprovalEvent {
+  id         String        @id @default(cuid())
+  expenseId  String
+  actorId    String
+  fromStatus ExpenseStatus?
+  toStatus   ExpenseStatus
+  action     String
+  note       String?
+  createdAt  DateTime      @default(now())
+
+  expense Expense         @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  actor   EmployeeProfile @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+  @@index([createdAt])
+}
+
+model ExpenseFlag {
+  id          String              @id @default(cuid())
+  expenseId   String
+  type        ExpenseFlagType
+  severity    ExpenseFlagSeverity @default(WARNING)
+  message     String
+  resolved    Boolean             @default(false)
+  raisedById  String?
+  createdAt   DateTime            @default(now())
+  resolvedAt  DateTime?
+
+  expense  Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  raisedBy EmployeeProfile? @relation(fields: [raisedById], references: [id], onDelete: SetNull)
+
+  @@index([expenseId])
+  @@index([type])
+}
+
+model ExpenseBudget {
+  id         String       @id @default(cuid())
+  businessId String
+  categoryId String
+  period     BudgetPeriod
+  amount     Decimal      @db.Decimal(14, 2)
+  year       Int
+  month      Int?
+  quarter    Int?
+  alert75    Boolean      @default(true)
+  alert90    Boolean      @default(true)
+  alert100   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  deletedAt  DateTime?
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, categoryId, period, year, month, quarter])
+  @@index([businessId])
+  @@index([categoryId])
+}
+
+model ExpenseNotification {
+  id         String                  @id @default(cuid())
+  businessId String
+  employeeId String
+  type       ExpenseNotificationType
+  title      String
+  body       String
+  expenseId  String?
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime                @default(now())
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId, readAt])
+  @@index([createdAt])
+}
+
+/// Immutable expense-domain audit trail with before/after snapshots.
+model ExpenseAuditEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  actorId    String?
+  expenseId  String?
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    EmployeeProfile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([expenseId])
+  @@index([createdAt])
+  @@index([entity])
+}
+
+model ExpenseSavedFilter {
+  id         String   @id @default(cuid())
+  businessId String
+  employeeId String
+  name       String
+  filters    Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, name])
+  @@index([businessId])
 }

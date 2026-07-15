@@ -60,6 +60,7 @@ export const MODULE_SETTING_KEYS = [
   "RESTAURANT",
   "LOYALTY",
   "GIFT_CARDS",
+  "EXPENSES",
 ] as const;
 
 export const moduleSettingsSchema = z

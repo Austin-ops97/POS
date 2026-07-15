@@ -27,6 +27,9 @@ export function normalizeModuleKey(key: string): string {
     gift_cards: "GIFT_CARDS",
     giftcards: "GIFT_CARDS",
     inventory: "RETAIL",
+    expenses: "EXPENSES",
+    finance: "EXPENSES",
+    expense_management: "EXPENSES",
   };
   const lower = key.toLowerCase();
   if (aliases[lower]) return aliases[lower];
