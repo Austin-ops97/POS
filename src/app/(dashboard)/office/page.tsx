@@ -70,6 +70,9 @@ export default async function OfficePage() {
       metrics={{ documents, customers, employees, openOrders, openWork, pendingExpenses }}
       recentRecords={recentRecords.map((record) => ({
         ...record,
+        metadata: record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+          ? record.metadata as Record<string, unknown>
+          : null,
         dueAt: record.dueAt?.toISOString() ?? null,
         createdAt: record.createdAt.toISOString(),
         updatedAt: record.updatedAt.toISOString(),
