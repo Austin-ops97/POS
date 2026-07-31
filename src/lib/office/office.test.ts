@@ -46,6 +46,16 @@ describe("Office content security", () => {
     assert.match(clean, /colspan="2"/);
   });
 
+  it("preserves page layout, headers, footers, and page-number fields", () => {
+    const clean = sanitizeOfficeContent(
+      '<div class="office-document-layout" data-page-size="letter" data-orientation="portrait" data-margin-preset="custom" data-margin-top="0.75" data-margin-right="1" data-margin-bottom="0.75" data-margin-left="1"><div class="office-document-header"><p>Confidential</p></div><div class="office-document-body"><p>Report</p></div><div class="office-document-footer"><p class="office-page-number">Page </p></div></div>'
+    );
+    assert.match(clean, /class="office-document-layout"/);
+    assert.match(clean, /data-margin-top="0.75"/);
+    assert.match(clean, /class="office-document-header"/);
+    assert.match(clean, /class="office-page-number"/);
+  });
+
   it("extracts normalized search text", () => {
     assert.equal(officeContentText("<p>Hello&nbsp; <strong>world</strong></p>"), "Hello world");
   });

@@ -35,10 +35,13 @@ import {
   ListOrdered,
   Loader2,
   LockKeyhole,
+  Maximize2,
   Minus,
   MoreHorizontal,
   Paintbrush,
   Pilcrow,
+  PanelBottom,
+  PanelTop,
   Printer,
   Redo2,
   Replace,
@@ -76,7 +79,9 @@ type SaveState = "saved" | "saving" | "unsaved" | "error";
 type RibbonTab = "Home" | "Insert" | "Layout" | "Review" | "View";
 type PageSize = "letter" | "legal" | "a4";
 type Orientation = "portrait" | "landscape";
-type MarginSize = "normal" | "narrow" | "wide";
+type MarginSize = "normal" | "narrow" | "moderate" | "wide" | "custom";
+type PageMargins = { top: number; right: number; bottom: number; left: number };
+type PageLayout = PageMargins & { pageSize: PageSize; orientation: Orientation; margins: MarginSize };
 
 const RIBBON_TABS: RibbonTab[] = ["Home", "Insert", "Layout", "Review", "View"];
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72];
@@ -87,6 +92,52 @@ const FONT_FAMILIES = [
   ["Times New Roman", "'Times New Roman', serif"],
   ["Verdana", "Verdana, sans-serif"],
 ] as const;
+
+const MARGIN_PRESETS: Record<Exclude<MarginSize, "custom">, PageMargins> = {
+  normal: { top: 1, right: 1, bottom: 1, left: 1 },
+  narrow: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
+  moderate: { top: 1, right: 0.75, bottom: 1, left: 0.75 },
+  wide: { top: 1, right: 2, bottom: 1, left: 2 },
+};
+
+function clampMargin(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(3, Math.max(0.25, numeric)) : fallback;
+}
+
+function parseStoredContent(content: string) {
+  const container = window.document.createElement("div");
+  container.innerHTML = content || "<p><br></p>";
+  const wrapper = container.firstElementChild?.matches(".office-document-layout")
+    ? container.firstElementChild as HTMLElement
+    : null;
+  if (!wrapper) return { body: content || "<p><br></p>", header: "", footer: "", layout: null };
+
+  const body = wrapper.querySelector<HTMLElement>(":scope > .office-document-body");
+  const header = wrapper.querySelector<HTMLElement>(":scope > .office-document-header");
+  const footer = wrapper.querySelector<HTMLElement>(":scope > .office-document-footer");
+  const pageSize = wrapper.dataset.pageSize;
+  const orientation = wrapper.dataset.orientation;
+  const margins = wrapper.dataset.marginPreset;
+  const validPageSize = pageSize === "letter" || pageSize === "legal" || pageSize === "a4" ? pageSize : "letter";
+  const validOrientation = orientation === "landscape" ? "landscape" : "portrait";
+  const validMargins = margins === "narrow" || margins === "moderate" || margins === "wide" || margins === "custom" ? margins : "normal";
+  const preset = validMargins === "custom" ? MARGIN_PRESETS.normal : MARGIN_PRESETS[validMargins];
+  return {
+    body: body?.innerHTML || "<p><br></p>",
+    header: header?.innerHTML || "",
+    footer: footer?.innerHTML || "",
+    layout: {
+      pageSize: validPageSize,
+      orientation: validOrientation,
+      margins: validMargins,
+      top: clampMargin(wrapper.dataset.marginTop, preset.top),
+      right: clampMargin(wrapper.dataset.marginRight, preset.right),
+      bottom: clampMargin(wrapper.dataset.marginBottom, preset.bottom),
+      left: clampMargin(wrapper.dataset.marginLeft, preset.left),
+    } satisfies PageLayout,
+  };
+}
 
 function apiMessage(response: Response) {
   return response
@@ -190,6 +241,9 @@ function ToolbarSelect({
 export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
   const router = useRouter();
   const editorRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const activeSurfaceRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef(document.content);
   const titleRef = useRef(document.title);
@@ -203,7 +257,9 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
   const statsTimerRef = useRef<number | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const saveRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => true);
+  const markDirtyRef = useRef<() => void>(() => undefined);
   const serverUpdatedAt = useRef(new Date(document.updatedAt).getTime());
+  const layoutRef = useRef<PageLayout>({ pageSize: "letter", orientation: "portrait", margins: "normal", ...MARGIN_PRESETS.normal });
 
   const [title, setTitle] = useState(document.title);
   const [status, setStatus] = useState(document.status);
@@ -229,6 +285,11 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
   const [pageSize, setPageSize] = useState<PageSize>("letter");
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [margins, setMargins] = useState<MarginSize>("normal");
+  const [pageMargins, setPageMargins] = useState<PageMargins>(MARGIN_PRESETS.normal);
+  const [showPageSetup, setShowPageSetup] = useState(false);
+  const [showHeader, setShowHeader] = useState(false);
+  const [showFooter, setShowFooter] = useState(false);
+  const [focusWindow, setFocusWindow] = useState(false);
   const [showMarks, setShowMarks] = useState(false);
   const [recoveryAvailable, setRecoveryAvailable] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -248,19 +309,49 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     return orientation === "portrait" ? base : { width: base.height, height: base.width };
   }, [orientation, pageSize]);
 
-  const marginInches = margins === "narrow" ? 0.5 : margins === "wide" ? 1.5 : 1;
+  const { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft } = pageMargins;
+
+  const syncDocumentContent = useCallback(() => {
+    const layout = layoutRef.current;
+    contentRef.current = `<div class="office-document-layout" data-page-size="${layout.pageSize}" data-orientation="${layout.orientation}" data-margin-preset="${layout.margins}" data-margin-top="${layout.top}" data-margin-right="${layout.right}" data-margin-bottom="${layout.bottom}" data-margin-left="${layout.left}"><div class="office-document-header">${headerRef.current?.innerHTML ?? ""}</div><div class="office-document-body">${editorRef.current?.innerHTML || "<p><br></p>"}</div><div class="office-document-footer">${footerRef.current?.innerHTML ?? ""}</div></div>`;
+  }, []);
+
+  const applyLayout = useCallback((next: PageLayout, dirty = true) => {
+    layoutRef.current = next;
+    setPageSize(next.pageSize);
+    setOrientation(next.orientation);
+    setMargins(next.margins);
+    setPageMargins({ top: next.top, right: next.right, bottom: next.bottom, left: next.left });
+    if (dirty) {
+      window.setTimeout(() => {
+        syncDocumentContent();
+        markDirtyRef.current();
+      }, 0);
+    }
+  }, [syncDocumentContent]);
 
   useLayoutEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = document.content || "<p><br></p>";
+    const parsed = parseStoredContent(document.content);
+    if (editorRef.current) editorRef.current.innerHTML = parsed.body;
+    if (headerRef.current) headerRef.current.innerHTML = parsed.header;
+    if (footerRef.current) footerRef.current.innerHTML = parsed.footer;
+    setShowHeader(Boolean(headerRef.current?.innerText.trim()));
+    setShowFooter(Boolean(footerRef.current?.innerText.trim()));
     contentRef.current = document.content || "<p><br></p>";
     setStats(countDocument(editorRef.current?.innerText ?? ""));
 
     try {
       const layout = JSON.parse(window.localStorage.getItem(layoutKey) ?? "null");
-      if (layout?.pageSize === "letter" || layout?.pageSize === "legal" || layout?.pageSize === "a4") setPageSize(layout.pageSize);
-      if (layout?.orientation === "portrait" || layout?.orientation === "landscape") setOrientation(layout.orientation);
-      if (layout?.margins === "normal" || layout?.margins === "narrow" || layout?.margins === "wide") setMargins(layout.margins);
+      const storedLayout = parsed.layout ?? (layout?.pageSize ? {
+        pageSize: layout.pageSize === "legal" || layout.pageSize === "a4" ? layout.pageSize : "letter",
+        orientation: layout.orientation === "landscape" ? "landscape" : "portrait",
+        margins: layout.margins === "narrow" || layout.margins === "moderate" || layout.margins === "wide" || layout.margins === "custom" ? layout.margins : "normal",
+        top: clampMargin(layout.top, 1), right: clampMargin(layout.right, 1), bottom: clampMargin(layout.bottom, 1), left: clampMargin(layout.left, 1),
+      } as PageLayout : layoutRef.current);
+      applyLayout(storedLayout, false);
       if (typeof layout?.zoom === "number") setZoom(Math.min(200, Math.max(50, layout.zoom)));
+
+      setFocusWindow(new URLSearchParams(window.location.search).get("focus") === "1");
 
       const recovery = JSON.parse(window.localStorage.getItem(recoveryKey) ?? "null");
       if (recovery?.content && recovery.updatedAt > serverUpdatedAt.current && recovery.content !== document.content) {
@@ -269,11 +360,11 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     } catch {
       // A malformed browser cache must never prevent the server document from opening.
     }
-  }, [document.content, document.id, layoutKey, recoveryKey]);
+  }, [applyLayout, document.content, document.id, layoutKey, recoveryKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(layoutKey, JSON.stringify({ pageSize, orientation, margins, zoom }));
-  }, [layoutKey, margins, orientation, pageSize, zoom]);
+    window.localStorage.setItem(layoutKey, JSON.stringify({ ...pageMargins, pageSize, orientation, margins, zoom }));
+  }, [layoutKey, margins, orientation, pageMargins, pageSize, zoom]);
 
   const save = useCallback(async (silent = false) => {
     if (!editable) return true;
@@ -355,6 +446,8 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     }, 180);
   }, [recoveryKey]);
 
+  markDirtyRef.current = markDirty;
+
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (revisionRef.current <= savedRevisionRef.current) return;
@@ -374,7 +467,11 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     const editor = editorRef.current;
     if (!selection?.rangeCount || !editor) return;
     const range = selection.getRangeAt(0);
-    if (editor.contains(range.commonAncestorContainer)) savedRangeRef.current = range.cloneRange();
+    const surface = [editor, headerRef.current, footerRef.current].find((item) => item?.contains(range.commonAncestorContainer));
+    if (surface) {
+      savedRangeRef.current = range.cloneRange();
+      activeSurfaceRef.current = surface;
+    }
 
     setFormatState({
       bold: window.document.queryCommandState("bold"),
@@ -400,17 +497,17 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     restoreSelection();
     window.document.execCommand("styleWithCSS", false, "true");
     window.document.execCommand(name, false, value);
-    editorRef.current?.focus();
-    contentRef.current = editorRef.current?.innerHTML ?? "";
+    activeSurfaceRef.current?.focus();
+    syncDocumentContent();
     captureSelection();
     markDirty();
   }
 
   function insertHtml(html: string) {
     restoreSelection();
-    editorRef.current?.focus();
+    (activeSurfaceRef.current ?? editorRef.current)?.focus();
     window.document.execCommand("insertHTML", false, html);
-    contentRef.current = editorRef.current?.innerHTML ?? "";
+    syncDocumentContent();
     markDirty();
   }
 
@@ -435,7 +532,7 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
       if (block && editor.contains(block)) blocks.push(block);
     }
     blocks.forEach((block) => { block.style.lineHeight = value; });
-    contentRef.current = editor.innerHTML;
+    syncDocumentContent();
     editor.focus();
     markDirty();
   }
@@ -547,7 +644,7 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     const index = findIndex < 0 ? 0 : Math.min(findIndex, ranges.length - 1);
     ranges[index].deleteContents();
     ranges[index].insertNode(window.document.createTextNode(replaceText));
-    contentRef.current = editorRef.current?.innerHTML ?? "";
+    syncDocumentContent();
     markDirty();
     setFindRevision((value) => value + 1);
   }
@@ -559,7 +656,7 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
       range.deleteContents();
       range.insertNode(window.document.createTextNode(replaceText));
     });
-    contentRef.current = editorRef.current?.innerHTML ?? "";
+    syncDocumentContent();
     markDirty();
     setFindRevision((value) => value + 1);
     toast.success(`Replaced ${ranges.length} ${ranges.length === 1 ? "match" : "matches"}`);
@@ -569,8 +666,14 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     try {
       const recovery = JSON.parse(window.localStorage.getItem(recoveryKey) ?? "null");
       if (!recovery?.content || !editorRef.current) return;
-      editorRef.current.innerHTML = recovery.content;
-      contentRef.current = recovery.content;
+      const parsed = parseStoredContent(recovery.content);
+      editorRef.current.innerHTML = parsed.body;
+      if (headerRef.current) headerRef.current.innerHTML = parsed.header;
+      if (footerRef.current) footerRef.current.innerHTML = parsed.footer;
+      setShowHeader(Boolean(headerRef.current?.innerText.trim()));
+      setShowFooter(Boolean(footerRef.current?.innerText.trim()));
+      if (parsed.layout) applyLayout(parsed.layout, false);
+      syncDocumentContent();
       if (recovery.title) {
         setTitle(recovery.title);
         titleRef.current = recovery.title;
@@ -679,11 +782,73 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     })();
   }
 
+  function updatePageSize(value: PageSize) {
+    applyLayout({ ...layoutRef.current, pageSize: value });
+  }
+
+  function updateOrientation(value: Orientation) {
+    applyLayout({ ...layoutRef.current, orientation: value });
+  }
+
+  function updateMarginPreset(value: MarginSize) {
+    if (value === "custom") {
+      applyLayout({ ...layoutRef.current, margins: "custom" });
+      setShowPageSetup(true);
+      return;
+    }
+    applyLayout({ ...layoutRef.current, margins: value, ...MARGIN_PRESETS[value] });
+  }
+
+  function updateCustomMargin(side: keyof PageMargins, value: number) {
+    applyLayout({ ...layoutRef.current, margins: "custom", [side]: clampMargin(value, layoutRef.current[side]) });
+  }
+
+  function enableHeaderFooter(target: "header" | "footer") {
+    const reference = target === "header" ? headerRef : footerRef;
+    if (target === "header") setShowHeader(true);
+    else setShowFooter(true);
+    window.setTimeout(() => {
+      const surface = reference.current;
+      if (!surface) return;
+      if (!surface.innerHTML.trim()) surface.innerHTML = "<p><br></p>";
+      activeSurfaceRef.current = surface;
+      surface.focus();
+      syncDocumentContent();
+      markDirty();
+    }, 0);
+  }
+
+  function insertPageNumber(target: "header" | "footer") {
+    enableHeaderFooter(target);
+    window.setTimeout(() => {
+      const surface = target === "header" ? headerRef.current : footerRef.current;
+      if (!surface) return;
+      surface.innerHTML = `${surface.innerHTML.replace(/<p><br><\/p>$/i, "")}<p class="office-page-number">Page </p>`;
+      syncDocumentContent();
+      markDirty();
+    }, 10);
+  }
+
+  async function printDocument() {
+    syncDocumentContent();
+    if (revisionRef.current > savedRevisionRef.current) await save(true);
+    window.setTimeout(() => window.print(), 50);
+  }
+
+  function openFocusWindow() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("focus", "1");
+    const popup = window.open(url.toString(), `nexapos-office-${document.id}`, `popup=yes,width=${window.screen.availWidth},height=${window.screen.availHeight},left=0,top=0`);
+    if (!popup) toast.error("Allow pop-ups to open the editor in its own window");
+    else popup.focus();
+  }
+
   const statusText = saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed — local copy retained" : "All changes saved";
-  const estimatedPages = Math.max(1, Math.ceil((editorRef.current?.scrollHeight ?? 1) / (pageDimensions.height * 96 - marginInches * 192)));
+  const estimatedPages = Math.max(1, Math.ceil((editorRef.current?.scrollHeight ?? 1) / Math.max(96, (pageDimensions.height - marginTop - marginBottom) * 96)));
 
   return (
-    <div className="office-editor-shell page-flush min-h-[calc(100dvh-4rem)] bg-[#eef1f5]">
+    <div className={cn("office-editor-shell page-flush min-h-[calc(100dvh-4rem)] bg-[#eef1f5]", focusWindow && "fixed inset-0 z-[100] min-h-dvh overflow-auto")}>
+      <style media="print">{`@page { size: ${pageSize} ${orientation}; margin: ${marginTop}in ${marginRight}in ${marginBottom}in ${marginLeft}in; }`}</style>
       <header className="sticky top-0 z-30 border-b border-slate-300 bg-white shadow-sm print:hidden">
         <div className="flex min-h-14 items-center gap-2 px-2 sm:px-4">
           <Button asChild variant="ghost" size="icon"><Link href="/office" aria-label="Back to Office"><ArrowLeft className="h-5 w-5" /></Link></Button>
@@ -718,7 +883,8 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
             {document.kind === "TEMPLATE" ? <Button variant="outline" size="sm" onClick={() => void createFromTemplate()}><CopyPlus className="h-4 w-4" />Use template</Button> : null}
             <Button variant="ghost" size="icon" onClick={() => setShowFind((value) => !value)} aria-label="Find and replace"><Search className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" onClick={() => setShowHistory((value) => !value)} aria-label="Version history"><FileClock className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" onClick={() => window.print()} aria-label="Print"><Printer className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={openFocusWindow} aria-label="Open in separate full-screen window" title="Open in separate window"><Maximize2 className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => void printDocument()} aria-label="Print"><Printer className="h-4 w-4" /></Button>
             {editable ? <Button size="sm" onClick={() => void save(false)}><Save className="h-4 w-4" />Save</Button> : null}
           </div>
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setActiveTab((tab) => tab === "Home" ? "Insert" : "Home")} aria-label="More editor tools"><MoreHorizontal className="h-5 w-5" /></Button>
@@ -799,13 +965,19 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
                 <ToolButton label="Date and time" onClick={() => insertHtml(`<time datetime="${new Date().toISOString()}">${new Date().toLocaleString()}</time>`)}><FileClock className="h-5 w-5" /></ToolButton>
                 <ToolButton label="Symbol" onClick={() => { const symbol = window.prompt("Enter a symbol", "©"); if (symbol) insertHtml(symbol.replace(/[<>]/g, "")); }}><span className="text-lg">Ω</span></ToolButton>
               </RibbonGroup>
+              <RibbonGroup label="Header & footer">
+                <ToolButton label="Add or edit header" active={showHeader} onClick={() => enableHeaderFooter("header")}><PanelTop className="h-5 w-5" /></ToolButton>
+                <ToolButton label="Add or edit footer" active={showFooter} onClick={() => enableHeaderFooter("footer")}><PanelBottom className="h-5 w-5" /></ToolButton>
+                <ToolButton label="Page number in footer" onClick={() => insertPageNumber("footer")}><span className="text-xs font-semibold">#</span></ToolButton>
+              </RibbonGroup>
             </> : null}
 
             {activeTab === "Layout" ? <>
               <RibbonGroup label="Page setup">
-                <ToolbarSelect label="Paper size" value={pageSize} onChange={(value) => setPageSize(value as PageSize)} className="w-28"><option value="letter">Letter 8.5 × 11</option><option value="legal">Legal 8.5 × 14</option><option value="a4">A4</option></ToolbarSelect>
-                <ToolbarSelect label="Orientation" value={orientation} onChange={(value) => setOrientation(value as Orientation)} className="w-24"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></ToolbarSelect>
-                <ToolbarSelect label="Margins" value={margins} onChange={(value) => setMargins(value as MarginSize)} className="w-24"><option value="normal">Normal</option><option value="narrow">Narrow</option><option value="wide">Wide</option></ToolbarSelect>
+                <ToolbarSelect label="Paper size" value={pageSize} onChange={(value) => updatePageSize(value as PageSize)} className="w-28"><option value="letter">Letter 8.5 × 11</option><option value="legal">Legal 8.5 × 14</option><option value="a4">A4 8.27 × 11.69</option></ToolbarSelect>
+                <ToolbarSelect label="Orientation" value={orientation} onChange={(value) => updateOrientation(value as Orientation)} className="w-24"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></ToolbarSelect>
+                <ToolbarSelect label="Margins" value={margins} onChange={(value) => updateMarginPreset(value as MarginSize)} className="w-28"><option value="normal">Normal · 1 in</option><option value="narrow">Narrow · 0.5 in</option><option value="moderate">Moderate</option><option value="wide">Wide</option><option value="custom">Custom margins…</option></ToolbarSelect>
+                <ToolButton label="Detailed page setup" onClick={() => setShowPageSetup(true)}><span className="text-xs font-semibold">↘</span></ToolButton>
               </RibbonGroup>
               <RibbonGroup label="Breaks"><ToolButton label="Insert page break" onClick={insertPageBreak}><FileDown className="h-5 w-5" /></ToolButton></RibbonGroup>
               <RibbonGroup label="Paragraph">
@@ -846,22 +1018,48 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
         <div className="mt-2 flex gap-1"><input value={replaceText} onChange={(event) => setReplaceText(event.target.value)} placeholder="Replace with" className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" /><Button variant="outline" size="sm" onClick={replaceCurrent} disabled={!findCount}><Replace className="h-4 w-4" />Replace</Button><Button variant="outline" size="sm" onClick={replaceAll} disabled={!findCount}>All</Button></div>
       </div> : null}
 
+      {showPageSetup ? <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/35 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="page-setup-title">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h2 id="page-setup-title" className="font-semibold text-slate-950">Page setup</h2><p className="text-xs text-slate-500">These settings are saved with the document and applied when printing.</p></div><button type="button" onClick={() => setShowPageSetup(false)} className="rounded-md p-1.5 hover:bg-slate-100" aria-label="Close page setup"><X className="h-4 w-4" /></button></div>
+          <div className="grid gap-5 p-5 sm:grid-cols-2">
+            <fieldset className="space-y-3"><legend className="text-sm font-semibold text-slate-800">Paper</legend><label className="block text-xs text-slate-600">Size<ToolbarSelect label="Paper size" value={pageSize} onChange={(value) => updatePageSize(value as PageSize)} className="mt-1 w-full"><option value="letter">Letter — 8.5 × 11 in</option><option value="legal">Legal — 8.5 × 14 in</option><option value="a4">A4 — 210 × 297 mm</option></ToolbarSelect></label><label className="block text-xs text-slate-600">Orientation<ToolbarSelect label="Orientation" value={orientation} onChange={(value) => updateOrientation(value as Orientation)} className="mt-1 w-full"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></ToolbarSelect></label></fieldset>
+            <fieldset><legend className="text-sm font-semibold text-slate-800">Margins (inches)</legend><div className="mt-3 grid grid-cols-2 gap-3">{(["top", "bottom", "left", "right"] as const).map((side) => <label key={side} className="text-xs capitalize text-slate-600">{side}<input type="number" min="0.25" max="3" step="0.05" value={pageMargins[side]} onChange={(event) => updateCustomMargin(side, Number(event.target.value))} className="mt-1 h-9 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" /></label>)}</div></fieldset>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4"><Button variant="outline" size="sm" onClick={() => updateMarginPreset("normal")}>Restore normal margins</Button><div className="flex gap-2"><Button variant="outline" onClick={() => setShowPageSetup(false)}>Cancel</Button><Button onClick={() => setShowPageSetup(false)}>Apply</Button></div></div>
+        </div>
+      </div> : null}
+
       <div className="mx-auto flex max-w-[100rem] gap-5 px-3 py-5 sm:px-6">
         <main className="min-w-0 flex-1 overflow-auto pb-14">
           <div className="office-page-frame mx-auto origin-top transition-[width] duration-150" style={{ width: `${pageDimensions.width * 96 * zoom / 100}px`, maxWidth: "none" }}>
             <div
               className="office-paper mx-auto bg-white text-slate-950 shadow-[0_2px_12px_rgba(15,23,42,0.16)] ring-1 ring-slate-300"
               style={{
-                "--office-page-margin": `${marginInches}in`,
+                "--office-page-margin": `${marginLeft}in`,
+                "--office-margin-top": `${marginTop}in`,
+                "--office-margin-right": `${marginRight}in`,
+                "--office-margin-bottom": `${marginBottom}in`,
+                "--office-margin-left": `${marginLeft}in`,
                 minHeight: `${pageDimensions.height * 96}px`,
                 width: `${pageDimensions.width * 96}px`,
-                padding: `${marginInches * 96}px`,
+                padding: `${marginTop * 96}px ${marginRight * 96}px ${marginBottom * 96}px ${marginLeft * 96}px`,
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: "top left",
               } as React.CSSProperties}
               data-page-size={pageSize}
               data-orientation={orientation}
             >
+              <div
+                ref={headerRef}
+                contentEditable={editable}
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Document header"
+                data-placeholder="Type header"
+                onFocus={captureSelection}
+                onInput={() => { syncDocumentContent(); markDirty(); }}
+                className={cn("office-header-surface outline-none", !showHeader && "hidden")}
+              />
               <div
                 ref={editorRef}
                 contentEditable={editable}
@@ -872,15 +1070,28 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
                 aria-multiline="true"
                 onFocus={captureSelection}
                 onInput={(event) => {
-                  contentRef.current = event.currentTarget.innerHTML;
+                  void event;
+                  syncDocumentContent();
                   markDirty();
                 }}
                 onPaste={() => window.setTimeout(() => {
-                  contentRef.current = editorRef.current?.innerHTML ?? "";
+                  syncDocumentContent();
                   markDirty();
                 }, 0)}
-                className={cn("office-rich-text min-h-[6in] outline-none", showMarks && "office-show-marks", !editable && "cursor-default")}
+                className={cn("office-rich-text outline-none", showMarks && "office-show-marks", !editable && "cursor-default")}
+                style={{ minHeight: `${Math.max(1, pageDimensions.height - marginTop - marginBottom)}in` }}
                 data-placeholder="Start writing…"
+              />
+              <div
+                ref={footerRef}
+                contentEditable={editable}
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Document footer"
+                data-placeholder="Type footer"
+                onFocus={captureSelection}
+                onInput={() => { syncDocumentContent(); markDirty(); }}
+                className={cn("office-footer-surface outline-none", !showFooter && "hidden")}
               />
             </div>
           </div>
@@ -908,7 +1119,7 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
           markDirty();
         }} className={cn("rounded-full border px-2 py-1 text-[10px]", selectedTags.includes(tag.id) ? "border-slate-700 bg-slate-800 text-white" : "border-slate-200 text-slate-500")}>{tag.name}</button>)}</div>
         <select value={status} disabled={!editable} onChange={(event) => void updateStatus(event.target.value as typeof status)} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs capitalize"><option value="DRAFT">Draft</option><option value="PUBLISHED" disabled={!capabilities.canApprove && status !== "PUBLISHED"}>Published</option><option value="ARCHIVED">Archived</option></select>
-        <div className="relative group"><Button variant="ghost" size="icon" aria-label="More document actions"><ChevronDown className="h-4 w-4" /></Button><div className="invisible absolute bottom-full right-0 mb-1 w-44 rounded-lg border border-slate-200 bg-white p-1 opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"><button type="button" onClick={duplicateDocument} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-50"><CopyPlus className="h-4 w-4" />Duplicate</button><button type="button" onClick={() => window.print()} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-50"><Printer className="h-4 w-4" />Print / Save PDF</button>{capabilities.canDelete ? <button type="button" onClick={() => void remove()} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" />Move to trash</button> : null}</div></div>
+        <div className="relative group"><Button variant="ghost" size="icon" aria-label="More document actions"><ChevronDown className="h-4 w-4" /></Button><div className="invisible absolute bottom-full right-0 mb-1 w-52 rounded-lg border border-slate-200 bg-white p-1 opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"><button type="button" onClick={duplicateDocument} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-50"><CopyPlus className="h-4 w-4" />Duplicate</button><button type="button" onClick={openFocusWindow} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-50"><Maximize2 className="h-4 w-4" />Open in separate window</button><button type="button" onClick={() => void printDocument()} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs hover:bg-slate-50"><Printer className="h-4 w-4" />Print / Save PDF</button>{capabilities.canDelete ? <button type="button" onClick={() => void remove()} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" />Move to trash</button> : null}</div></div>
       </div>
     </div>
   );
