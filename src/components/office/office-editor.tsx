@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlignCenter,
@@ -52,6 +52,11 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef(document.content);
   const titleRef = useRef(document.title);
+  const folderIdRef = useRef(document.folderId ?? "");
+  const selectedTagsRef = useRef(document.tags.map((item) => item.tag.id));
+  const revisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const [title, setTitle] = useState(document.title);
   const [status, setStatus] = useState(document.status);
   const [folderId, setFolderId] = useState(document.folderId ?? "");
@@ -61,29 +66,67 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const editable = capabilities.canEdit && (document.kind !== "TEMPLATE" || capabilities.canManageTemplates);
 
+  useLayoutEffect(() => {
+    // The editable DOM must remain uncontrolled while the user is typing. If React
+    // owns these children through dangerouslySetInnerHTML, every save-state render
+    // can restore the last server value and erase the character just entered.
+    if (editorRef.current) editorRef.current.innerHTML = document.content;
+    contentRef.current = document.content;
+  }, [document.id, document.content]);
+
   const save = useCallback(async (silent = false) => {
     if (!editable) return true;
-    setSaveState("saving");
-    const response = await fetch(`/api/office/documents/${document.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: titleRef.current.trim() || "Untitled document",
-        content: contentRef.current,
-        folderId: folderId || null,
-        tagIds: selectedTags,
-      }),
-    });
-    if (!response.ok) {
-      setSaveState("error");
-      if (!silent) toast.error(await apiMessage(response));
-      return false;
+
+    // Serialize saves so a slow, older request can never finish after a newer one
+    // and overwrite more recent text in the database.
+    if (saveInFlightRef.current) {
+      const succeeded = await saveInFlightRef.current;
+      if (succeeded && !silent) toast.success("Document saved");
+      return succeeded;
     }
-    setSaveState("saved");
-    if (!silent) toast.success("Document saved");
-    router.refresh();
-    return true;
-  }, [document.id, editable, folderId, router, selectedTags]);
+
+    const operation = (async () => {
+      while (savedRevisionRef.current < revisionRef.current) {
+        const revision = revisionRef.current;
+        const payload = {
+          title: titleRef.current.trim() || "Untitled document",
+          content: contentRef.current,
+          folderId: folderIdRef.current || null,
+          tagIds: selectedTagsRef.current,
+        };
+
+        setSaveState("saving");
+        try {
+          const response = await fetch(`/api/office/documents/${document.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (response.ok) {
+            savedRevisionRef.current = revision;
+            continue;
+          }
+          setSaveState("error");
+          if (!silent) toast.error(await apiMessage(response));
+          return false;
+        } catch {
+          setSaveState("error");
+          if (!silent) toast.error("Unable to reach the server. Your text is still in the editor.");
+          return false;
+        }
+      }
+      return true;
+    })();
+
+    saveInFlightRef.current = operation;
+    const succeeded = await operation;
+    if (saveInFlightRef.current === operation) saveInFlightRef.current = null;
+    if (succeeded) {
+      setSaveState("saved");
+      if (!silent) toast.success("Document saved");
+    }
+    return succeeded;
+  }, [document.id, editable]);
 
   useEffect(() => {
     if (!dirtyRevision || !editable) return;
@@ -92,7 +135,10 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
     return () => window.clearTimeout(timer);
   }, [dirtyRevision, editable, save]);
 
-  function markDirty() { setDirtyRevision((value) => value + 1); }
+  function markDirty() {
+    revisionRef.current += 1;
+    setDirtyRevision(revisionRef.current);
+  }
   function command(name: string, value?: string) { window.document.execCommand(name, false, value); editorRef.current?.focus(); contentRef.current = editorRef.current?.innerHTML ?? ""; markDirty(); }
 
   function insertLink() {
@@ -162,7 +208,7 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
         <div className="flex min-h-16 items-center gap-2 px-3 sm:px-5">
           <Button asChild variant="ghost" size="icon"><Link href="/office" aria-label="Back to Office"><ArrowLeft className="h-5 w-5" /></Link></Button>
           <div className="min-w-0 flex-1"><input value={title} disabled={!editable} onChange={(event) => { setTitle(event.target.value); titleRef.current = event.target.value; markDirty(); }} className="w-full truncate bg-transparent text-base font-semibold text-slate-950 outline-none disabled:opacity-100" aria-label="Document title" /><div className="flex items-center gap-1.5 text-[11px] text-slate-400">{saveState === "saving" ? <Loader2 className="h-3 w-3 animate-spin" /> : saveState === "saved" ? <Check className="h-3 w-3" /> : null}<span className={cn(saveState === "error" && "text-red-600")}>{statusText}</span>{document.isSensitive ? <><span>·</span><LockKeyhole className="h-3 w-3 text-amber-600" /><span>Sensitive</span></> : null}</div></div>
-          <div className="hidden items-center gap-2 sm:flex"><select value={folderId} disabled={!editable} onChange={(event) => { setFolderId(event.target.value); markDirty(); }} className="h-9 max-w-40 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="">No folder</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>{document.kind === "TEMPLATE" ? <Button variant="outline" size="sm" onClick={() => void createFromTemplate()}><CopyPlus className="h-4 w-4" />Use template</Button> : null}<Button variant="outline" size="sm" onClick={() => setShowHistory((value) => !value)}><FileClock className="h-4 w-4" />History</Button><Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" />Print</Button>{editable ? <Button size="sm" onClick={() => void save(false)}><Save className="h-4 w-4" />Save</Button> : null}</div>
+          <div className="hidden items-center gap-2 sm:flex"><select value={folderId} disabled={!editable} onChange={(event) => { const value = event.target.value; setFolderId(value); folderIdRef.current = value; markDirty(); }} className="h-9 max-w-40 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="">No folder</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>{document.kind === "TEMPLATE" ? <Button variant="outline" size="sm" onClick={() => void createFromTemplate()}><CopyPlus className="h-4 w-4" />Use template</Button> : null}<Button variant="outline" size="sm" onClick={() => setShowHistory((value) => !value)}><FileClock className="h-4 w-4" />History</Button><Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" />Print</Button>{editable ? <Button size="sm" onClick={() => void save(false)}><Save className="h-4 w-4" />Save</Button> : null}</div>
         </div>
         {editable ? <div className="flex items-center gap-0.5 overflow-x-auto border-t border-slate-100 px-3 py-1.5 sm:px-16"><select defaultValue="p" onChange={(event) => command("formatBlock", event.target.value)} className="mr-1 h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="blockquote">Quote</option></select><ToolButton label="Bold" onClick={() => command("bold")}><Bold className="h-4 w-4" /></ToolButton><ToolButton label="Italic" onClick={() => command("italic")}><Italic className="h-4 w-4" /></ToolButton><ToolButton label="Underline" onClick={() => command("underline")}><Underline className="h-4 w-4" /></ToolButton><ToolButton label="Strikethrough" onClick={() => command("strikeThrough")}><Strikethrough className="h-4 w-4" /></ToolButton><span className="mx-1 h-5 w-px bg-slate-200" /><ToolButton label="Bullet list" onClick={() => command("insertUnorderedList")}><List className="h-4 w-4" /></ToolButton><ToolButton label="Numbered list" onClick={() => command("insertOrderedList")}><ListOrdered className="h-4 w-4" /></ToolButton><ToolButton label="Align left" onClick={() => command("justifyLeft")}><AlignLeft className="h-4 w-4" /></ToolButton><ToolButton label="Align center" onClick={() => command("justifyCenter")}><AlignCenter className="h-4 w-4" /></ToolButton><ToolButton label="Align right" onClick={() => command("justifyRight")}><AlignRight className="h-4 w-4" /></ToolButton><ToolButton label="Insert link" onClick={insertLink}><Link2 className="h-4 w-4" /></ToolButton><ToolButton label="Insert table" onClick={insertTable}><Table2 className="h-4 w-4" /></ToolButton><input type="color" aria-label="Text color" className="ml-1 h-7 w-7 cursor-pointer rounded border-0 bg-transparent" onChange={(event) => command("foreColor", event.target.value)} /></div> : null}
       </header>
@@ -170,14 +216,14 @@ export function OfficeEditor({ document, folders, tags, capabilities }: Props) {
       <div className="mx-auto flex max-w-[90rem] gap-5 p-3 sm:p-6">
         <main className="min-w-0 flex-1">
           <div className="office-paper mx-auto min-h-[70vh] w-full max-w-[52rem] bg-white px-[clamp(1.5rem,7vw,5rem)] py-[clamp(2rem,7vw,5rem)] shadow-sm ring-1 ring-slate-200 print:max-w-none print:shadow-none print:ring-0">
-            <div ref={editorRef} contentEditable={editable} suppressContentEditableWarning onInput={(event) => { contentRef.current = event.currentTarget.innerHTML; markDirty(); }} dangerouslySetInnerHTML={{ __html: document.content }} className={cn("office-rich-text min-h-[55vh] outline-none", !editable && "cursor-default")} data-placeholder="Start writing…" />
+            <div ref={editorRef} contentEditable={editable} suppressContentEditableWarning spellCheck role="textbox" aria-label="Document body" aria-multiline="true" onInput={(event) => { contentRef.current = event.currentTarget.innerHTML; markDirty(); }} className={cn("office-rich-text min-h-[55vh] outline-none", !editable && "cursor-default")} data-placeholder="Start writing…" />
           </div>
         </main>
 
         {showHistory ? <aside className="hidden w-72 shrink-0 space-y-4 rounded-2xl border border-slate-200 bg-white p-4 xl:block"><div className="flex items-center justify-between"><h2 className="font-semibold text-slate-900">Version history</h2><button onClick={() => setShowHistory(false)}><ChevronDown className="h-4 w-4 -rotate-90 text-slate-400" /></button></div>{editable ? <Button variant="outline" size="sm" className="w-full" onClick={() => void createVersion()}><FileClock className="h-4 w-4" />Create snapshot</Button> : null}<div className="space-y-2">{document.versions.map((version) => <div key={version.id} className="rounded-xl bg-slate-50 p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-slate-800">Version {version.version}</span><span className="text-[10px] text-slate-400">{new Date(version.createdAt).toLocaleDateString()}</span></div><p className="mt-1 text-xs text-slate-500">{version.note || `Saved by ${version.author.name}`}</p></div>)}</div></aside> : null}
       </div>
 
-      <div className="fixed bottom-4 right-4 z-20 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg print:hidden"><div className="hidden max-w-44 flex-wrap gap-1 px-1 lg:flex">{tags.slice(0, 6).map((tag) => <button key={tag.id} disabled={!editable} onClick={() => { setSelectedTags((items) => items.includes(tag.id) ? items.filter((id) => id !== tag.id) : [...items, tag.id]); markDirty(); }} className={cn("rounded-full border px-2 py-1 text-[10px]", selectedTags.includes(tag.id) ? "border-slate-700 bg-slate-800 text-white" : "border-slate-200 text-slate-500")}>{tag.name}</button>)}</div><select value={status} disabled={!editable} onChange={(event) => void updateStatus(event.target.value as typeof status)} className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-xs capitalize"><option value="DRAFT">Draft</option><option value="PUBLISHED" disabled={!capabilities.canApprove && status !== "PUBLISHED"}>Published</option><option value="ARCHIVED">Archived</option></select>{capabilities.canDelete ? <Button variant="ghost" size="icon" onClick={() => void remove()} className="text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button> : null}</div>
+      <div className="fixed bottom-4 right-4 z-20 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg print:hidden"><div className="hidden max-w-44 flex-wrap gap-1 px-1 lg:flex">{tags.slice(0, 6).map((tag) => <button key={tag.id} disabled={!editable} onClick={() => { setSelectedTags((items) => { const next = items.includes(tag.id) ? items.filter((id) => id !== tag.id) : [...items, tag.id]; selectedTagsRef.current = next; return next; }); markDirty(); }} className={cn("rounded-full border px-2 py-1 text-[10px]", selectedTags.includes(tag.id) ? "border-slate-700 bg-slate-800 text-white" : "border-slate-200 text-slate-500")}>{tag.name}</button>)}</div><select value={status} disabled={!editable} onChange={(event) => void updateStatus(event.target.value as typeof status)} className="h-9 rounded-xl border border-slate-200 bg-white px-2 text-xs capitalize"><option value="DRAFT">Draft</option><option value="PUBLISHED" disabled={!capabilities.canApprove && status !== "PUBLISHED"}>Published</option><option value="ARCHIVED">Archived</option></select>{capabilities.canDelete ? <Button variant="ghost" size="icon" onClick={() => void remove()} className="text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button> : null}</div>
     </div>
   );
 }
