@@ -13,13 +13,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NAV_ITEMS } from "@/components/dashboard/nav-items";
+import { OFFICE_SUITE_MODULES, officeModuleHref } from "@/lib/office/suite";
 
 type SearchHit =
   | { kind: "page"; label: string; href: string }
   | { kind: "product"; label: string; href: string; detail?: string }
   | { kind: "customer"; label: string; href: string; detail?: string }
   | { kind: "order"; label: string; href: string; detail?: string }
-  | { kind: "document"; label: string; href: string; detail?: string };
+  | { kind: "document"; label: string; href: string; detail?: string }
+  | { kind: "tool"; label: string; href: string; detail?: string };
 
 export function GlobalSearch() {
   const router = useRouter();
@@ -42,21 +44,35 @@ export function GlobalSearch() {
   const pageHits = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {
-      return NAV_ITEMS.slice(0, 8).map(
+      return [...NAV_ITEMS.slice(0, 6).map(
         (item): SearchHit => ({
           kind: "page",
           label: item.label,
           href: item.href,
         })
-      );
+      ), ...OFFICE_SUITE_MODULES.slice(0, 4).map((module): SearchHit => ({
+        kind: "tool",
+        label: module.name,
+        href: officeModuleHref(module),
+        detail: module.eyebrow,
+      }))];
     }
-    return NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(q)).map(
+    const pages = NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(q)).map(
       (item): SearchHit => ({
         kind: "page",
         label: item.label,
         href: item.href,
       })
     );
+    const tools = OFFICE_SUITE_MODULES.filter((module) =>
+      `${module.name} ${module.description} ${module.features.join(" ")}`.toLowerCase().includes(q)
+    ).map((module): SearchHit => ({
+      kind: "tool",
+      label: module.name,
+      href: officeModuleHref(module),
+      detail: module.description,
+    }));
+    return [...pages, ...tools];
   }, [query]);
 
   useEffect(() => {
@@ -166,7 +182,7 @@ export function GlobalSearch() {
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
             <DialogDescription>
-              Jump to pages, products, customers, orders, or office documents.
+              Find pages, records, documents, and every Office & Admin capability.
             </DialogDescription>
           </DialogHeader>
           <div className="relative">

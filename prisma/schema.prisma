@@ -300,6 +300,7 @@ model Business {
   officeDocuments           OfficeDocument[]
   officeTags                OfficeTag[]
   officeAuditEvents         OfficeAuditEvent[]
+  officeWorkspaceRecords    OfficeWorkspaceRecord[]
 
   @@index([createdAt])
 }
@@ -435,49 +436,51 @@ model EmployeeProfile {
   updatedAt           DateTime            @updatedAt
   deletedAt           DateTime?
 
-  business               Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user                   User?                      @relation(fields: [userId], references: [id])
-  role                   Role                       @relation(fields: [roleId], references: [id])
-  manager                EmployeeProfile?           @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
-  directReports          EmployeeProfile[]          @relation("EmployeeManager")
-  defaultLocation        Location?                  @relation("EmployeeDefaultLocation", fields: [defaultLocationId], references: [id], onDelete: SetNull)
-  locations              EmployeeLocation[]
-  emergencyContacts      EmployeeEmergencyContact[]
-  compensationHistory    EmployeeCompensation[]
-  compensationCreated    EmployeeCompensation[]     @relation("CompensationCreatedBy")
-  ptoLedgerEntries       PtoLedgerEntry[]
-  ptoAdjustmentsMade     PtoLedgerEntry[]           @relation("PtoAdjustedBy")
-  orders                 Order[]
-  refunds                Refund[]
-  registerSessions       RegisterSession[]
-  auditLogs              AuditLog[]
-  shifts                 Shift[]
-  shiftsCreated          Shift[]                    @relation("ShiftCreatedBy")
-  timeEntries            TimeEntry[]
-  timeEntriesAdjusted    TimeEntry[]                @relation("TimeEntryAdjustedBy")
-  timeOffRequests        TimeOffRequest[]
-  timeOffReviews         TimeOffRequest[]           @relation("TimeOffReviewedBy")
-  payrollBonuses         PayrollBonus[]
-  payrollBonusesCreated  PayrollBonus[]             @relation("PayrollBonusCreatedBy")
-  inventoryScanSessions  InventoryScanSession[]
-  assignedCompanyCards   CompanyCard[]              @relation("CompanyCardAssignee")
-  companyCardsCreated    CompanyCard[]              @relation("CompanyCardCreatedBy")
-  expenses               Expense[]                  @relation("ExpenseEmployee")
-  expensesSubmitted      Expense[]                  @relation("ExpenseSubmittedBy")
-  expenseApprovals       ExpenseApprovalEvent[]
-  expenseComments        ExpenseComment[]
-  expenseFlagsRaised     ExpenseFlag[]
-  expenseNotifications   ExpenseNotification[]
-  expenseAuditEvents     ExpenseAuditEvent[]
-  expenseSavedFilters    ExpenseSavedFilter[]
-  cardTransactions       CompanyCardTransaction[]
-  officeFoldersCreated   OfficeFolder[]             @relation("OfficeFolderCreatedBy")
-  officeDocumentsCreated OfficeDocument[]           @relation("OfficeDocumentCreatedBy")
-  officeDocumentsUpdated OfficeDocument[]           @relation("OfficeDocumentUpdatedBy")
-  officeDocumentVersions OfficeDocumentVersion[]
-  officeDocumentFiles    OfficeDocumentFile[]
-  officeFavorites        OfficeDocumentFavorite[]
-  officeAuditEvents      OfficeAuditEvent[]
+  business                       Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                           User?                      @relation(fields: [userId], references: [id])
+  role                           Role                       @relation(fields: [roleId], references: [id])
+  manager                        EmployeeProfile?           @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                  EmployeeProfile[]          @relation("EmployeeManager")
+  defaultLocation                Location?                  @relation("EmployeeDefaultLocation", fields: [defaultLocationId], references: [id], onDelete: SetNull)
+  locations                      EmployeeLocation[]
+  emergencyContacts              EmployeeEmergencyContact[]
+  compensationHistory            EmployeeCompensation[]
+  compensationCreated            EmployeeCompensation[]     @relation("CompensationCreatedBy")
+  ptoLedgerEntries               PtoLedgerEntry[]
+  ptoAdjustmentsMade             PtoLedgerEntry[]           @relation("PtoAdjustedBy")
+  orders                         Order[]
+  refunds                        Refund[]
+  registerSessions               RegisterSession[]
+  auditLogs                      AuditLog[]
+  shifts                         Shift[]
+  shiftsCreated                  Shift[]                    @relation("ShiftCreatedBy")
+  timeEntries                    TimeEntry[]
+  timeEntriesAdjusted            TimeEntry[]                @relation("TimeEntryAdjustedBy")
+  timeOffRequests                TimeOffRequest[]
+  timeOffReviews                 TimeOffRequest[]           @relation("TimeOffReviewedBy")
+  payrollBonuses                 PayrollBonus[]
+  payrollBonusesCreated          PayrollBonus[]             @relation("PayrollBonusCreatedBy")
+  inventoryScanSessions          InventoryScanSession[]
+  assignedCompanyCards           CompanyCard[]              @relation("CompanyCardAssignee")
+  companyCardsCreated            CompanyCard[]              @relation("CompanyCardCreatedBy")
+  expenses                       Expense[]                  @relation("ExpenseEmployee")
+  expensesSubmitted              Expense[]                  @relation("ExpenseSubmittedBy")
+  expenseApprovals               ExpenseApprovalEvent[]
+  expenseComments                ExpenseComment[]
+  expenseFlagsRaised             ExpenseFlag[]
+  expenseNotifications           ExpenseNotification[]
+  expenseAuditEvents             ExpenseAuditEvent[]
+  expenseSavedFilters            ExpenseSavedFilter[]
+  cardTransactions               CompanyCardTransaction[]
+  officeFoldersCreated           OfficeFolder[]             @relation("OfficeFolderCreatedBy")
+  officeDocumentsCreated         OfficeDocument[]           @relation("OfficeDocumentCreatedBy")
+  officeDocumentsUpdated         OfficeDocument[]           @relation("OfficeDocumentUpdatedBy")
+  officeDocumentVersions         OfficeDocumentVersion[]
+  officeDocumentFiles            OfficeDocumentFile[]
+  officeFavorites                OfficeDocumentFavorite[]
+  officeAuditEvents              OfficeAuditEvent[]
+  officeWorkspaceRecordsCreated  OfficeWorkspaceRecord[]    @relation("OfficeWorkspaceRecordCreatedBy")
+  officeWorkspaceRecordsAssigned OfficeWorkspaceRecord[]    @relation("OfficeWorkspaceRecordAssignedTo")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -1982,4 +1985,32 @@ model OfficeAuditEvent {
   @@index([businessId, createdAt])
   @@index([documentId])
   @@index([action])
+}
+
+/// A flexible, tenant-scoped record shared by the Office & Admin workspaces.
+/// Workspace-specific fields live in metadata while the common operational
+/// fields stay queryable for search, assignment, status, and due-date views.
+model OfficeWorkspaceRecord {
+  id           String    @id @default(cuid())
+  businessId   String
+  workspace    String
+  createdById  String
+  assignedToId String?
+  title        String
+  summary      String?
+  status       String    @default("ACTIVE")
+  priority     String    @default("NORMAL")
+  dueAt        DateTime?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  archivedAt   DateTime?
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy  EmployeeProfile  @relation("OfficeWorkspaceRecordCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  assignedTo EmployeeProfile? @relation("OfficeWorkspaceRecordAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, workspace, archivedAt, updatedAt])
+  @@index([businessId, status, dueAt])
+  @@index([assignedToId, status])
 }

@@ -16,6 +16,7 @@ Sign in once and land in a completely unlocked account — no trials, plans, or 
 - **Refunds & Receipts** — Full/partial refunds via Stripe with digital receipts
 - **Workforce** — Scheduling, time clock, PTO, and payroll exports
 - **Expenses / Finance** — Company cards, approvals, budgets, and receipt capture
+- **Office & Admin Suite** — Connected documents, files, CRM workflows, forms, projects, knowledge, security, utilities, and approval-first AI automation
 
 ## Tech Stack
 
