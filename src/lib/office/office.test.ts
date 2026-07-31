@@ -11,7 +11,16 @@ import {
   officeWorkspaceRecordCreateSchema,
   officeWorkspaceRecordUpdateSchema,
 } from "@/lib/validations/office-workspace";
-import { OFFICE_SUITE_GROUPS, OFFICE_SUITE_MODULES, getOfficeSuiteModule } from "./suite";
+import {
+  CUSTOM_OFFICE_WORKSPACES,
+  OFFICE_SUITE_GROUPS,
+  OFFICE_SUITE_MODULES,
+  getOfficeSuiteModule,
+  officeModuleHref,
+} from "./suite";
+import { columnName, evaluateFormula, parseCsv, toCsv } from "./spreadsheet";
+import { appointmentsConflict } from "./calendar";
+import { convertUnit } from "./converters";
 
 describe("Office content security", () => {
   it("removes scripts, event handlers, external images, and unsafe links", () => {
@@ -86,7 +95,7 @@ describe("Office validation", () => {
 });
 
 describe("Office & Admin suite", () => {
-  it("publishes a complete, uniquely-addressable workspace directory", () => {
+  it("publishes an accurate, uniquely-addressable tool directory", () => {
     assert.equal(OFFICE_SUITE_MODULES.length, 16);
     assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 16);
     assert.deepEqual(
@@ -94,8 +103,12 @@ describe("Office & Admin suite", () => {
       new Set(OFFICE_SUITE_GROUPS)
     );
     for (const workspaceDefinition of OFFICE_SUITE_MODULES) {
-      assert.ok(workspaceDefinition.features.length >= 6, `${workspaceDefinition.slug} should expose its major capabilities`);
-      assert.equal(workspaceDefinition.templates.length, 3, `${workspaceDefinition.slug} should have three quick starts`);
+      assert.ok(workspaceDefinition.features.length > 0, `${workspaceDefinition.slug} should list verified functions`);
+      assert.ok(workspaceDefinition.features.length <= 3, `${workspaceDefinition.slug} should not overstate its scope`);
+      assert.ok(workspaceDefinition.quickActions.length > 0, `${workspaceDefinition.slug} should have a direct action`);
+      assert.match(officeModuleHref(workspaceDefinition), /^\//);
+      if (workspaceDefinition.delivery === "connected") assert.ok(workspaceDefinition.nativeHref);
+      if (workspaceDefinition.delivery === "built-in") assert.ok(CUSTOM_OFFICE_WORKSPACES.includes(workspaceDefinition.slug as never));
       assert.ok(getOfficeSuiteModule(workspaceDefinition.slug));
     }
   });
@@ -110,5 +123,33 @@ describe("Office & Admin suite", () => {
       officeWorkspaceRecordCreateSchema.safeParse({ title: "Review", priority: "CRITICAL" }).success,
       false
     );
+  });
+});
+
+describe("Functional Office tools", () => {
+  it("calculates formulas and round-trips quoted CSV", () => {
+    const grid = [["10", "20"], ["5", "=A1+B1"], ["=SUM(A1:A2)", "=AVERAGE(A1:B1)"]];
+    assert.equal(evaluateFormula(grid[1][1], grid), 30);
+    assert.equal(evaluateFormula(grid[2][0], grid), 15);
+    assert.equal(evaluateFormula(grid[2][1], grid), 15);
+    assert.equal(columnName(26), "AA");
+    assert.equal(evaluateFormula("=A1", [["=A1"]]), 0);
+    const csv = toCsv([["Name", "Note"], ["Smith, Jane", 'Said "hello"']]);
+    assert.deepEqual(parseCsv(csv), [["Name", "Note"], ["Smith, Jane", 'Said "hello"']]);
+  });
+
+  it("detects only overlapping appointments for the same assignee", () => {
+    const existing = [
+      { id: "one", assignedToId: "employee-a", startsAt: "2026-07-31T10:00:00Z", endsAt: "2026-07-31T11:00:00Z" },
+      { id: "two", assignedToId: "employee-b", startsAt: "2026-07-31T10:00:00Z", endsAt: "2026-07-31T11:00:00Z" },
+    ];
+    assert.deepEqual(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T10:30:00Z", endsAt: "2026-07-31T11:30:00Z" }, existing).map((item) => item.id), ["one"]);
+    assert.equal(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T11:00:00Z", endsAt: "2026-07-31T12:00:00Z" }, existing).length, 0);
+  });
+
+  it("converts business units and temperatures", () => {
+    assert.ok(Math.abs(convertUnit(1, "length", "miles", "feet") - 5280) < 0.001);
+    assert.ok(Math.abs(convertUnit(32, "temperature", "fahrenheit", "celsius")) < 0.001);
+    assert.ok(Math.abs(convertUnit(1, "weight", "kilograms", "pounds") - 2.20462) < 0.001);
   });
 });

@@ -17,6 +17,7 @@ export type OfficeWorkspaceRecordSummary = {
   status: string;
   priority: string;
   dueAt: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   createdBy: { id: string; name: string };
@@ -38,6 +39,7 @@ function serializeRecord(record: {
   status: string;
   priority: string;
   dueAt: Date | null;
+  metadata: Prisma.JsonValue | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: { id: string; name: string };
@@ -45,6 +47,9 @@ function serializeRecord(record: {
 }): OfficeWorkspaceRecordSummary {
   return {
     ...record,
+    metadata: record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? record.metadata as Record<string, unknown>
+      : null,
     dueAt: record.dueAt?.toISOString() ?? null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
