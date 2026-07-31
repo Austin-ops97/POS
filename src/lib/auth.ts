@@ -1,14 +1,25 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import { db } from "./db";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
 
 const SINGLE_USER_CLERK_ID = "single-user-pos";
 const SINGLE_USER_EMAIL = "owner@pos.local";
 
+function platformAdminEmails(): Set<string> {
+  return new Set(
+    (process.env.PLATFORM_ADMIN_EMAILS || "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
 export type AuthContext = {
   clerkId: string;
   userId: string;
   email: string;
+  isPlatformAdmin: boolean;
   employee: EmployeeProfile & {
     role: { name: string; permissions: { permission: { key: string } }[] };
     locations: { locationId: string; location: Location }[];
@@ -45,8 +56,11 @@ async function getSingleUser() {
       email: SINGLE_USER_EMAIL,
       firstName: "POS",
       lastName: "Owner",
+      platformRole: platformAdminEmails().has(SINGLE_USER_EMAIL) ? "ADMIN" : "USER",
     },
-    update: {},
+    update: {
+      platformRole: platformAdminEmails().has(SINGLE_USER_EMAIL) ? "ADMIN" : undefined,
+    },
   });
 }
 
@@ -62,17 +76,21 @@ export async function getAuthUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
+  const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+  const platformRole = platformAdminEmails().has(email.toLowerCase()) ? "ADMIN" : undefined;
   const user = await db.user.upsert({
     where: { clerkId },
     create: {
       clerkId,
-      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      email,
+      platformRole,
       firstName: clerkUser.firstName,
       lastName: clerkUser.lastName,
       imageUrl: clerkUser.imageUrl,
     },
     update: {
-      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      email,
+      ...(platformRole ? { platformRole } : {}),
       firstName: clerkUser.firstName,
       lastName: clerkUser.lastName,
       imageUrl: clerkUser.imageUrl,
@@ -114,6 +132,7 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
   });
 
   if (!employee) return null;
+  if (employee.business.status !== "ACTIVE") return null;
 
   const defaultLocation =
     employee.locations.find((el) => el.location.isDefault)?.location ||
@@ -126,6 +145,7 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
     clerkId: user.clerkId,
     userId: user.id,
     email: user.email,
+    isPlatformAdmin: user.platformRole === "ADMIN",
     employee,
     business: employee.business,
     location: defaultLocation,
@@ -137,7 +157,30 @@ export async function requireAuth(businessId?: string): Promise<AuthContext> {
   if (!ctx) {
     throw new Error("Unauthorized");
   }
+  const requestedModule = (await headers()).get("x-nexapos-module");
+  if (requestedModule) {
+    const [businessSetting, employeeSetting] = await Promise.all([
+      db.moduleSetting.findUnique({
+        where: { businessId_module: { businessId: ctx.business.id, module: requestedModule } },
+        select: { enabled: true },
+      }),
+      db.employeeModuleAccess.findUnique({
+        where: { employeeId_module: { employeeId: ctx.employee.id, module: requestedModule } },
+        select: { enabled: true },
+      }),
+    ]);
+    if (businessSetting?.enabled === false || employeeSetting?.enabled === false) {
+      throw new Error(`Module disabled: ${requestedModule}`);
+    }
+  }
   return ctx;
+}
+
+export async function requirePlatformAdmin() {
+  const user = await getAuthUser();
+  if (!user) throw new Error("Unauthorized");
+  if (user.platformRole !== "ADMIN") throw new Error("Platform administrator required");
+  return user;
 }
 
 export function hasPermission(

@@ -51,6 +51,10 @@ export const PERMISSIONS = {
   APPROVE_DOCUMENTS: "approve_documents",
   VIEW_SENSITIVE_DOCUMENTS: "view_sensitive_documents",
   MANAGE_OFFICE_SETTINGS: "manage_office_settings",
+  // Employee connections and messaging
+  VIEW_CONNECTIONS: "view_connections",
+  SEND_CONNECTION_MESSAGES: "send_connection_messages",
+  MANAGE_CONNECTIONS: "manage_connections",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -136,6 +140,11 @@ const OFFICE_ADMIN: PermissionKey[] = [
   PERMISSIONS.MANAGE_OFFICE_SETTINGS,
 ];
 
+const CONNECTION_USER: PermissionKey[] = [
+  PERMISSIONS.VIEW_CONNECTIONS,
+  PERMISSIONS.SEND_CONNECTION_MESSAGES,
+];
+
 export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Owner: Object.values(PERMISSIONS),
   Admin: [
@@ -158,6 +167,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_FINANCE,
     ...OFFICE_ADMIN,
+    ...CONNECTION_USER,
+    PERMISSIONS.MANAGE_CONNECTIONS,
   ],
   Manager: [
     PERMISSIONS.OPEN_REGISTER,
@@ -180,6 +191,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_MANAGER,
     ...OFFICE_MANAGER,
+    ...CONNECTION_USER,
+    PERMISSIONS.MANAGE_CONNECTIONS,
   ],
   Cashier: [
     PERMISSIONS.OPEN_REGISTER,
@@ -193,6 +206,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.VIEW_DOCUMENTS,
     PERMISSIONS.CREATE_DOCUMENTS,
     PERMISSIONS.SCAN_DOCUMENTS,
+    ...CONNECTION_USER,
   ],
   "Inventory Staff": [
     ...PRODUCT_OPS,
@@ -201,6 +215,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_EMPLOYEE,
     ...OFFICE_USER,
+    ...CONNECTION_USER,
   ],
   "Reports Viewer": [
     PERMISSIONS.VIEW_REPORTS,
@@ -208,12 +223,14 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.VIEW_OWN_EXPENSES,
     PERMISSIONS.VIEW_EXPENSE_REPORTS,
     PERMISSIONS.VIEW_DOCUMENTS,
+    ...CONNECTION_USER,
   ],
   Finance: [
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.VIEW_PAYROLL,
     ...EXPENSE_FINANCE,
     ...OFFICE_ADMIN,
+    ...CONNECTION_USER,
   ],
 };
 

@@ -5,6 +5,9 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getModuleSettings } from "@/lib/queries";
 import { db } from "@/lib/db";
 import { normalizeModuleKey } from "@/lib/modules";
+import { getEmployeeModuleAccess } from "@/lib/access-control";
+import { hasAnyPermission, hasPermission } from "@/lib/auth";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +26,7 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
-  const [moduleSettings, employeeCount] = await Promise.all([
+  const [moduleSettings, employeeCount, access] = await Promise.all([
     getModuleSettings(ctx),
     db.employeeProfile.count({
       where: {
@@ -32,6 +35,7 @@ export default async function DashboardLayout({
         status: "ACTIVE",
       },
     }),
+    getEmployeeModuleAccess(ctx),
   ]);
 
   const expensesModule = moduleSettings.find(
@@ -42,6 +46,22 @@ export default async function DashboardLayout({
     (m) => normalizeModuleKey(m.module) === "OFFICE"
   );
   const officeEnabled = officeModule ? officeModule.enabled : true;
+  const isOwner = ctx.employee.role.name === "Owner";
+  const allowedHrefs = [
+    "/dashboard",
+    ...(access.POS && hasPermission(ctx, PERMISSIONS.OPEN_REGISTER) ? ["/register"] : []),
+    ...(access.PAYMENTS && hasAnyPermission(ctx, [PERMISSIONS.PROCESS_SALE, PERMISSIONS.MANAGE_STRIPE, PERMISSIONS.VIEW_REPORTS]) ? ["/payments"] : []),
+    ...(access.CATALOG && hasPermission(ctx, PERMISSIONS.VIEW_PRODUCTS) ? ["/products"] : []),
+    ...(access.INVENTORY && hasPermission(ctx, PERMISSIONS.VIEW_INVENTORY) ? ["/inventory"] : []),
+    ...(access.ORDERS && hasAnyPermission(ctx, [PERMISSIONS.PROCESS_SALE, PERMISSIONS.PROCESS_REFUND, PERMISSIONS.VIEW_REPORTS]) ? ["/orders"] : []),
+    ...(access.CUSTOMERS && hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS) ? ["/customers"] : []),
+    ...(access.WORKFORCE && hasAnyPermission(ctx, [PERMISSIONS.MANAGE_EMPLOYEES, PERMISSIONS.VIEW_WORKFORCE, PERMISSIONS.REQUEST_TIME_OFF]) ? ["/employees", "/workforce"] : []),
+    ...(access.CONNECTIONS && hasPermission(ctx, PERMISSIONS.VIEW_CONNECTIONS) ? ["/connections"] : []),
+    ...(access.REPORTS && hasPermission(ctx, PERMISSIONS.VIEW_REPORTS) ? ["/reports"] : []),
+    ...(access.OFFICE && hasPermission(ctx, PERMISSIONS.VIEW_DOCUMENTS) ? ["/office", "/office/documents", "/office/apps/projects", "/office/apps/forms-approvals", "/office/apps/automations-ai"] : []),
+    ...(access.EXPENSES && hasAnyPermission(ctx, [PERMISSIONS.CREATE_EXPENSE, PERMISSIONS.VIEW_OWN_EXPENSES, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]) ? ["/finance/expenses", "/finance/cards", "/finance/reimbursements", "/finance/reports", "/finance/budgets"] : []),
+    ...(isOwner || hasAnyPermission(ctx, [PERMISSIONS.MANAGE_EMPLOYEES, PERMISSIONS.MANAGE_LOCATIONS, PERMISSIONS.MANAGE_STRIPE]) ? ["/settings"] : []),
+  ];
 
   return (
     <DashboardShell
@@ -49,10 +69,13 @@ export default async function DashboardLayout({
       locationName={ctx.location?.name}
       authEnabled={isClerkConfigured()}
       navVisibility={{
-        expensesEnabled,
-        officeEnabled,
+        expensesEnabled: expensesEnabled && access.EXPENSES,
+        officeEnabled: officeEnabled && access.OFFICE,
         showWorkforce: employeeCount > 1,
+        allowedHrefs,
       }}
+      canOpenRegister={access.POS && hasPermission(ctx, PERMISSIONS.OPEN_REGISTER)}
+      isPlatformAdmin={ctx.isPlatformAdmin}
     >
       {children}
     </DashboardShell>

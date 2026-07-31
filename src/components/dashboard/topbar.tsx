@@ -1,7 +1,7 @@
 "use client";
 
 import { Show, UserButton } from "@clerk/nextjs";
-import { MapPin, Menu, Plus, User } from "lucide-react";
+import { MapPin, Menu, Plus, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -11,6 +11,8 @@ type TopbarProps = {
   authEnabled?: boolean;
   onMenuClick?: () => void;
   searchSlot?: React.ReactNode;
+  canOpenRegister?: boolean;
+  isPlatformAdmin?: boolean;
 };
 
 export function Topbar({
@@ -19,6 +21,8 @@ export function Topbar({
   authEnabled = true,
   onMenuClick,
   searchSlot,
+  canOpenRegister = true,
+  isPlatformAdmin = false,
 }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 pt-[env(safe-area-inset-top)] sm:h-16 sm:px-5 lg:px-6">
@@ -51,7 +55,8 @@ export function Topbar({
         <div className="mx-1 flex min-w-0 flex-1 justify-center sm:mx-3">{searchSlot}</div>
       ) : null}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <Button asChild size="default" className="hidden sm:inline-flex">
+        {isPlatformAdmin ? <Button asChild variant="outline" size="sm" className="hidden md:inline-flex"><Link href="/admin"><Shield className="h-4 w-4" />Platform</Link></Button> : null}
+        {canOpenRegister ? <><Button asChild size="default" className="hidden sm:inline-flex">
           <Link href="/register">
             <Plus className="h-4 w-4" aria-hidden="true" />
             Open Register
@@ -61,7 +66,7 @@ export function Topbar({
           <Link href="/register">
             <Plus className="h-5 w-5" aria-hidden="true" />
           </Link>
-        </Button>
+        </Button></> : null}
         {authEnabled ? (
           <Show when="signed-in">
             <UserButton />

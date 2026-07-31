@@ -15,6 +15,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getEmployeeStatusVariant } from "@/lib/status-utils";
 import type { EmployeeStatus } from "@prisma/client";
+import { db } from "@/lib/db";
+import { getBusinessModuleAccess } from "@/lib/access-control";
+import { CUSTOMER_CONFIGURABLE_MODULES, type AppModuleKey } from "@/lib/modules";
+import { EmployeeModuleAccess } from "@/components/dashboard/employee-module-access";
 
 export default async function EmployeeDetailPage({
   params,
@@ -24,14 +28,22 @@ export default async function EmployeeDetailPage({
   const { id } = await params;
   const ctx = await requireAuth();
   const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
-  const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
-
   const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES);
 
   const employee = await getEmployeeById(ctx, id);
   if (!employee) notFound();
 
   const summary = await getEmployeeWorkforceSummary(ctx, id);
+  const [licensedModules, moduleOverrides] = canManage
+    ? await Promise.all([
+        getBusinessModuleAccess(ctx.business.id),
+        db.employeeModuleAccess.findMany({ where: { employeeId: id }, select: { module: true, enabled: true } }),
+      ])
+    : [null, []];
+  const overrideMap = new Map(moduleOverrides.map((item) => [item.module, item.enabled]));
+  const employeeModules = Object.fromEntries(
+    CUSTOMER_CONFIGURABLE_MODULES.map(({ key }) => [key, overrideMap.get(key) ?? true])
+  ) as Record<AppModuleKey, boolean>;
 
   const weekHours = summary.timeEntries.reduce((sum, entry) => {
     return sum + getWorkedMinutes(entry) / 60;
@@ -154,6 +166,18 @@ export default async function EmployeeDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        {canManage && licensedModules ? (
+          <>
+            <CardHeader><CardTitle>App access</CardTitle></CardHeader>
+            <CardContent>
+              <p className="mb-4 text-sm text-slate-500">Changes take effect the next time this employee navigates or refreshes.</p>
+              <EmployeeModuleAccess employeeId={id} licensed={licensedModules} initial={employeeModules} />
+            </CardContent>
+          </>
+        ) : null}
+      </Card>
 
       <Card>
         <CardHeader>

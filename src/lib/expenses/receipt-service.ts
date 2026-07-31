@@ -57,6 +57,7 @@ export async function attachReceipt(
       mimeType: data.mimeType,
       sizeBytes: persisted.sizeBytes,
       storageUrl: persisted.storageUrl,
+      data: persisted.data,
       pageNumber: data.pageNumber ?? 1,
       width: data.width,
       height: data.height,

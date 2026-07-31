@@ -13,6 +13,8 @@ import {
   upsertEmergencyContacts,
 } from "@/lib/workforce/employee-service";
 import { recordPtoLedgerEntry } from "@/lib/workforce/pto-service";
+import { assertEmployeeManagementAllowed, assertRoleAssignmentAllowed } from "@/lib/employee-security";
+import { requireModule } from "@/lib/access-control";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -29,6 +31,7 @@ const employeeInclude = {
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await requireModule(ctx, "WORKFORCE");
     const { id } = await params;
 
     const employee = await db.employeeProfile.findFirst({
@@ -47,6 +50,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
     const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
     const { pinHash: _pinHash, ...sanitized } = employee;
+    void _pinHash;
 
     return NextResponse.json(
       sanitizeEmployeeForViewer(sanitized, canViewPersonal, canViewCompensation)
@@ -59,6 +63,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await requireModule(ctx, "WORKFORCE");
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
     }
@@ -69,11 +74,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const existing = await db.employeeProfile.findFirst({
       where: { id, businessId: ctx.business.id, deletedAt: null },
+      include: { role: { select: { name: true } } },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
+    assertEmployeeManagementAllowed(ctx, existing.role.name);
+    if (data.roleId) await assertRoleAssignmentAllowed(ctx, data.roleId);
 
     if (data.email && data.email !== existing.email) {
       const emailTaken = await db.employeeProfile.findFirst({
@@ -192,6 +200,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     });
 
     const { pinHash: _pinHash, ...sanitized } = employee!;
+    void _pinHash;
 
     await createAuditLog({
       businessId: ctx.business.id,
@@ -219,6 +228,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const ctx = await requireAuth();
+    await requireModule(ctx, "WORKFORCE");
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
     }
@@ -234,10 +244,20 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     const existing = await db.employeeProfile.findFirst({
       where: { id, businessId: ctx.business.id, deletedAt: null },
+      include: { role: { select: { name: true } } },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
+    assertEmployeeManagementAllowed(ctx, existing.role.name);
+    if (existing.role.name === "Owner") {
+      const ownerCount = await db.employeeProfile.count({
+        where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE", role: { name: "Owner" } },
+      });
+      if (ownerCount <= 1) {
+        return NextResponse.json({ error: "Cannot delete the final business owner" }, { status: 400 });
+      }
     }
 
     await db.employeeProfile.update({

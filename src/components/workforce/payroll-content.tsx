@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Download, Plus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
   const [bonusModal, setBonusModal] = useState<PayrollRow | null>(null);
   const [bonusForm, setBonusForm] = useState({ amount: "", description: "" });
 
-  async function loadPayroll() {
+  const loadPayroll = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
@@ -66,11 +66,11 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
     } finally {
       setLoading(false);
     }
-  }
+  }, [periodStart, periodEnd]);
 
   useEffect(() => {
     loadPayroll();
-  }, [periodStart, periodEnd]);
+  }, [loadPayroll]);
 
   function selectPeriod(value: string) {
     const period = periods.find((p) => p.label === value);

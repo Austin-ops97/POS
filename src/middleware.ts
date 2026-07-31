@@ -1,6 +1,31 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
+function moduleForPath(pathname: string): string | null {
+  const routes: Array<[string, string]> = [
+    ["/api/checkout", "POS"], ["/register", "POS"],
+    ["/api/stripe", "PAYMENTS"], ["/payments", "PAYMENTS"],
+    ["/api/products", "CATALOG"], ["/products", "CATALOG"],
+    ["/api/inventory", "INVENTORY"], ["/inventory", "INVENTORY"],
+    ["/api/orders", "ORDERS"], ["/orders", "ORDERS"],
+    ["/api/customers", "CUSTOMERS"], ["/customers", "CUSTOMERS"],
+    ["/api/reports", "REPORTS"], ["/reports", "REPORTS"],
+    ["/api/employees", "WORKFORCE"], ["/api/workforce", "WORKFORCE"],
+    ["/employees", "WORKFORCE"], ["/workforce", "WORKFORCE"],
+    ["/api/connections", "CONNECTIONS"], ["/connections", "CONNECTIONS"],
+    ["/api/expenses", "EXPENSES"], ["/finance", "EXPENSES"],
+    ["/api/office", "OFFICE"], ["/office", "OFFICE"],
+  ];
+  return routes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] || null;
+}
+
+function forwardedRequest(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  const appModule = moduleForPath(request.nextUrl.pathname);
+  if (appModule) requestHeaders.set("x-nexapos-module", appModule);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
@@ -28,6 +53,7 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
+  return forwardedRequest(request);
 });
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
@@ -45,7 +71,7 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
       }
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
-    return NextResponse.next();
+    return forwardedRequest(request);
   }
 
   return clerkAuthMiddleware(request, event);

@@ -1,8 +1,8 @@
 # NexaPOS
 
-An authenticated Stripe-powered POS platform for retail checkout, inventory, workforce, and expenses.
+An authenticated, multi-tenant POS platform for retail checkout, inventory, workforce, expenses, and office operations.
 
-Sign in once and land in a completely unlocked account — no trials, plans, or paywalls. Employee role permissions and multi-tenant isolation still apply.
+The service owner has a platform control plane at `/admin`. Each customer business receives only its licensed modules, and business owners can further restrict each employee's visible app areas and role permissions.
 
 ## Features
 
@@ -67,6 +67,7 @@ Required variables:
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `NEXT_PUBLIC_APP_URL` | App URL (e.g. `http://localhost:3000`) |
+| `PLATFORM_ADMIN_EMAILS` | Comma-separated Clerk emails allowed to use `/admin` |
 
 ### 3. Database Setup
 
@@ -78,6 +79,8 @@ npm run db:seed
 ```
 
 The seed only creates system roles and permissions — no demo merchant data.
+
+The application uses one shared PostgreSQL backend with `businessId` tenant isolation. To move a deployment to a different PostgreSQL provider, change `DATABASE_URL` and `DIRECT_URL`, deploy the migrations, and restart the app; no frontend configuration changes are required. Platform, payment, authentication, and receipt persistence configuration is centralized in environment variables and `src/lib` adapters.
 
 ### 4. Stripe Webhook (Development)
 

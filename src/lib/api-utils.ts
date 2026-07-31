@@ -135,6 +135,15 @@ export function handleApiError(error: unknown, context: string) {
         requestId,
       });
     }
+    if (error.message.startsWith("Module disabled:")) {
+      return apiError(error.message, 403, { code: "MODULE_DISABLED", requestId });
+    }
+    if (
+      error.message === "Platform administrator required" ||
+      error.message.startsWith("Only a business owner")
+    ) {
+      return apiError(error.message, 403, { code: "FORBIDDEN", requestId });
+    }
     if (error.message === "Not authorized to cancel this request") {
       return apiError(error.message, 403, { code: "FORBIDDEN", requestId });
     }
@@ -152,6 +161,9 @@ export function handleApiError(error: unknown, context: string) {
     }
     if (error.message.includes("already attached")) {
       return apiError(error.message, 409, { code: "DUPLICATE_FILE", requestId });
+    }
+    if (error.message.includes("already completed by another request")) {
+      return apiError(error.message, 409, { code: "CONFLICT", requestId });
     }
     if (error.message.includes("Stripe is not configured")) {
       return apiError(error.message, 503, { code: "STRIPE_UNAVAILABLE", requestId });

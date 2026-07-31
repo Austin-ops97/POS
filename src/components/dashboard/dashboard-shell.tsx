@@ -12,6 +12,8 @@ type DashboardShellProps = {
   locationName?: string;
   authEnabled?: boolean;
   navVisibility?: NavVisibility;
+  canOpenRegister?: boolean;
+  isPlatformAdmin?: boolean;
 };
 
 export function DashboardShell({
@@ -20,6 +22,8 @@ export function DashboardShell({
   locationName,
   authEnabled,
   navVisibility,
+  canOpenRegister,
+  isPlatformAdmin,
 }: DashboardShellProps) {
   const [navOpen, setNavOpen] = useState(false);
 
@@ -38,6 +42,8 @@ export function DashboardShell({
           authEnabled={authEnabled}
           onMenuClick={() => setNavOpen(true)}
           searchSlot={<GlobalSearch />}
+          canOpenRegister={canOpenRegister}
+          isPlatformAdmin={isPlatformAdmin}
         />
         <main className="page-container min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {children}

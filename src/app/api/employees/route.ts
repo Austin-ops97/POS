@@ -6,10 +6,14 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { hashPin } from "@/lib/pin";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
+import { assertRoleAssignmentAllowed } from "@/lib/employee-security";
+import { createInvitationToken, INVITATION_TTL_MS } from "@/lib/employee-invitations";
+import { requireModule } from "@/lib/access-control";
 
 export async function GET() {
   try {
     const ctx = await requireAuth();
+    await requireModule(ctx, "WORKFORCE");
     await requireAnyPermission(ctx, [
       PERMISSIONS.MANAGE_EMPLOYEES,
       PERMISSIONS.VIEW_WORKFORCE,
@@ -34,10 +38,10 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    const sanitized = employees.map(({ pinHash: _pinHash, hourlyWage, ...employee }) => ({
-      ...employee,
-      ...(canViewCompensation ? { hourlyWage } : {}),
-    }));
+    const sanitized = employees.map(({ pinHash: _pinHash, hourlyWage, ...employee }) => {
+      void _pinHash;
+      return { ...employee, ...(canViewCompensation ? { hourlyWage } : {}) };
+    });
 
     return NextResponse.json(sanitized);
   } catch (error) {
@@ -48,6 +52,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    await requireModule(ctx, "WORKFORCE");
 
     if (!hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EMPLOYEES}`);
@@ -56,13 +61,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const data = employeeSchema.parse(body);
 
-    const role = await db.role.findUnique({
-      where: { id: data.roleId },
-    });
-
-    if (!role) {
-      return NextResponse.json({ error: "Role not found" }, { status: 404 });
-    }
+    await assertRoleAssignmentAllowed(ctx, data.roleId);
 
     const existingEmail = await db.employeeProfile.findFirst({
       where: {
@@ -97,6 +96,7 @@ export async function POST(request: Request) {
     }
 
     const pinHash = data.pin ? await hashPin(data.pin) : undefined;
+    const invitation = createInvitationToken();
 
     const workforceSettings = await db.workforceSettings.findUnique({
       where: { businessId: ctx.business.id },
@@ -118,6 +118,9 @@ export async function POST(request: Request) {
           ptoAnnualHours: data.ptoAnnualHours ?? defaultPto,
           ptoBalanceHours: data.ptoAnnualHours ?? defaultPto,
           status: "INVITED",
+          inviteTokenHash: invitation.hash,
+          inviteExpiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+          invitedAt: new Date(),
         },
         include: {
           role: { select: { id: true, name: true } },
@@ -147,6 +150,7 @@ export async function POST(request: Request) {
     });
 
     const { pinHash: _pinHash, ...sanitized } = employee!;
+    void _pinHash;
 
     await createAuditLog({
       businessId: ctx.business.id,
@@ -161,7 +165,11 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(sanitized, { status: 201 });
+    const baseUrl = new URL(request.url).origin;
+    return NextResponse.json(
+      { ...sanitized, invitationUrl: `${baseUrl}/join/${invitation.token}` },
+      { status: 201 }
+    );
   } catch (error) {
     return handleApiError(error, "POST /api/employees");
   }

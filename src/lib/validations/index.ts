@@ -54,6 +54,15 @@ export const receiptSettingsSchema = z.object({
 });
 
 export const MODULE_SETTING_KEYS = [
+  "POS",
+  "PAYMENTS",
+  "CATALOG",
+  "INVENTORY",
+  "ORDERS",
+  "CUSTOMERS",
+  "REPORTS",
+  "WORKFORCE",
+  "CONNECTIONS",
   "RETAIL",
   "SERVICE",
   "RENTAL",
@@ -64,25 +73,14 @@ export const MODULE_SETTING_KEYS = [
   "OFFICE",
 ] as const;
 
-export const moduleSettingsSchema = z
-  .object({
-    modules: z.array(
-      z.object({
-        module: z.enum(MODULE_SETTING_KEYS),
-        enabled: z.boolean(),
-      })
-    ),
-  })
-  .superRefine((data, ctx) => {
-    const retail = data.modules.find((m) => m.module === "RETAIL");
-    if (!retail?.enabled) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Retail module cannot be disabled",
-        path: ["modules"],
-      });
-    }
-  });
+export const moduleSettingsSchema = z.object({
+  modules: z.array(
+    z.object({
+      module: z.enum(MODULE_SETTING_KEYS),
+      enabled: z.boolean(),
+    })
+  ),
+});
 
 export const productSchema = z.object({
   name: z.string().min(1),

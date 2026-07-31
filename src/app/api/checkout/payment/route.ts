@@ -88,11 +88,15 @@ export async function POST(request: Request) {
         },
         automatic_payment_methods: { enabled: true },
       },
-      { stripeAccount: stripeAccount.stripeAccountId }
+      {
+        stripeAccount: stripeAccount.stripeAccountId,
+        idempotencyKey: `order-payment-${order.id}`,
+      }
     );
 
-    const payment = await db.payment.create({
-      data: {
+    const payment = await db.payment.upsert({
+      where: { stripePaymentIntentId: paymentIntent.id },
+      create: {
         businessId: ctx.business.id,
         orderId: order.id,
         method: "CARD",
@@ -100,6 +104,7 @@ export async function POST(request: Request) {
         amount: toDecimal(Number(order.total)),
         stripePaymentIntentId: paymentIntent.id,
       },
+      update: {},
     });
 
     await createAuditLog({

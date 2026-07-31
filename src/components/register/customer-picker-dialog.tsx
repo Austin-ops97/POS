@@ -119,6 +119,7 @@ export function CustomerPickerDialog({
                   <button
                     type="button"
                     role="option"
+                    aria-selected="false"
                     className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-slate-100"
                     onClick={() => {
                       onSelect(c);

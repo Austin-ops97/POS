@@ -24,6 +24,16 @@ enum EmployeeStatus {
   INVITED
 }
 
+enum PlatformRole {
+  USER
+  ADMIN
+}
+
+enum BusinessStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum ProductType {
   PHYSICAL
   SERVICE
@@ -240,21 +250,28 @@ enum OfficeDocumentStatus {
   ARCHIVED
 }
 
+enum ConnectionConversationType {
+  DIRECT
+  GROUP
+  EVERYONE
+}
+
 // ─── Core Multi-Tenant ───────────────────────────────────────────────────────
 
 model Business {
-  id           String       @id @default(cuid())
+  id           String         @id @default(cuid())
   name         String
   legalName    String?
-  type         BusinessType @default(RETAIL)
+  type         BusinessType   @default(RETAIL)
   phone        String?
   email        String?
   website      String?
   logoUrl      String?
-  primaryColor String       @default("#1e3a5f")
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  primaryColor String         @default("#1e3a5f")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   deletedAt    DateTime?
+  status       BusinessStatus @default(ACTIVE)
 
   locations                 Location[]
   employees                 EmployeeProfile[]
@@ -301,6 +318,8 @@ model Business {
   officeTags                OfficeTag[]
   officeAuditEvents         OfficeAuditEvent[]
   officeWorkspaceRecords    OfficeWorkspaceRecord[]
+  connectionConversations   ConnectionConversation[]
+  connectionMessages        ConnectionMessage[]
 
   @@index([createdAt])
 }
@@ -340,14 +359,15 @@ model Location {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String
-  firstName String?
-  lastName  String?
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String       @id @default(cuid())
+  clerkId      String       @unique
+  email        String
+  firstName    String?
+  lastName     String?
+  imageUrl     String?
+  platformRole PlatformRole @default(USER)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   employees EmployeeProfile[]
 
@@ -435,36 +455,41 @@ model EmployeeProfile {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   deletedAt           DateTime?
+  inviteTokenHash     String?             @unique
+  inviteExpiresAt     DateTime?
+  invitedAt           DateTime?
+  joinedAt            DateTime?
 
-  business                       Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user                           User?                      @relation(fields: [userId], references: [id])
-  role                           Role                       @relation(fields: [roleId], references: [id])
-  manager                        EmployeeProfile?           @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
-  directReports                  EmployeeProfile[]          @relation("EmployeeManager")
-  defaultLocation                Location?                  @relation("EmployeeDefaultLocation", fields: [defaultLocationId], references: [id], onDelete: SetNull)
+  business                       Business                       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                           User?                          @relation(fields: [userId], references: [id])
+  role                           Role                           @relation(fields: [roleId], references: [id])
+  manager                        EmployeeProfile?               @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports                  EmployeeProfile[]              @relation("EmployeeManager")
+  defaultLocation                Location?                      @relation("EmployeeDefaultLocation", fields: [defaultLocationId], references: [id], onDelete: SetNull)
   locations                      EmployeeLocation[]
+  moduleAccess                   EmployeeModuleAccess[]
   emergencyContacts              EmployeeEmergencyContact[]
   compensationHistory            EmployeeCompensation[]
-  compensationCreated            EmployeeCompensation[]     @relation("CompensationCreatedBy")
+  compensationCreated            EmployeeCompensation[]         @relation("CompensationCreatedBy")
   ptoLedgerEntries               PtoLedgerEntry[]
-  ptoAdjustmentsMade             PtoLedgerEntry[]           @relation("PtoAdjustedBy")
+  ptoAdjustmentsMade             PtoLedgerEntry[]               @relation("PtoAdjustedBy")
   orders                         Order[]
   refunds                        Refund[]
   registerSessions               RegisterSession[]
   auditLogs                      AuditLog[]
   shifts                         Shift[]
-  shiftsCreated                  Shift[]                    @relation("ShiftCreatedBy")
+  shiftsCreated                  Shift[]                        @relation("ShiftCreatedBy")
   timeEntries                    TimeEntry[]
-  timeEntriesAdjusted            TimeEntry[]                @relation("TimeEntryAdjustedBy")
+  timeEntriesAdjusted            TimeEntry[]                    @relation("TimeEntryAdjustedBy")
   timeOffRequests                TimeOffRequest[]
-  timeOffReviews                 TimeOffRequest[]           @relation("TimeOffReviewedBy")
+  timeOffReviews                 TimeOffRequest[]               @relation("TimeOffReviewedBy")
   payrollBonuses                 PayrollBonus[]
-  payrollBonusesCreated          PayrollBonus[]             @relation("PayrollBonusCreatedBy")
+  payrollBonusesCreated          PayrollBonus[]                 @relation("PayrollBonusCreatedBy")
   inventoryScanSessions          InventoryScanSession[]
-  assignedCompanyCards           CompanyCard[]              @relation("CompanyCardAssignee")
-  companyCardsCreated            CompanyCard[]              @relation("CompanyCardCreatedBy")
-  expenses                       Expense[]                  @relation("ExpenseEmployee")
-  expensesSubmitted              Expense[]                  @relation("ExpenseSubmittedBy")
+  assignedCompanyCards           CompanyCard[]                  @relation("CompanyCardAssignee")
+  companyCardsCreated            CompanyCard[]                  @relation("CompanyCardCreatedBy")
+  expenses                       Expense[]                      @relation("ExpenseEmployee")
+  expensesSubmitted              Expense[]                      @relation("ExpenseSubmittedBy")
   expenseApprovals               ExpenseApprovalEvent[]
   expenseComments                ExpenseComment[]
   expenseFlagsRaised             ExpenseFlag[]
@@ -472,21 +497,112 @@ model EmployeeProfile {
   expenseAuditEvents             ExpenseAuditEvent[]
   expenseSavedFilters            ExpenseSavedFilter[]
   cardTransactions               CompanyCardTransaction[]
-  officeFoldersCreated           OfficeFolder[]             @relation("OfficeFolderCreatedBy")
-  officeDocumentsCreated         OfficeDocument[]           @relation("OfficeDocumentCreatedBy")
-  officeDocumentsUpdated         OfficeDocument[]           @relation("OfficeDocumentUpdatedBy")
+  officeFoldersCreated           OfficeFolder[]                 @relation("OfficeFolderCreatedBy")
+  officeDocumentsCreated         OfficeDocument[]               @relation("OfficeDocumentCreatedBy")
+  officeDocumentsUpdated         OfficeDocument[]               @relation("OfficeDocumentUpdatedBy")
   officeDocumentVersions         OfficeDocumentVersion[]
   officeDocumentFiles            OfficeDocumentFile[]
   officeFavorites                OfficeDocumentFavorite[]
   officeAuditEvents              OfficeAuditEvent[]
-  officeWorkspaceRecordsCreated  OfficeWorkspaceRecord[]    @relation("OfficeWorkspaceRecordCreatedBy")
-  officeWorkspaceRecordsAssigned OfficeWorkspaceRecord[]    @relation("OfficeWorkspaceRecordAssignedTo")
+  officeWorkspaceRecordsCreated  OfficeWorkspaceRecord[]        @relation("OfficeWorkspaceRecordCreatedBy")
+  officeWorkspaceRecordsAssigned OfficeWorkspaceRecord[]        @relation("OfficeWorkspaceRecordAssignedTo")
+  connectionMemberships          ConnectionConversationMember[]
+  connectionConversationsCreated ConnectionConversation[]       @relation("ConnectionConversationCreatedBy")
+  connectionMessages             ConnectionMessage[]            @relation("ConnectionMessageSender")
+  connectionReactions            ConnectionMessageReaction[]
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
   @@index([email])
   @@index([businessId, status])
   @@index([managerId])
+}
+
+model EmployeeModuleAccess {
+  id         String   @id @default(cuid())
+  employeeId String
+  module     String
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, module])
+  @@index([employeeId])
+}
+
+model ConnectionConversation {
+  id            String                     @id @default(cuid())
+  businessId    String
+  type          ConnectionConversationType
+  name          String?
+  createdById   String?
+  lastMessageAt DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  deletedAt     DateTime?
+
+  business  Business                       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile?               @relation("ConnectionConversationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  members   ConnectionConversationMember[]
+  messages  ConnectionMessage[]
+
+  @@index([businessId, lastMessageAt])
+  @@index([businessId, type])
+}
+
+model ConnectionConversationMember {
+  id             String    @id @default(cuid())
+  conversationId String
+  employeeId     String
+  joinedAt       DateTime  @default(now())
+  lastReadAt     DateTime?
+  muted          Boolean   @default(false)
+
+  conversation ConnectionConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  employee     EmployeeProfile        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, employeeId])
+  @@index([employeeId, lastReadAt])
+}
+
+model ConnectionMessage {
+  id             String    @id @default(cuid())
+  businessId     String
+  conversationId String
+  senderId       String
+  replyToId      String?
+  body           String    @db.Text
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  business     Business                    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation ConnectionConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       EmployeeProfile             @relation("ConnectionMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo      ConnectionMessage?          @relation("ConnectionMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      ConnectionMessage[]         @relation("ConnectionMessageReplies")
+  reactions    ConnectionMessageReaction[]
+
+  @@index([conversationId, createdAt])
+  @@index([businessId, createdAt])
+  @@index([replyToId])
+}
+
+model ConnectionMessageReaction {
+  id         String   @id @default(cuid())
+  messageId  String
+  employeeId String
+  emoji      String
+  createdAt  DateTime @default(now())
+
+  message  ConnectionMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, employeeId, emoji])
+  @@index([messageId])
 }
 
 model EmployeeEmergencyContact {
@@ -933,7 +1049,7 @@ model Payment {
   amount                Decimal       @db.Decimal(10, 2)
   amountTendered        Decimal?      @db.Decimal(10, 2)
   changeDue             Decimal?      @db.Decimal(10, 2)
-  stripePaymentIntentId String?
+  stripePaymentIntentId String?       @unique
   stripeChargeId        String?
   cardLast4             String?
   cardBrand             String?
@@ -945,7 +1061,6 @@ model Payment {
 
   @@index([businessId])
   @@index([orderId])
-  @@index([stripePaymentIntentId])
 }
 
 model Refund {
@@ -957,7 +1072,7 @@ model Refund {
   taxAmount      Decimal      @default(0) @db.Decimal(10, 2)
   reason         RefundReason
   reasonNote     String?
-  stripeRefundId String?
+  stripeRefundId String?      @unique
   returnToStock  Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
@@ -1638,6 +1753,7 @@ model ExpenseReceipt {
   sizeBytes   Int
   /// Data URL or storage URL — never store full PAN/card numbers from OCR into notes alone.
   storageUrl  String
+  data        Bytes?
   pageNumber  Int                @default(1)
   width       Int?
   height      Int?

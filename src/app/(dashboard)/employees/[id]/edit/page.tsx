@@ -25,7 +25,10 @@ export default async function EmployeeEditPage({
   if (!employee) notFound();
 
   const [roles, locations, managers] = await Promise.all([
-    db.role.findMany({ orderBy: { name: "asc" } }),
+    db.role.findMany({
+      where: ctx.employee.role.name === "Owner" ? undefined : { name: { notIn: ["Owner", "Admin"] } },
+      orderBy: { name: "asc" },
+    }),
     db.location.findMany({
       where: { businessId: ctx.business.id, deletedAt: null },
       orderBy: { name: "asc" },

@@ -153,6 +153,7 @@ export async function POST(
 
       const stripeRefund = await stripe.refunds.create(refundParams, {
         stripeAccount: stripeAccount.stripeAccountId,
+        idempotencyKey: `order-refund-${order.id}-${Math.round(priorRefunded * 100)}-${Math.round(refundAmount * 100)}`,
       });
       stripeRefundId = stripeRefund.id;
     } else if (!cashPayment) {

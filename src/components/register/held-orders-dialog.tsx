@@ -102,6 +102,7 @@ export function HeldOrdersDialog({
                   <button
                     type="button"
                     role="option"
+                    aria-selected="false"
                     className="flex w-full items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
                     onClick={() => {
                       onSelect(order);

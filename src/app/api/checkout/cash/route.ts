@@ -75,6 +75,18 @@ export async function POST(request: Request) {
     const result = await db.$transaction(async (tx) => {
       await assertOrderInventoryInTransaction(tx, ctx.business.id, order.id);
 
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          businessId: ctx.business.id,
+          status: { in: ["PENDING_PAYMENT", "HELD"] },
+        },
+        data: { status: "PAID", paidAt: new Date(), heldAt: null },
+      });
+      if (claimed.count !== 1) {
+        throw new Error("Order payment was already completed by another request");
+      }
+
       const payment = await tx.payment.create({
         data: {
           businessId: ctx.business.id,
@@ -91,14 +103,7 @@ export async function POST(request: Request) {
         },
       });
 
-      const updatedOrder = await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-          heldAt: null,
-        },
-      });
+      const updatedOrder = await tx.order.findUniqueOrThrow({ where: { id: order.id } });
 
       await deductOrderInventoryInTransaction(
         tx,

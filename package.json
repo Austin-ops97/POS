@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/provision-business.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts src/lib/workforce/workforce.test.ts src/lib/barcodes.test.ts src/lib/inventory-scan.test.ts src/lib/product-lookup/service.test.ts src/components/barcode/decoder.test.ts src/lib/barcode-api.test.ts src/lib/expenses/expenses.test.ts src/lib/security-hardening.test.ts src/lib/office/office.test.ts",
+    "test": "node --import tsx --test src/lib/provision-business.test.ts src/lib/receipts/receipt.test.ts src/lib/register/register-checkout.test.ts src/lib/register/receipt-preview.test.ts src/lib/workforce/workforce.test.ts src/lib/barcodes.test.ts src/lib/inventory-scan.test.ts src/lib/product-lookup/service.test.ts src/components/barcode/decoder.test.ts src/lib/barcode-api.test.ts src/lib/expenses/expenses.test.ts src/lib/security-hardening.test.ts src/lib/office/office.test.ts src/lib/connections/connections.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:public": "playwright test e2e/responsive.spec.ts --grep \"responsive public smoke\"",
@@ -54,7 +54,7 @@
     "date-fns": "^4.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.17.0",
-    "next": "^15.5.19",
+    "next": "^15.5.22",
     "pdfkit": "^0.19.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
@@ -80,10 +80,14 @@
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.0",
     "eslint": "^9",
-    "eslint-config-next": "^15.5.19",
+    "eslint-config-next": "^15.5.22",
     "prisma": "5.22.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.3"
   }
 }

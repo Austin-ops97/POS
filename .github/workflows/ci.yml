@@ -9,6 +9,14 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://user:pass@localhost:5432/db?pgbouncer=true
+      DIRECT_URL: postgresql://user:pass@localhost:5432/db
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci
+      CLERK_SECRET_KEY: sk_test_ci
+      STRIPE_SECRET_KEY: sk_test_ci
+      STRIPE_WEBHOOK_SECRET: whsec_ci
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,20 +24,16 @@ jobs:
           node-version: "22"
           cache: npm
       - name: Install
-        run: |
-          DATABASE_URL="postgresql://user:pass@localhost:5432/db?pgbouncer=true"
-          DIRECT_URL="postgresql://user:pass@localhost:5432/db"
-          export DATABASE_URL DIRECT_URL
-          npm ci
+        run: npm ci
       - name: Generate Prisma client
-        run: |
-          DATABASE_URL="postgresql://user:pass@localhost:5432/db?pgbouncer=true"
-          DIRECT_URL="postgresql://user:pass@localhost:5432/db"
-          export DATABASE_URL DIRECT_URL
-          npx prisma generate
+        run: npx prisma generate
+      - name: Validate database schema
+        run: npx prisma validate
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
         run: npm run lint
       - name: Unit tests
         run: npm test
+      - name: Production build
+        run: npm run build:app

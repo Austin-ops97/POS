@@ -63,6 +63,7 @@ export function EmployeeForm({
   const router = useRouter();
   const isEdit = !!employeeId;
   const [dirty, setDirty] = useState(false);
+  const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -199,8 +200,14 @@ export function EmployeeForm({
         return;
       }
 
+      const result = (await res.json().catch(() => ({}))) as { invitationUrl?: string };
+
       toast.success(isEdit ? "Employee updated" : "Employee created");
       setDirty(false);
+      if (!isEdit && result.invitationUrl) {
+        setInvitationUrl(result.invitationUrl);
+        return;
+      }
       router.push(isEdit ? `/employees/${employeeId}` : "/employees");
     } catch {
       setSubmitError(`Failed to ${isEdit ? "update" : "create"} employee`);
@@ -218,6 +225,19 @@ export function EmployeeForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl space-y-6">
+      {invitationUrl ? (
+        <Card className="border-emerald-200 bg-emerald-50">
+          <CardHeader><CardTitle className="text-base">Employee invitation ready</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-slate-600">Send this private, expiring link to the employee. They must sign in with the email address on this profile.</p>
+            <Input readOnly value={invitationUrl} />
+            <div className="flex gap-2">
+              <Button type="button" onClick={async () => { await navigator.clipboard.writeText(invitationUrl); toast.success("Invitation link copied"); }}>Copy invitation link</Button>
+              <Button type="button" variant="outline" onClick={() => router.push("/employees")}>Done</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       {submitError && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {submitError}

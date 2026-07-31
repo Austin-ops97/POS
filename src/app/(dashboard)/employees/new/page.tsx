@@ -10,6 +10,7 @@ export default async function NewEmployeePage() {
 
   const [roles, locations] = await Promise.all([
     db.role.findMany({
+      where: ctx.employee.role.name === "Owner" ? undefined : { name: { notIn: ["Owner", "Admin"] } },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

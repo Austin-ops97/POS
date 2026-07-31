@@ -19,6 +19,8 @@ import {
   FolderKanban,
   FileSignature,
   Bot,
+  MessageCircle,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,7 +48,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/orders", label: "Orders", icon: ClipboardList },
       { href: "/customers", label: "Customers", icon: Users },
       { href: "/employees", label: "Employees", icon: UserCog },
+      { href: "/connections", label: "Connection", icon: MessagesSquare },
       { href: "/workforce", label: "Workforce", icon: CalendarClock },
+      { href: "/connections", label: "Connections", icon: MessageCircle },
       { href: "/reports", label: "Reports", icon: BarChart3 },
     ],
   },
@@ -104,6 +108,8 @@ export type NavVisibility = {
   showWorkforce: boolean;
   /** When false, hide the Office workspace. */
   officeEnabled: boolean;
+  /** Exact routes this employee may see after module and role evaluation. */
+  allowedHrefs?: string[];
 };
 
 export function filterNavSections(
@@ -125,11 +131,20 @@ export function filterNavSections(
             if (item.href === "/workforce" && !visibility.showWorkforce) {
               return false;
             }
+            if (visibility.allowedHrefs && !visibility.allowedHrefs.includes(item.href)) {
+              return false;
+            }
             return true;
           }),
         };
       }
+      if (visibility.allowedHrefs) {
+        return {
+          ...section,
+          items: section.items.filter((item) => visibility.allowedHrefs!.includes(item.href)),
+        };
+      }
       return section;
     })
-    .filter((section): section is NavSection => section != null);
+    .filter((section): section is NavSection => section != null && section.items.length > 0);
 }

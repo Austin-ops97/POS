@@ -182,9 +182,11 @@ describe("module key normalization", () => {
     const { normalizeModuleKey, defaultEnabledModules } = await import("./modules");
     assert.equal(normalizeModuleKey("retail"), "RETAIL");
     assert.equal(normalizeModuleKey("SERVICE"), "SERVICE");
-    assert.equal(normalizeModuleKey("inventory"), "RETAIL");
+    assert.equal(normalizeModuleKey("inventory"), "INVENTORY");
     const defaults = defaultEnabledModules();
-    assert.ok(defaults.every((m) => m.enabled));
+    assert.equal(defaults.find((m) => m.module === "POS")?.enabled, true);
+    assert.equal(defaults.find((m) => m.module === "OFFICE")?.enabled, true);
+    assert.equal(defaults.find((m) => m.module === "GIFT_CARDS")?.enabled, false);
     assert.deepEqual(
       defaults.map((m) => m.module).sort(),
       [...MODULE_SETTING_KEYS].sort()

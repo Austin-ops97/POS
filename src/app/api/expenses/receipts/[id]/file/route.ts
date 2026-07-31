@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: Params) {
       return jsonError("Forbidden", 403);
     }
 
-    const blob = await readReceiptBlob(receipt.storageUrl);
+    const blob = await readReceiptBlob(receipt.storageUrl, receipt.data, receipt.mimeType);
     if (!blob) {
       return jsonError("Receipt file missing", 404);
     }

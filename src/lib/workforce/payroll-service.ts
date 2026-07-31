@@ -40,7 +40,6 @@ export function computeEntryHours(entry: TimeEntryWithBreaks): {
   }
   const end = entry.clockOut;
   const totalHours = hoursFromMs(end.getTime() - entry.clockIn.getTime());
-  const breakHours = getBreakMinutes(entry.breaks) / 60;
   const actualHours = getWorkedMinutes(entry, end) / 60;
   return { actualHours, breakHours: totalHours - actualHours };
 }
@@ -158,6 +157,9 @@ export async function computePayrollSummary(params: {
     const empShifts = shiftsByEmployee.get(emp.id) ?? [];
     const empBonuses = bonusesByEmployee.get(emp.id) ?? [];
     const empTimeOff = timeOffByEmployee.get(emp.id) ?? [];
+    const paidLeaveHours = empTimeOff
+      .filter((request) => request.type === "PTO" || request.type === "SICK")
+      .reduce((sum, request) => sum + Number(request.hoursRequested), 0);
 
     let actualHours = 0;
     let breakHours = 0;
@@ -182,7 +184,7 @@ export async function computePayrollSummary(params: {
     }
 
     if (empTimeOff.length > 0) {
-      flags.push("Approved time off");
+      flags.push(paidLeaveHours > 0 ? `Paid leave: ${paidLeaveHours.toFixed(2)}h` : "Approved unpaid time off");
     }
 
     const compensation = await getEffectiveCompensation(emp.id, periodEnd);
@@ -199,14 +201,15 @@ export async function computePayrollSummary(params: {
 
     if (payType === "SALARY") {
       const annual = Number(compensation?.annualSalary ?? 0);
-      const periodDays =
-        (periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+      const startDay = Date.UTC(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate());
+      const endDay = Date.UTC(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate());
+      const periodDays = Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
       totalPay = (annual / 365) * periodDays;
       regularHours = actualHours;
       flags.push("Salary employee");
     } else {
       const ot = computeWeeklyOvertimeHours(empEntries, weekStartDay, overtimeThreshold);
-      regularHours = ot.regularHours;
+      regularHours = ot.regularHours + paidLeaveHours;
       overtimeHours = otEligible ? ot.overtimeHours : 0;
       regularPay = regularHours * hourlyWage;
       overtimePay = overtimeHours * hourlyWage * otMultiplier;
