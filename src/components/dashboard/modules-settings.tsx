@@ -20,6 +20,11 @@ const MODULES = [
     name: "Expenses",
     description: "Company cards, reimbursements, receipts, and approvals",
   },
+  {
+    key: "OFFICE" as const,
+    name: "Office",
+    description: "Documents, camera scanning, folders, templates, and business records",
+  },
 ];
 
 const MODULE_ALIASES: Record<string, (typeof MODULE_SETTING_KEYS)[number]> = {
@@ -34,6 +39,8 @@ const MODULE_ALIASES: Record<string, (typeof MODULE_SETTING_KEYS)[number]> = {
   gift_cards: "GIFT_CARDS",
   expenses: "EXPENSES",
   finance: "EXPENSES",
+  office: "OFFICE",
+  documents: "OFFICE",
 };
 
 function normalizeModuleKey(module: string): (typeof MODULE_SETTING_KEYS)[number] {

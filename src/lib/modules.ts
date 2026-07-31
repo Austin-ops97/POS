@@ -30,6 +30,9 @@ export function normalizeModuleKey(key: string): string {
     expenses: "EXPENSES",
     finance: "EXPENSES",
     expense_management: "EXPENSES",
+    office: "OFFICE",
+    documents: "OFFICE",
+    admin: "OFFICE",
   };
   const lower = key.toLowerCase();
   if (aliases[lower]) return aliases[lower];

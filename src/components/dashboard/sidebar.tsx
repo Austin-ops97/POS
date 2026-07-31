@@ -26,7 +26,7 @@ type SidebarNavProps = {
 export function SidebarNav({
   onNavigate,
   className,
-  visibility = { expensesEnabled: true, showWorkforce: true },
+  visibility = { expensesEnabled: true, showWorkforce: true, officeEnabled: true },
 }: SidebarNavProps) {
   const pathname = usePathname();
   const sections = filterNavSections(NAV_SECTIONS, visibility);

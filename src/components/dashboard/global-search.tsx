@@ -18,7 +18,8 @@ type SearchHit =
   | { kind: "page"; label: string; href: string }
   | { kind: "product"; label: string; href: string; detail?: string }
   | { kind: "customer"; label: string; href: string; detail?: string }
-  | { kind: "order"; label: string; href: string; detail?: string };
+  | { kind: "order"; label: string; href: string; detail?: string }
+  | { kind: "document"; label: string; href: string; detail?: string };
 
 export function GlobalSearch() {
   const router = useRouter();
@@ -73,10 +74,11 @@ export function GlobalSearch() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const [productsRes, customersRes, ordersRes] = await Promise.all([
+        const [productsRes, customersRes, ordersRes, documentsRes] = await Promise.all([
           fetch(`/api/products?search=${encodeURIComponent(q)}&limit=5`),
           fetch(`/api/customers?search=${encodeURIComponent(q)}&limit=5`),
           fetch(`/api/orders?search=${encodeURIComponent(q)}&limit=5`),
+          fetch(`/api/office/documents?q=${encodeURIComponent(q)}&pageSize=5`),
         ]);
         const next: SearchHit[] = [...pageHits];
         if (productsRes.ok) {
@@ -109,6 +111,17 @@ export function GlobalSearch() {
               label: o.orderNumber,
               href: `/orders/${o.id}`,
               detail: o.status,
+            });
+          }
+        }
+        if (documentsRes.ok) {
+          const data = await documentsRes.json();
+          for (const document of data.items || []) {
+            next.push({
+              kind: "document",
+              label: document.title,
+              href: `/office/documents/${document.id}`,
+              detail: document.kind === "SCAN" ? "Scanned document" : "Office document",
             });
           }
         }
@@ -153,7 +166,7 @@ export function GlobalSearch() {
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
             <DialogDescription>
-              Jump to pages, products, customers, or orders.
+              Jump to pages, products, customers, orders, or office documents.
             </DialogDescription>
           </DialogHeader>
           <div className="relative">
@@ -180,6 +193,7 @@ export function GlobalSearch() {
                   <button
                     type="button"
                     role="option"
+                    aria-selected="false"
                     className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-100"
                     onClick={() => {
                       setOpen(false);

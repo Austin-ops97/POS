@@ -40,6 +40,17 @@ export const PERMISSIONS = {
   MANAGE_EXPENSE_BUDGETS: "manage_expense_budgets",
   MANAGE_EXPENSE_SETTINGS: "manage_expense_settings",
   REIMBURSE_EXPENSES: "reimburse_expenses",
+  // Office and document management
+  VIEW_DOCUMENTS: "view_documents",
+  CREATE_DOCUMENTS: "create_documents",
+  EDIT_DOCUMENTS: "edit_documents",
+  DELETE_DOCUMENTS: "delete_documents",
+  SCAN_DOCUMENTS: "scan_documents",
+  MANAGE_DOCUMENT_FOLDERS: "manage_document_folders",
+  MANAGE_DOCUMENT_TEMPLATES: "manage_document_templates",
+  APPROVE_DOCUMENTS: "approve_documents",
+  VIEW_SENSITIVE_DOCUMENTS: "view_sensitive_documents",
+  MANAGE_OFFICE_SETTINGS: "manage_office_settings",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -104,6 +115,27 @@ const EXPENSE_FINANCE: PermissionKey[] = [
   PERMISSIONS.REIMBURSE_EXPENSES,
 ];
 
+const OFFICE_USER: PermissionKey[] = [
+  PERMISSIONS.VIEW_DOCUMENTS,
+  PERMISSIONS.CREATE_DOCUMENTS,
+  PERMISSIONS.EDIT_DOCUMENTS,
+  PERMISSIONS.SCAN_DOCUMENTS,
+];
+
+const OFFICE_MANAGER: PermissionKey[] = [
+  ...OFFICE_USER,
+  PERMISSIONS.DELETE_DOCUMENTS,
+  PERMISSIONS.MANAGE_DOCUMENT_FOLDERS,
+  PERMISSIONS.MANAGE_DOCUMENT_TEMPLATES,
+  PERMISSIONS.APPROVE_DOCUMENTS,
+];
+
+const OFFICE_ADMIN: PermissionKey[] = [
+  ...OFFICE_MANAGER,
+  PERMISSIONS.VIEW_SENSITIVE_DOCUMENTS,
+  PERMISSIONS.MANAGE_OFFICE_SETTINGS,
+];
+
 export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Owner: Object.values(PERMISSIONS),
   Admin: [
@@ -125,6 +157,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     ...WORKFORCE_PAYROLL,
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_FINANCE,
+    ...OFFICE_ADMIN,
   ],
   Manager: [
     PERMISSIONS.OPEN_REGISTER,
@@ -146,6 +179,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.APPROVE_TIME_OFF,
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_MANAGER,
+    ...OFFICE_MANAGER,
   ],
   Cashier: [
     PERMISSIONS.OPEN_REGISTER,
@@ -156,6 +190,9 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.VIEW_WORKFORCE,
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_EMPLOYEE,
+    PERMISSIONS.VIEW_DOCUMENTS,
+    PERMISSIONS.CREATE_DOCUMENTS,
+    PERMISSIONS.SCAN_DOCUMENTS,
   ],
   "Inventory Staff": [
     ...PRODUCT_OPS,
@@ -163,17 +200,20 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.REQUEST_TIME_OFF,
     ...EXPENSE_EMPLOYEE,
+    ...OFFICE_USER,
   ],
   "Reports Viewer": [
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.REQUEST_TIME_OFF,
     PERMISSIONS.VIEW_OWN_EXPENSES,
     PERMISSIONS.VIEW_EXPENSE_REPORTS,
+    PERMISSIONS.VIEW_DOCUMENTS,
   ],
   Finance: [
     PERMISSIONS.VIEW_REPORTS,
     PERMISSIONS.VIEW_PAYROLL,
     ...EXPENSE_FINANCE,
+    ...OFFICE_ADMIN,
   ],
 };
 

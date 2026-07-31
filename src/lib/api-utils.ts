@@ -138,6 +138,21 @@ export function handleApiError(error: unknown, context: string) {
     if (error.message === "Not authorized to cancel this request") {
       return apiError(error.message, 403, { code: "FORBIDDEN", requestId });
     }
+    if (error.message.endsWith("not found")) {
+      return apiError(error.message, 404, { code: "NOT_FOUND", requestId });
+    }
+    if (error.message.includes("10 MB limit")) {
+      return apiError(error.message, 413, { code: "FILE_TOO_LARGE", requestId });
+    }
+    if (
+      error.message.startsWith("Unsupported office file") ||
+      error.message.includes("does not match its type")
+    ) {
+      return apiError(error.message, 415, { code: "UNSUPPORTED_FILE", requestId });
+    }
+    if (error.message.includes("already attached")) {
+      return apiError(error.message, 409, { code: "DUPLICATE_FILE", requestId });
+    }
     if (error.message.includes("Stripe is not configured")) {
       return apiError(error.message, 503, { code: "STRIPE_UNAVAILABLE", requestId });
     }

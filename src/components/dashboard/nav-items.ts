@@ -14,6 +14,7 @@ import {
   Receipt,
   PiggyBank,
   LineChart,
+  Files,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,11 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/workforce", label: "Workforce", icon: CalendarClock },
       { href: "/reports", label: "Reports", icon: BarChart3 },
     ],
+  },
+  {
+    id: "office",
+    label: "Office",
+    items: [{ href: "/office", label: "Documents", icon: Files }],
   },
   {
     id: "finance",
@@ -85,6 +91,8 @@ export type NavVisibility = {
   expensesEnabled: boolean;
   /** When false, hide Workforce until the business has multiple staff. */
   showWorkforce: boolean;
+  /** When false, hide the Office workspace. */
+  officeEnabled: boolean;
 };
 
 export function filterNavSections(
@@ -94,6 +102,9 @@ export function filterNavSections(
   return sections
     .map((section) => {
       if (section.id === "finance" && !visibility.expensesEnabled) {
+        return null;
+      }
+      if (section.id === "office" && !visibility.officeEnabled) {
         return null;
       }
       if (section.id === "main") {

@@ -38,6 +38,10 @@ export default async function DashboardLayout({
     (m) => normalizeModuleKey(m.module) === "EXPENSES"
   );
   const expensesEnabled = expensesModule ? expensesModule.enabled : true;
+  const officeModule = moduleSettings.find(
+    (m) => normalizeModuleKey(m.module) === "OFFICE"
+  );
+  const officeEnabled = officeModule ? officeModule.enabled : true;
 
   return (
     <DashboardShell
@@ -46,6 +50,7 @@ export default async function DashboardLayout({
       authEnabled={isClerkConfigured()}
       navVisibility={{
         expensesEnabled,
+        officeEnabled,
         showWorkforce: employeeCount > 1,
       }}
     >
