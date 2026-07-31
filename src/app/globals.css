@@ -122,7 +122,7 @@ body {
 
 .office-rich-text p,
 .office-rich-text li {
-  line-height: 1.7;
+  line-height: 1.5;
 }
 
 .office-rich-text p {
@@ -174,6 +174,112 @@ body {
   font-weight: 650;
 }
 
+.office-rich-text {
+  caret-color: #1d4ed8;
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 11pt;
+  overflow-wrap: anywhere;
+}
+
+.office-rich-text::selection,
+.office-rich-text *::selection {
+  background: #bfdbfe;
+  color: #0f172a;
+}
+
+.office-rich-text hr {
+  border: 0;
+  border-top: 1px solid #94a3b8;
+  margin: 1.25rem 0;
+}
+
+.office-rich-text figure {
+  margin: 1rem auto;
+  max-width: 100%;
+  text-align: center;
+}
+
+.office-rich-text img {
+  display: inline-block;
+  height: auto;
+  max-width: 100%;
+  resize: both;
+}
+
+.office-rich-text figcaption {
+  color: #64748b;
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+.office-rich-text .office-checklist {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.office-rich-text .office-checklist li::before {
+  border: 1.5px solid #64748b;
+  border-radius: 0.2rem;
+  content: "";
+  display: inline-block;
+  height: 0.85rem;
+  margin-right: 0.55rem;
+  vertical-align: -0.05rem;
+  width: 0.85rem;
+}
+
+.office-page-break {
+  border-top: 1px dashed #94a3b8;
+  break-after: page;
+  margin: 2rem calc(-1 * var(--office-page-margin, 1in));
+  page-break-after: always;
+  position: relative;
+  user-select: none;
+}
+
+.office-page-break span {
+  background: white;
+  color: #94a3b8;
+  font-size: 0.65rem;
+  left: 50%;
+  padding: 0 0.5rem;
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.office-show-marks p::after,
+.office-show-marks h1::after,
+.office-show-marks h2::after,
+.office-show-marks h3::after,
+.office-show-marks li::after {
+  color: #93c5fd;
+  content: " ¶";
+  font-weight: 400;
+  user-select: none;
+}
+
+@media (max-width: 639px) {
+  .office-page-frame,
+  .office-paper {
+    transform: none !important;
+    width: calc(100vw - 1.5rem) !important;
+  }
+
+  .office-paper {
+    min-height: calc(100dvh - 14rem) !important;
+    padding: 1.25rem !important;
+  }
+
+  .office-rich-text {
+    font-size: 16px;
+  }
+
+  .office-paper {
+    box-shadow: none !important;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;
@@ -190,7 +296,17 @@ body {
     padding: 0 !important;
     position: absolute;
     top: 0;
+    transform: none !important;
     width: 100%;
+  }
+
+  .office-page-break {
+    border: 0;
+    margin: 0;
+  }
+
+  .office-page-break span {
+    display: none;
   }
 }
 

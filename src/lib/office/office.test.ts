@@ -9,12 +9,32 @@ import {
 } from "@/lib/validations/office";
 
 describe("Office content security", () => {
-  it("removes scripts, event handlers, images, and unsafe links", () => {
+  it("removes scripts, event handlers, external images, and unsafe links", () => {
     const clean = sanitizeOfficeContent(
       '<h1 onclick="alert(1)">Policy</h1><script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">bad</a>'
     );
     assert.match(clean, /<h1>Policy<\/h1>/);
     assert.doesNotMatch(clean, /script|onclick|onerror|<img|javascript:/i);
+  });
+
+  it("preserves authenticated Office images and page structure only", () => {
+    const clean = sanitizeOfficeContent(
+      '<figure><img src="/api/office/files/clx123" alt="Site map"><figcaption>Site map</figcaption></figure><div class="office-page-break" data-office-page-break="true"><span>Page break</span></div><img src="https://tracker.example/pixel.png">'
+    );
+    assert.match(clean, /src="\/api\/office\/files\/clx123"/);
+    assert.match(clean, /data-office-page-break="true"/);
+    assert.doesNotMatch(clean, /tracker\.example/);
+  });
+
+  it("preserves safe word-processing styles", () => {
+    const clean = sanitizeOfficeContent(
+      '<p style="font-family: Georgia, serif; font-size: 18px; font-weight: bold; line-height: 1.5; text-align: justify">Formatted</p>'
+    );
+    assert.match(clean, /font-family:Georgia, serif/);
+    assert.match(clean, /font-size:18px/);
+    assert.match(clean, /font-weight:bold/);
+    assert.match(clean, /line-height:1.5/);
+    assert.match(clean, /text-align:justify/);
   });
 
   it("preserves supported business-document formatting", () => {
@@ -49,4 +69,3 @@ describe("Office validation", () => {
     assert.equal(officeFileOrderSchema.safeParse({ fileIds: [] }).success, false);
   });
 });
-
