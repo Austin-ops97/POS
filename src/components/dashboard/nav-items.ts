@@ -15,6 +15,10 @@ import {
   PiggyBank,
   LineChart,
   Files,
+  FileText,
+  FolderKanban,
+  FileSignature,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,7 +53,13 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     id: "office",
     label: "Office",
-    items: [{ href: "/office", label: "Documents", icon: Files }],
+    items: [
+      { href: "/office", label: "Office hub", icon: Files },
+      { href: "/office/documents", label: "Documents", icon: FileText },
+      { href: "/office/apps/projects", label: "Projects", icon: FolderKanban },
+      { href: "/office/apps/forms-approvals", label: "Forms & approvals", icon: FileSignature },
+      { href: "/office/apps/automations-ai", label: "AI & automations", icon: Bot },
+    ],
   },
   {
     id: "finance",
@@ -74,6 +84,7 @@ export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.it
 export function isNavItemActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
   if (href === "/dashboard") return false;
+  if (href === "/office") return false;
   if (href === "/finance/expenses") {
     return (
       pathname === "/finance/expenses" ||

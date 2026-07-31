@@ -7,6 +7,11 @@ import {
   officeFileOrderSchema,
   officeListQuerySchema,
 } from "@/lib/validations/office";
+import {
+  officeWorkspaceRecordCreateSchema,
+  officeWorkspaceRecordUpdateSchema,
+} from "@/lib/validations/office-workspace";
+import { OFFICE_SUITE_GROUPS, OFFICE_SUITE_MODULES, getOfficeSuiteModule } from "./suite";
 
 describe("Office content security", () => {
   it("removes scripts, event handlers, external images, and unsafe links", () => {
@@ -77,5 +82,33 @@ describe("Office validation", () => {
     assert.equal(officeListQuerySchema.parse({ page: "2", pageSize: "50" }).page, 2);
     assert.equal(officeListQuerySchema.safeParse({ pageSize: "101" }).success, false);
     assert.equal(officeFileOrderSchema.safeParse({ fileIds: [] }).success, false);
+  });
+});
+
+describe("Office & Admin suite", () => {
+  it("publishes a complete, uniquely-addressable workspace directory", () => {
+    assert.equal(OFFICE_SUITE_MODULES.length, 16);
+    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 16);
+    assert.deepEqual(
+      new Set(OFFICE_SUITE_MODULES.map((module) => module.group)),
+      new Set(OFFICE_SUITE_GROUPS)
+    );
+    for (const workspaceDefinition of OFFICE_SUITE_MODULES) {
+      assert.ok(workspaceDefinition.features.length >= 6, `${workspaceDefinition.slug} should expose its major capabilities`);
+      assert.equal(workspaceDefinition.templates.length, 3, `${workspaceDefinition.slug} should have three quick starts`);
+      assert.ok(getOfficeSuiteModule(workspaceDefinition.slug));
+    }
+  });
+
+  it("normalizes safe defaults for shared workspace records", () => {
+    const parsed = officeWorkspaceRecordCreateSchema.parse({ title: "  Monthly close  " });
+    assert.equal(parsed.title, "Monthly close");
+    assert.equal(parsed.status, "ACTIVE");
+    assert.equal(parsed.priority, "NORMAL");
+    assert.equal(officeWorkspaceRecordUpdateSchema.safeParse({}).success, false);
+    assert.equal(
+      officeWorkspaceRecordCreateSchema.safeParse({ title: "Review", priority: "CRITICAL" }).success,
+      false
+    );
   });
 });
