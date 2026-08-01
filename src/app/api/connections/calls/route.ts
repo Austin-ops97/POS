@@ -21,7 +21,14 @@ export async function POST(request: Request) {
       );
     }
     if (error instanceof Error && error.message.includes("already active")) {
-      return NextResponse.json({ error: error.message, code: "CALL_ACTIVE" }, { status: 409 });
+      const callId =
+        typeof (error as Error & { callId?: string }).callId === "string"
+          ? (error as Error & { callId?: string }).callId
+          : undefined;
+      return NextResponse.json(
+        { error: error.message, code: "CALL_ACTIVE", callId },
+        { status: 409 }
+      );
     }
     if (error instanceof Error && error.message.includes("disabled")) {
       return NextResponse.json({ error: error.message, code: "FEATURE_DISABLED" }, { status: 403 });

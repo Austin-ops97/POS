@@ -192,13 +192,20 @@ export function CallPrejoin({
         <Button
           type="button"
           disabled={joining}
-          onClick={() =>
+          onClick={() => {
+            streamRef.current?.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+            if (analyserRef.current) {
+              cancelAnimationFrame(analyserRef.current.raf);
+              void analyserRef.current.ctx.close();
+              analyserRef.current = null;
+            }
             onJoin({
               withVideo: callType === "VIDEO" ? withVideo : false,
               audioDeviceId: audioDeviceId || undefined,
               videoDeviceId: videoDeviceId || undefined,
-            })
-          }
+            });
+          }}
         >
           {joining ? "Joining…" : "Join call"}
         </Button>

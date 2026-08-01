@@ -189,7 +189,15 @@ export async function startCall(ctx: AuthContext, input: unknown) {
       status: { in: ["CREATED", "RINGING", "ACTIVE"] },
     },
   });
-  if (activeExisting) throw new Error("A call is already active in this conversation");
+  if (activeExisting) {
+    const error = new Error("A call is already active in this conversation") as Error & {
+      code?: string;
+      callId?: string;
+    };
+    error.code = "CALL_ACTIVE";
+    error.callId = activeExisting.id;
+    throw error;
+  }
 
   const provider = getCallProvider();
   const roomName = buildProviderRoomName(ctx.business.id, conversation.id);
@@ -248,6 +256,57 @@ export async function getCall(ctx: AuthContext, callId: string) {
   return serializeCall(call);
 }
 
+async function ensureParticipantForMember(
+  call: {
+    id: string;
+    conversationId: string | null;
+    type: string;
+    participants: Array<{
+      id: string;
+      employeeId: string;
+      status: string;
+      withVideo?: boolean;
+      isHost?: boolean;
+    }>;
+  },
+  employeeId: string
+) {
+  const existing = call.participants.find((p) => p.employeeId === employeeId);
+  if (existing) {
+    return {
+      id: existing.id,
+      employeeId: existing.employeeId,
+      status: existing.status,
+      withVideo: existing.withVideo ?? call.type === "VIDEO",
+      isHost: existing.isHost ?? false,
+    };
+  }
+  if (!call.conversationId) return null;
+
+  const member = await db.connectionConversationMember.findFirst({
+    where: { conversationId: call.conversationId, employeeId },
+    select: { employeeId: true },
+  });
+  if (!member) return null;
+
+  const created = await db.callParticipant.create({
+    data: {
+      callId: call.id,
+      employeeId,
+      status: "INVITED",
+      isHost: false,
+      withVideo: call.type === "VIDEO",
+    },
+  });
+  return {
+    id: created.id,
+    employeeId: created.employeeId,
+    status: created.status,
+    withVideo: created.withVideo,
+    isHost: created.isHost,
+  };
+}
+
 export async function listActiveForEmployee(ctx: AuthContext) {
   await requireModule(ctx, "VIDEO_CALLING");
   if (
@@ -257,30 +316,51 @@ export async function listActiveForEmployee(ctx: AuthContext) {
     return [];
   }
 
+  // Include calls the employee was invited to, plus any live call in a conversation they belong to
+  // (Teams-style: same-thread members can always jump on).
   const calls = await db.communicationCall.findMany({
     where: {
       businessId: ctx.business.id,
       status: { in: ["RINGING", "ACTIVE"] },
-      participants: {
-        some: {
-          employeeId: ctx.employee.id,
-          status: { in: ["INVITED", "RINGING", "JOINED"] },
+      OR: [
+        {
+          participants: {
+            some: {
+              employeeId: ctx.employee.id,
+              status: { in: ["INVITED", "RINGING", "JOINED", "LEFT"] },
+            },
+          },
         },
-      },
+        {
+          conversation: {
+            members: { some: { employeeId: ctx.employee.id } },
+          },
+        },
+      ],
     },
     include: callInclude,
     orderBy: { createdAt: "desc" },
     take: 20,
   });
 
-  // Mark timed-out ringing calls as missed (best-effort during poll)
   const results = [];
   for (const call of calls) {
+    await ensureParticipantForMember(call, ctx.employee.id).catch(() => null);
+
     if (call.status === "RINGING" && ringingHasTimedOut(call.ringingAt)) {
-      const missed = await markMissed(ctx, call.id).catch(() => null);
-      if (missed) continue;
+      const updated = await markMissed(ctx, call.id).catch(() => null);
+      if (!updated) continue;
+      // markMissed may promote to ACTIVE when someone is already in — keep those joinable.
+      if (!isCallJoinableStatus(updated.status)) continue;
+      results.push(updated);
+      continue;
     }
-    results.push(serializeCall(call));
+
+    const fresh = await db.communicationCall.findFirst({
+      where: { id: call.id },
+      include: callInclude,
+    });
+    if (fresh) results.push(serializeCall(fresh));
   }
   return results;
 }
@@ -301,17 +381,23 @@ export async function answerCall(ctx: AuthContext, callId: string, input: unknow
     throw new Error("Call is no longer available");
   }
 
-  const participant = call.participants.find((p) => p.employeeId === ctx.employee.id);
-  if (!participant) throw new Error("Call not found");
-  if (participant.status === "DECLINED") throw new Error("You declined this call");
+  const existingParticipant =
+    call.participants.find((p) => p.employeeId === ctx.employee.id) ?? null;
+  const ensured = existingParticipant
+    ? null
+    : await ensureParticipantForMember(call, ctx.employee.id);
+  const participantId = existingParticipant?.id ?? ensured?.id;
+  if (!participantId) throw new Error("Call not found");
 
   const now = new Date();
   await db.$transaction(async (tx) => {
     await tx.callParticipant.update({
-      where: { id: participant.id },
+      where: { id: participantId },
       data: {
         status: "JOINED",
-        joinedAt: participant.joinedAt ?? now,
+        joinedAt: now,
+        leftAt: null,
+        declinedAt: null,
         withVideo,
       },
     });
@@ -516,11 +602,16 @@ export async function issueJoinToken(
     throw new Error("Call is no longer available");
   }
 
-  const participant = call.participants.find((p) => p.employeeId === ctx.employee.id);
-  if (!participant) throw new Error("Call not found");
-  if (participant.status === "DECLINED" || participant.status === "MISSED") {
-    throw new Error("You are not invited to this call");
-  }
+  const existingParticipant =
+    call.participants.find((p) => p.employeeId === ctx.employee.id) ?? null;
+  const ensured = existingParticipant
+    ? null
+    : await ensureParticipantForMember(call, ctx.employee.id);
+  const participantId = existingParticipant?.id ?? ensured?.id;
+  const participantWithVideo =
+    existingParticipant?.withVideo ?? ensured?.withVideo ?? call.type === "VIDEO";
+  const participantIsHost = existingParticipant?.isHost ?? ensured?.isHost ?? false;
+  if (!participantId) throw new Error("Call not found");
 
   const provider = getCallProvider();
   const token = await provider.createParticipantToken({
@@ -535,11 +626,13 @@ export async function issueJoinToken(
   const now = new Date();
   await db.$transaction(async (tx) => {
     await tx.callParticipant.update({
-      where: { id: participant.id },
+      where: { id: participantId },
       data: {
         status: "JOINED",
-        joinedAt: participant.joinedAt ?? now,
-        withVideo: options?.withVideo ?? participant.withVideo,
+        joinedAt: now,
+        leftAt: null,
+        declinedAt: null,
+        withVideo: options?.withVideo ?? participantWithVideo,
       },
     });
     if (call.status === "RINGING" || call.status === "CREATED") {
@@ -558,8 +651,8 @@ export async function issueJoinToken(
     roomName: call.providerRoomId,
     callId: call.id,
     type: call.type,
-    withVideo: options?.withVideo ?? participant.withVideo,
+    withVideo: options?.withVideo ?? participantWithVideo,
     enableScreenSharing: settings.enableScreenSharing,
-    isHost: participant.isHost,
+    isHost: participantIsHost,
   };
 }

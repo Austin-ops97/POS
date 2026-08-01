@@ -10,7 +10,9 @@ export function isParticipantJoinable(status: string): boolean {
     status === "INVITED" ||
     status === "RINGING" ||
     status === "JOINED" ||
-    status === "LEFT"
+    status === "LEFT" ||
+    status === "DECLINED" ||
+    status === "MISSED"
   );
 }
 

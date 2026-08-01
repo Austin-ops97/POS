@@ -58,13 +58,13 @@ describe("authorization predicates", () => {
     assert.equal(isCallJoinableStatus("MISSED"), false);
   });
 
-  it("lets invitees join ACTIVE calls and blocks declined/missed", () => {
+  it("lets invitees join ACTIVE calls and blocks ended calls", () => {
     assert.equal(isParticipantJoinable("RINGING"), true);
     assert.equal(isParticipantJoinable("INVITED"), true);
     assert.equal(isParticipantJoinable("JOINED"), true);
     assert.equal(isParticipantJoinable("LEFT"), true);
-    assert.equal(isParticipantJoinable("DECLINED"), false);
-    assert.equal(isParticipantJoinable("MISSED"), false);
+    assert.equal(isParticipantJoinable("DECLINED"), true);
+    assert.equal(isParticipantJoinable("MISSED"), true);
     assert.equal(isAwaitingInviteeResponse("RINGING"), true);
     assert.equal(isAwaitingInviteeResponse("JOINED"), false);
 
@@ -88,7 +88,7 @@ describe("authorization predicates", () => {
           { employeeId: "emp-2", status: "DECLINED" },
         ],
       }),
-      false
+      true
     );
     assert.equal(
       canEmployeeJoinCall({

@@ -58,6 +58,8 @@ type JoinSession = {
   enableScreenSharing: boolean;
   isHost: boolean;
   startedAt?: string | null;
+  audioDeviceId?: string;
+  videoDeviceId?: string;
 };
 
 export type CallSettingsProps = {
@@ -227,6 +229,15 @@ export function ConnectionsInbox({
       return;
     }
     setError("");
+
+    // Teams-style: if this conversation already has a live call, join it instead of starting another.
+    const existing =
+      joinableCalls.find((call) => call.conversationId === activeId) ?? null;
+    if (existing) {
+      openJoinPrejoin(existing, type === "VIDEO");
+      return;
+    }
+
     const response = await fetch("/api/connections/calls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -234,6 +245,25 @@ export function ConnectionsInbox({
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (data.code === "CALL_ACTIVE" || /already active/i.test(String(data.error ?? ""))) {
+        await pollActiveCalls();
+        const activeRes = await fetch("/api/connections/calls/active", { cache: "no-store" });
+        if (activeRes.ok) {
+          const calls = (await activeRes.json()) as ActiveCall[];
+          const live =
+            (typeof data.callId === "string"
+              ? calls.find((call) => call.id === data.callId)
+              : null) ??
+            calls.find((call) => call.conversationId === activeId) ??
+            null;
+          if (live) {
+            openJoinPrejoin(live, type === "VIDEO");
+            return;
+          }
+        }
+        setError("A call is already active — use Join call to enter it.");
+        return;
+      }
       setError(
         typeof data.error === "string" ? data.error : "Could not start call"
       );
@@ -249,6 +279,7 @@ export function ConnectionsInbox({
       setError("Video calling is not configured");
       return;
     }
+    setError("");
     setPrejoin({
       callId: call.id,
       type: call.type,
@@ -262,15 +293,25 @@ export function ConnectionsInbox({
     callId: string;
     type: "AUDIO" | "VIDEO";
     withVideo: boolean;
+    audioDeviceId?: string;
+    videoDeviceId?: string;
   }) {
     setJoining(true);
     setJoinError("");
     try {
-      await fetch(`/api/connections/calls/${opts.callId}/answer`, {
+      const answerRes = await fetch(`/api/connections/calls/${opts.callId}/answer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ withVideo: opts.withVideo }),
       });
+      if (!answerRes.ok) {
+        const answerData = await answerRes.json().catch(() => ({}));
+        throw new Error(
+          typeof answerData.error === "string"
+            ? answerData.error
+            : "Could not join call"
+        );
+      }
       const tokenRes = await fetch(`/api/connections/calls/${opts.callId}/token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -293,6 +334,8 @@ export function ConnectionsInbox({
         enableScreenSharing: Boolean(tokenData.enableScreenSharing ?? callSettings.enableScreenSharing),
         isHost: Boolean(tokenData.isHost),
         startedAt: null,
+        audioDeviceId: opts.audioDeviceId,
+        videoDeviceId: opts.videoDeviceId,
       });
       setPrejoin(null);
       setIncoming(null);
@@ -480,6 +523,8 @@ export function ConnectionsInbox({
                 isHost={session.isHost}
                 canModerate={canModerateCalls}
                 startedAt={session.startedAt}
+                audioDeviceId={session.audioDeviceId}
+                videoDeviceId={session.videoDeviceId}
                 onLeave={() => void leaveCall()}
                 onEnd={() => void endCall()}
               />
@@ -506,6 +551,8 @@ export function ConnectionsInbox({
                   callId: prejoin.callId,
                   type: prejoin.type,
                   withVideo: opts.withVideo,
+                  audioDeviceId: opts.audioDeviceId,
+                  videoDeviceId: opts.videoDeviceId,
                 });
               }}
             />
