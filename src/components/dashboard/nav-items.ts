@@ -20,7 +20,6 @@ import {
   FileSignature,
   Bot,
   MessageCircle,
-  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,7 +47,6 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/orders", label: "Orders", icon: ClipboardList },
       { href: "/customers", label: "Customers", icon: Users },
       { href: "/employees", label: "Employees", icon: UserCog },
-      { href: "/connections", label: "Connection", icon: MessagesSquare },
       { href: "/workforce", label: "Workforce", icon: CalendarClock },
       { href: "/connections", label: "Connections", icon: MessageCircle },
       { href: "/reports", label: "Reports", icon: BarChart3 },
