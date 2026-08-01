@@ -4,11 +4,14 @@ import {
   assertCallTenant,
   buildProviderRoomName,
   callSystemBody,
+  canEmployeeJoinCall,
   canEndCallAs,
   formatCallDuration,
+  isAwaitingInviteeResponse,
   isCallJoinableStatus,
   isCallSystemMessage,
   isGroupOrEveryoneConversation,
+  isParticipantJoinable,
   ringingHasTimedOut,
   stripCallSystemPrefix,
   CALL_SYSTEM_PREFIX,
@@ -53,6 +56,48 @@ describe("authorization predicates", () => {
     assert.equal(isCallJoinableStatus("ACTIVE"), true);
     assert.equal(isCallJoinableStatus("ENDED"), false);
     assert.equal(isCallJoinableStatus("MISSED"), false);
+  });
+
+  it("lets invitees join ACTIVE calls and blocks declined/missed", () => {
+    assert.equal(isParticipantJoinable("RINGING"), true);
+    assert.equal(isParticipantJoinable("INVITED"), true);
+    assert.equal(isParticipantJoinable("JOINED"), true);
+    assert.equal(isParticipantJoinable("LEFT"), true);
+    assert.equal(isParticipantJoinable("DECLINED"), false);
+    assert.equal(isParticipantJoinable("MISSED"), false);
+    assert.equal(isAwaitingInviteeResponse("RINGING"), true);
+    assert.equal(isAwaitingInviteeResponse("JOINED"), false);
+
+    assert.equal(
+      canEmployeeJoinCall({
+        callStatus: "ACTIVE",
+        employeeId: "emp-2",
+        participants: [
+          { employeeId: "emp-1", status: "JOINED" },
+          { employeeId: "emp-2", status: "RINGING" },
+        ],
+      }),
+      true
+    );
+    assert.equal(
+      canEmployeeJoinCall({
+        callStatus: "ACTIVE",
+        employeeId: "emp-2",
+        participants: [
+          { employeeId: "emp-1", status: "JOINED" },
+          { employeeId: "emp-2", status: "DECLINED" },
+        ],
+      }),
+      false
+    );
+    assert.equal(
+      canEmployeeJoinCall({
+        callStatus: "ENDED",
+        employeeId: "emp-2",
+        participants: [{ employeeId: "emp-2", status: "RINGING" }],
+      }),
+      false
+    );
   });
 });
 

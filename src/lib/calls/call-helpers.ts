@@ -5,6 +5,12 @@ export {
   isCallSystemMessage,
   stripCallSystemPrefix,
 } from "./call-markers";
+export {
+  canEmployeeJoinCall,
+  isAwaitingInviteeResponse,
+  isCallJoinableStatus,
+  isParticipantJoinable,
+} from "./call-join";
 
 export const DEFAULT_RING_TIMEOUT_MS = 45_000;
 
@@ -34,10 +40,6 @@ export function assertCallTenant(callBusinessId: string, ctxBusinessId: string):
   if (callBusinessId !== ctxBusinessId) {
     throw new Error("Call not found");
   }
-}
-
-export function isCallJoinableStatus(status: string): boolean {
-  return status === "RINGING" || status === "ACTIVE" || status === "CREATED";
 }
 
 export function ringingHasTimedOut(

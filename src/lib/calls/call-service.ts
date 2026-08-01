@@ -22,11 +22,14 @@ export {
   assertCallTenant,
   buildProviderRoomName,
   callSystemBody,
+  canEmployeeJoinCall,
   canEndCallAs,
   formatCallDuration,
+  isAwaitingInviteeResponse,
   isCallJoinableStatus,
   isCallSystemMessage,
   isGroupOrEveryoneConversation,
+  isParticipantJoinable,
   ringingHasTimedOut,
   stripCallSystemPrefix,
 } from "./call-helpers";
@@ -448,6 +451,24 @@ export async function markMissed(ctx: AuthContext, callId: string) {
   }
 
   const now = new Date();
+
+  // Host is marked JOINED as soon as the call is created (prejoin). If anyone is already
+  // JOINED — or a token was issued (startedAt) — keep the call alive so other accounts can
+  // still join via the active-call UI instead of treating it as a missed ring.
+  const someoneJoined = call.participants.some((p) => p.status === "JOINED");
+  if (someoneJoined || call.startedAt) {
+    await db.communicationCall.update({
+      where: { id: call.id },
+      data: {
+        status: "ACTIVE",
+        startedAt: call.startedAt ?? now,
+      },
+    });
+    return serializeCall(
+      await db.communicationCall.findFirstOrThrow({ where: { id: call.id }, include: callInclude })
+    );
+  }
+
   await db.$transaction(async (tx) => {
     await tx.communicationCall.update({
       where: { id: call.id },
