@@ -1,6 +1,14 @@
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
 
-export type OfficeAppPermissions = { canCreate: boolean; canEdit: boolean; canDelete: boolean };
+export type OfficeAppPermissions = {
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canManageReminders?: boolean;
+  canSubmitCompletion?: boolean;
+  canApproveCompletion?: boolean;
+  canReopenProject?: boolean;
+};
 export type EmployeeOption = { id: string; name: string };
 
 async function apiError(response: Response) {

@@ -15,6 +15,10 @@ export const CUSTOMER_CONFIGURABLE_MODULES = [
   { key: "CONNECTIONS", name: "Connections", description: "Private employee and team messaging" },
   { key: "EXPENSES", name: "Expenses", description: "Cards, reimbursements, budgets, and approvals" },
   { key: "OFFICE", name: "Office", description: "Documents, projects, forms, and workflows" },
+  { key: "ORDER_TERMINATION", name: "Order termination", description: "Terminate pending, held, or abandoned orders" },
+  { key: "PROJECT_REMINDERS", name: "Project reminders", description: "Scheduled project reminder emails" },
+  { key: "PROJECT_COMPLETION", name: "Project completion", description: "Completion photos and supervisor approval" },
+  { key: "VIDEO_CALLING", name: "Video calling", description: "Audio and video calls in Connections" },
 ] as const;
 
 export type AppModuleKey = (typeof CUSTOMER_CONFIGURABLE_MODULES)[number]["key"];
@@ -58,6 +62,11 @@ export function normalizeModuleKey(key: string): string {
     office: "OFFICE",
     documents: "OFFICE",
     admin: "OFFICE",
+    order_termination: "ORDER_TERMINATION",
+    project_reminders: "PROJECT_REMINDERS",
+    project_completion: "PROJECT_COMPLETION",
+    video_calling: "VIDEO_CALLING",
+    video: "VIDEO_CALLING",
   };
   const lower = key.toLowerCase();
   if (aliases[lower]) return aliases[lower];

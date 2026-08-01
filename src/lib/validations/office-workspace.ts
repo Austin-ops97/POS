@@ -6,6 +6,10 @@ export const OFFICE_WORKSPACE_STATUSES = [
   "NEEDS_REVIEW",
   "WAITING",
   "COMPLETE",
+  "PENDING_APPROVAL",
+  "CHANGES_REQUESTED",
+  "APPROVED",
+  "REJECTED",
 ] as const;
 
 export const OFFICE_WORKSPACE_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;

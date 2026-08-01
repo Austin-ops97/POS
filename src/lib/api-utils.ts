@@ -150,8 +150,22 @@ export function handleApiError(error: unknown, context: string) {
     if (error.message.endsWith("not found")) {
       return apiError(error.message, 404, { code: "NOT_FOUND", requestId });
     }
-    if (error.message.includes("10 MB limit")) {
+    if (error.message.includes("10 MB limit") || error.message.includes("12 MB limit")) {
       return apiError(error.message, 413, { code: "FILE_TOO_LARGE", requestId });
+    }
+    if (
+      error.message.includes("is not configured") ||
+      error.message.includes("Blob storage is not configured")
+    ) {
+      return apiError(error.message, 503, { code: "SERVICE_UNAVAILABLE", requestId });
+    }
+    if (
+      error.message.includes("disabled for this business") ||
+      /^(At least |Photos can |Attachments can |This project cannot|This submission|A comment is required|No supervisor|Only JPEG|File is empty|Invalid )/i.test(
+        error.message
+      )
+    ) {
+      return apiError(error.message, 400, { code: "BAD_REQUEST", requestId });
     }
     if (
       error.message.startsWith("Unsupported office file") ||

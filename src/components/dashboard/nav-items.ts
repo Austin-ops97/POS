@@ -20,6 +20,8 @@ import {
   FileSignature,
   Bot,
   MessageCircle,
+  Bell,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,7 +61,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/office", label: "Office hub", icon: Files },
       { href: "/office/documents", label: "Documents", icon: FileText },
       { href: "/office/apps/projects", label: "Projects", icon: FolderKanban },
+      { href: "/office/reminders", label: "Reminders", icon: Bell },
       { href: "/office/apps/forms-approvals", label: "Forms & approvals", icon: FileSignature },
+      { href: "/office/approvals", label: "Project approvals", icon: ClipboardCheck },
       { href: "/office/apps/automations-ai", label: "AI & automations", icon: Bot },
     ],
   },

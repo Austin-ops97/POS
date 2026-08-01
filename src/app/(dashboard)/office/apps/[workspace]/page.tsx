@@ -34,6 +34,10 @@ export default async function OfficeModulePage({ params }: Props) {
     canCreate: hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS),
     canEdit: hasPermission(ctx, PERMISSIONS.EDIT_DOCUMENTS),
     canDelete: hasPermission(ctx, PERMISSIONS.DELETE_DOCUMENTS),
+    canManageReminders: hasPermission(ctx, PERMISSIONS.MANAGE_PROJECT_REMINDERS),
+    canSubmitCompletion: hasPermission(ctx, PERMISSIONS.SUBMIT_PROJECT_COMPLETION),
+    canApproveCompletion: hasPermission(ctx, PERMISSIONS.APPROVE_PROJECT_COMPLETION),
+    canReopenProject: hasPermission(ctx, PERMISSIONS.REOPEN_PROJECT),
   };
 
   switch (workspace) {

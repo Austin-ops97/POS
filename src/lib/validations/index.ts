@@ -71,6 +71,10 @@ export const MODULE_SETTING_KEYS = [
   "GIFT_CARDS",
   "EXPENSES",
   "OFFICE",
+  "ORDER_TERMINATION",
+  "PROJECT_REMINDERS",
+  "PROJECT_COMPLETION",
+  "VIDEO_CALLING",
 ] as const;
 
 export const moduleSettingsSchema = z.object({

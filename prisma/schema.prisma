@@ -164,6 +164,67 @@ enum AuditAction {
   COMPANY_CARD_CHANGE
   EXPENSE_BUDGET_CHANGE
   EXPENSE_CATEGORY_CHANGE
+  ORDER_TERMINATE
+  PROJECT_REMINDER
+  PROJECT_COMPLETION
+  PROJECT_APPROVAL
+  COMMUNICATION_CALL
+}
+
+enum OrderTerminationReason {
+  CUSTOMER_CANCELED
+  DUPLICATE_ORDER
+  ENTERED_BY_MISTAKE
+  PAYMENT_ABANDONED
+  REGISTER_INTERRUPTION
+  OTHER
+}
+
+enum ReminderRecurrence {
+  ONE_TIME
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ReminderDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ProjectApprovalAction {
+  SUBMITTED
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+  RESUBMITTED
+  REOPENED
+}
+
+enum CommunicationCallType {
+  AUDIO
+  VIDEO
+}
+
+enum CommunicationCallStatus {
+  CREATED
+  RINGING
+  ACTIVE
+  MISSED
+  DECLINED
+  ENDED
+  FAILED
+}
+
+enum CallParticipantStatus {
+  INVITED
+  RINGING
+  JOINED
+  LEFT
+  DECLINED
+  MISSED
 }
 
 enum PayPeriodType {
@@ -320,6 +381,12 @@ model Business {
   officeWorkspaceRecords    OfficeWorkspaceRecord[]
   connectionConversations   ConnectionConversation[]
   connectionMessages        ConnectionMessage[]
+  projectReminders          ProjectReminder[]
+  reminderDeliveries        ReminderDelivery[]
+  projectAttachments        ProjectAttachment[]
+  projectSubmissions        ProjectSubmission[]
+  projectApprovalEvents     ProjectApprovalEvent[]
+  communicationCalls        CommunicationCall[]
 
   @@index([createdAt])
 }
@@ -474,6 +541,7 @@ model EmployeeProfile {
   ptoLedgerEntries               PtoLedgerEntry[]
   ptoAdjustmentsMade             PtoLedgerEntry[]               @relation("PtoAdjustedBy")
   orders                         Order[]
+  ordersTerminated               Order[]                        @relation("OrderTerminatedBy")
   refunds                        Refund[]
   registerSessions               RegisterSession[]
   auditLogs                      AuditLog[]
@@ -510,6 +578,14 @@ model EmployeeProfile {
   connectionConversationsCreated ConnectionConversation[]       @relation("ConnectionConversationCreatedBy")
   connectionMessages             ConnectionMessage[]            @relation("ConnectionMessageSender")
   connectionReactions            ConnectionMessageReaction[]
+  projectRemindersCreated        ProjectReminder[]              @relation("ProjectReminderCreatedBy")
+  reminderDeliveries             ReminderDelivery[]
+  projectAttachmentsUploaded     ProjectAttachment[]            @relation("ProjectAttachmentUploadedBy")
+  projectSubmissionsSubmitted    ProjectSubmission[]            @relation("ProjectSubmissionSubmittedBy")
+  projectSubmissionsSupervised   ProjectSubmission[]            @relation("ProjectSubmissionSupervisor")
+  projectApprovalEvents          ProjectApprovalEvent[]         @relation("ProjectApprovalActor")
+  communicationCallsStarted      CommunicationCall[]            @relation("CommunicationCallStartedBy")
+  callParticipations             CallParticipant[]
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -547,6 +623,7 @@ model ConnectionConversation {
   createdBy EmployeeProfile?               @relation("ConnectionConversationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   members   ConnectionConversationMember[]
   messages  ConnectionMessage[]
+  calls     CommunicationCall[]
 
   @@index([businessId, lastMessageAt])
   @@index([businessId, type])
@@ -990,15 +1067,22 @@ model Order {
   discountAmount Decimal     @default(0) @db.Decimal(10, 2)
   taxAmount      Decimal     @default(0) @db.Decimal(10, 2)
   total          Decimal     @default(0) @db.Decimal(10, 2)
-  notes          String?
-  heldAt         DateTime?
-  paidAt         DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  notes               String?
+  heldAt              DateTime?
+  paidAt              DateTime?
+  terminatedAt        DateTime?
+  terminatedById      String?
+  terminatedByName    String?
+  terminationReason   OrderTerminationReason?
+  terminationNotes    String?
+  inventoryRestoredAt DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   location         Location         @relation(fields: [locationId], references: [id])
   employee         EmployeeProfile? @relation(fields: [employeeId], references: [id])
+  terminatedBy     EmployeeProfile? @relation("OrderTerminatedBy", fields: [terminatedById], references: [id], onDelete: SetNull)
   customer         Customer?        @relation(fields: [customerId], references: [id])
   items            OrderItem[]
   payments         Payment[]
@@ -1013,6 +1097,7 @@ model Order {
   @@index([locationId])
   @@index([status])
   @@index([createdAt])
+  @@index([businessId, terminatedAt])
 }
 
 model OrderItem {
@@ -1277,6 +1362,19 @@ model BusinessSetting {
   showSkuOnReceipt            Boolean  @default(false)
   enableBarcodeScanning       Boolean  @default(true)
   enableReceiptPrinting       Boolean  @default(true)
+  // Feature controls (platform modules gate availability; these refine behavior)
+  enableOrderTermination      Boolean  @default(true)
+  enableProjectReminders      Boolean  @default(true)
+  enableProjectCompletion     Boolean  @default(true)
+  requireCompletionPhotos     Boolean  @default(true)
+  minCompletionPhotos         Int      @default(1)
+  requireSupervisorApproval   Boolean  @default(true)
+  allowReopenApprovedProjects Boolean  @default(true)
+  defaultProjectSupervisorId  String?
+  enableVideoCalling          Boolean  @default(true)
+  enableGroupCalling          Boolean  @default(true)
+  enableScreenSharing         Boolean  @default(true)
+  enableMissedCallEmails      Boolean  @default(false)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 
@@ -2125,8 +2223,198 @@ model OfficeWorkspaceRecord {
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   createdBy  EmployeeProfile  @relation("OfficeWorkspaceRecordCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   assignedTo EmployeeProfile? @relation("OfficeWorkspaceRecordAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  reminders  ProjectReminder[]
+  attachments ProjectAttachment[]
+  submissions ProjectSubmission[]
+  approvalEvents ProjectApprovalEvent[]
 
   @@index([businessId, workspace, archivedAt, updatedAt])
   @@index([businessId, status, dueAt])
   @@index([assignedToId, status])
+}
+
+// ─── Project reminders ───────────────────────────────────────────────────────
+
+model ProjectReminder {
+  id              String             @id @default(cuid())
+  businessId      String
+  projectId       String
+  createdById     String
+  title           String
+  message         String?
+  timezone        String             @default("America/Chicago")
+  scheduledAt     DateTime
+  nextSendAt      DateTime
+  lastSentAt      DateTime?
+  recurrence      ReminderRecurrence @default(ONE_TIME)
+  intervalCount   Int                @default(1)
+  sendBeforeMinutes Int              @default(0)
+  enabled         Boolean            @default(true)
+  paused          Boolean            @default(false)
+  stopAt          DateTime?
+  maxOccurrences  Int?
+  occurrenceCount Int                @default(0)
+  recipients      Json
+  claimToken      String?
+  claimedAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+
+  business   Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  project    OfficeWorkspaceRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  EmployeeProfile       @relation("ProjectReminderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  deliveries ReminderDelivery[]
+
+  @@index([businessId, nextSendAt, enabled, paused])
+  @@index([projectId, deletedAt])
+  @@index([claimToken])
+}
+
+model ReminderDelivery {
+  id               String                  @id @default(cuid())
+  businessId       String
+  reminderId       String
+  occurrenceAt     DateTime
+  recipientEmail   String
+  recipientName    String?
+  status           ReminderDeliveryStatus  @default(PENDING)
+  providerMessageId String?
+  attemptCount     Int                     @default(0)
+  sentAt           DateTime?
+  failedAt         DateTime?
+  failureMessage   String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  reminder ProjectReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  employeeId String?
+
+  @@unique([reminderId, occurrenceAt, recipientEmail])
+  @@index([businessId, status, createdAt])
+  @@index([reminderId, occurrenceAt])
+}
+
+// ─── Project completion photos & approval ────────────────────────────────────
+
+model ProjectAttachment {
+  id               String   @id @default(cuid())
+  businessId       String
+  projectId        String
+  submissionId     String?
+  uploadedById     String
+  storageKey       String
+  storageUrl       String
+  originalFilename String
+  mimeType         String
+  byteSize         Int
+  caption          String?
+  createdAt        DateTime @default(now())
+  deletedAt        DateTime?
+
+  business   Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  project    OfficeWorkspaceRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submission ProjectSubmission?    @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  uploadedBy EmployeeProfile       @relation("ProjectAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, projectId, deletedAt])
+  @@index([submissionId])
+}
+
+model ProjectSubmission {
+  id              String    @id @default(cuid())
+  businessId      String
+  projectId       String
+  submittedById   String
+  supervisorId    String?
+  status          String    @default("PENDING_APPROVAL")
+  completionNote  String?
+  reviewComment   String?
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  business    Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  project     OfficeWorkspaceRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedBy EmployeeProfile       @relation("ProjectSubmissionSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  supervisor  EmployeeProfile?      @relation("ProjectSubmissionSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  attachments ProjectAttachment[]
+  events      ProjectApprovalEvent[]
+
+  @@index([businessId, status, submittedAt])
+  @@index([projectId, submittedAt])
+  @@index([supervisorId, status])
+}
+
+model ProjectApprovalEvent {
+  id           String                @id @default(cuid())
+  businessId   String
+  projectId    String
+  submissionId String?
+  actorId      String
+  action       ProjectApprovalAction
+  comment      String?
+  createdAt    DateTime              @default(now())
+
+  business   Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  project    OfficeWorkspaceRecord @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submission ProjectSubmission?    @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  actor      EmployeeProfile       @relation("ProjectApprovalActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, projectId, createdAt])
+  @@index([submissionId, createdAt])
+}
+
+// ─── Communication video / audio calls ───────────────────────────────────────
+
+model CommunicationCall {
+  id               String                  @id @default(cuid())
+  businessId       String
+  conversationId   String?
+  startedById      String
+  type             CommunicationCallType   @default(VIDEO)
+  status           CommunicationCallStatus @default(CREATED)
+  provider         String                  @default("livekit")
+  providerRoomId   String
+  scheduledAt      DateTime?
+  ringingAt        DateTime?
+  startedAt        DateTime?
+  endedAt          DateTime?
+  missedAt         DateTime?
+  endReason        String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  business     Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation ConnectionConversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  startedBy    EmployeeProfile          @relation("CommunicationCallStartedBy", fields: [startedById], references: [id], onDelete: Restrict)
+  participants CallParticipant[]
+
+  @@index([businessId, status, createdAt])
+  @@index([conversationId, createdAt])
+  @@unique([businessId, providerRoomId])
+}
+
+model CallParticipant {
+  id          String                @id @default(cuid())
+  callId      String
+  employeeId  String
+  status      CallParticipantStatus @default(INVITED)
+  invitedAt   DateTime              @default(now())
+  joinedAt    DateTime?
+  leftAt      DateTime?
+  declinedAt  DateTime?
+  withVideo   Boolean               @default(true)
+  isHost      Boolean               @default(false)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  call     CommunicationCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, employeeId])
+  @@index([employeeId, status])
 }
