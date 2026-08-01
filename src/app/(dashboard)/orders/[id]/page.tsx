@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, hasPermission } from "@/lib/auth";
+import { getEmployeeModuleAccess } from "@/lib/access-control";
+import { db } from "@/lib/db";
 import { getOrderById } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +17,9 @@ import {
 } from "@/lib/status-utils";
 import { OrderRefundActions } from "@/components/dashboard/order-refund-actions";
 import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions";
+import { OrderTerminateActions } from "@/components/dashboard/order-terminate-actions";
+import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export default async function OrderDetailPage({
   params,
@@ -24,8 +29,22 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const ctx = await requireAuth();
 
-  const order = await getOrderById(ctx, id);
+  const [order, moduleAccess, settings] = await Promise.all([
+    getOrderById(ctx, id),
+    getEmployeeModuleAccess(ctx),
+    db.businessSetting.findUnique({
+      where: { businessId: ctx.business.id },
+      select: { enableOrderTermination: true },
+    }),
+  ]);
   if (!order) notFound();
+
+  const canTerminateOrders =
+    hasPermission(ctx, PERMISSIONS.TERMINATE_ORDER) &&
+    moduleAccess.ORDER_TERMINATION &&
+    settings?.enableOrderTermination !== false;
+  const showTerminate =
+    canTerminateOrders && canTerminateOrder(order.status);
 
   const canRefund =
     order.status === "PAID" || order.status === "PARTIALLY_REFUNDED";
@@ -67,6 +86,9 @@ export default async function OrderDetailPage({
     order.customer && "email" in order.customer
       ? (order.customer.email as string | undefined)
       : undefined;
+  const customerName = order.customer
+    ? `${order.customer.firstName} ${order.customer.lastName ?? ""}`.trim()
+    : null;
 
   return (
     <div className="space-y-6">
@@ -96,6 +118,18 @@ export default async function OrderDetailPage({
           </div>
         </div>
         <div className="flex flex-col items-end gap-3 lg:flex-row lg:items-start">
+          {showTerminate && (
+            <OrderTerminateActions
+              order={{
+                id: order.id,
+                orderNumber: order.orderNumber,
+                customerName,
+                total: Number(order.total),
+                createdAt: new Date(order.createdAt).toISOString(),
+                employeeName: order.employee?.name ?? null,
+              }}
+            />
+          )}
           {showRefund && (
             <OrderRefundActions
               orderId={order.id}
@@ -119,6 +153,24 @@ export default async function OrderDetailPage({
           </div>
         </div>
       </div>
+
+      {order.terminatedAt && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Termination</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm text-slate-600">
+            <p>
+              Terminated {formatDate(order.terminatedAt)}
+              {order.terminatedByName ? ` by ${order.terminatedByName}` : ""}
+            </p>
+            {order.terminationReason && (
+              <p>Reason: {order.terminationReason.replace(/_/g, " ")}</p>
+            )}
+            {order.terminationNotes && <p>Notes: {order.terminationNotes}</p>}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
