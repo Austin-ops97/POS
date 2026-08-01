@@ -3,6 +3,11 @@ import { db } from "./db";
 import { getAuthUser, type AuthContext } from "./auth";
 import { ensureRolesAndPermissions } from "./roles-permissions";
 import { defaultEnabledModules, CANONICAL_MODULE_KEYS } from "./modules";
+import {
+  AUTO_PROVISIONED_BUSINESS_NAME,
+  claimPendingInvitationsForUser,
+  findPreferredActiveMembership,
+} from "./membership";
 
 export type ProvisionUser = {
   id: string;
@@ -18,33 +23,28 @@ export type ProvisionedBusinessContext = {
   created: boolean;
 };
 
-const DEFAULT_BUSINESS_NAME = "My Business";
+const DEFAULT_BUSINESS_NAME = AUTO_PROVISIONED_BUSINESS_NAME;
 const DEFAULT_LOCATION_NAME = "Main Location";
 const DEFAULT_PRIMARY_COLOR = "#1e3a5f";
 const DEFAULT_TIMEZONE = "America/Chicago";
 
 async function findActiveEmployeeForUser(userId: string) {
-  return db.employeeProfile.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-      deletedAt: null,
-    },
-    include: {
-      locations: { take: 1, orderBy: { locationId: "asc" } },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  return findPreferredActiveMembership(userId);
 }
 
 /**
  * Idempotent provisioning for a local User row.
- * Existing employees keep their business; new users get a blank unlocked business.
+ * Existing employees keep their business; pending invitees join that business;
+ * only users with no membership and no invite get a blank unlocked business.
  * Safe under concurrent requests via serializable transactions + conflict handling.
  */
 export async function provisionBusinessForLocalUser(
   user: ProvisionUser
 ): Promise<ProvisionedBusinessContext> {
+  // Claim pending invites before creating a blank personal business so invitees
+  // land on the owner's shared workspace (same inventory, products, etc.).
+  await claimPendingInvitationsForUser(user);
+
   const existing = await findActiveEmployeeForUser(user.id);
   if (existing) {
     return {
@@ -72,10 +72,12 @@ export async function provisionBusinessForLocalUser(
             userId: user.id,
             status: "ACTIVE",
             deletedAt: null,
+            business: { status: "ACTIVE", deletedAt: null },
           },
           include: {
             locations: { take: 1, orderBy: { locationId: "asc" } },
           },
+          orderBy: { createdAt: "desc" },
         });
 
         if (raced) {

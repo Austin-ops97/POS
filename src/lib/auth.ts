@@ -104,16 +104,30 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
   const user = await getAuthUser();
   if (!user) return null;
 
+  const { findPreferredActiveMembership } = await import("./membership");
+
+  // When no explicit business is requested, prefer the shared/invited workplace
+  // over an empty auto-provisioned "My Business" shell.
+  const preferred =
+    !businessId && (isClerkConfigured() || !allowDevAuthBypass())
+      ? await findPreferredActiveMembership(user.id)
+      : null;
+
   const employee = await db.employeeProfile.findFirst({
     where: {
       // Always scope to the authenticated user when Clerk is on.
-      // Dev bypass still picks the earliest ACTIVE employee for local single-user mode.
+      // Dev bypass still picks an ACTIVE employee for local single-user mode.
       ...(isClerkConfigured() || !allowDevAuthBypass()
         ? { userId: user.id }
         : {}),
-      ...(businessId ? { businessId } : {}),
+      ...(businessId
+        ? { businessId }
+        : preferred
+          ? { id: preferred.id }
+          : {}),
       status: "ACTIVE",
       deletedAt: null,
+      business: { status: "ACTIVE", deletedAt: null },
     },
     include: {
       role: {
@@ -128,7 +142,7 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
         include: { location: true },
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ joinedAt: "desc" }, { createdAt: "desc" }],
   });
 
   if (!employee) return null;

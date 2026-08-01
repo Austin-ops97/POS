@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-utils";
 import { hashInvitationToken } from "@/lib/employee-invitations";
+import { retireEmptyAutoProvisionedMemberships } from "@/lib/membership";
 
 export async function POST(request: Request) {
   try {
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
         inviteExpiresAt: null,
       },
     });
+
+    // If sign-in auto-created an empty "My Business", retire it so the employee
+    // stays connected to this shared business (inventory, products, etc.).
+    await retireEmptyAutoProvisionedMemberships(user.id, employee.id);
+
     return NextResponse.json({ success: true, businessName: employee.business.name });
   } catch (error) {
     return handleApiError(error, "POST /api/invitations/accept");
