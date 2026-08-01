@@ -25,6 +25,26 @@ const MODULES = [
     name: "Office",
     description: "Documents, camera scanning, folders, templates, and business records",
   },
+  {
+    key: "ORDER_TERMINATION" as const,
+    name: "Order termination",
+    description: "Terminate pending, held, or abandoned orders",
+  },
+  {
+    key: "PROJECT_REMINDERS" as const,
+    name: "Project reminders",
+    description: "Scheduled project reminder emails via Resend",
+  },
+  {
+    key: "PROJECT_COMPLETION" as const,
+    name: "Project completion",
+    description: "Completion photos and supervisor approval workflow",
+  },
+  {
+    key: "VIDEO_CALLING" as const,
+    name: "Video calling",
+    description: "Audio and video calls in Connections (LiveKit)",
+  },
 ];
 
 const MODULE_ALIASES: Record<string, (typeof MODULE_SETTING_KEYS)[number]> = {
@@ -64,7 +84,15 @@ function buildDefaultModules(settings: Array<{ module: string; enabled: boolean 
     enabled:
       mod.key === "RETAIL"
         ? true
-        : enabledMap.get(mod.key) ?? false,
+        : enabledMap.get(mod.key) ??
+          (mod.key === "ORDER_TERMINATION" ||
+          mod.key === "PROJECT_REMINDERS" ||
+          mod.key === "PROJECT_COMPLETION" ||
+          mod.key === "VIDEO_CALLING" ||
+          mod.key === "OFFICE" ||
+          mod.key === "EXPENSES"
+            ? true
+            : false),
   }));
 }
 
