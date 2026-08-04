@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, FileUp, RotateCw, Crop, Check, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { detectDocumentCorners, warpDocument } from "@/lib/receipts/document-scanner";
 import { toast } from "sonner";
 
 export type CapturedReceipt = {
@@ -22,6 +23,7 @@ type ReceiptCaptureProps = {
   onCaptured: (receipt: CapturedReceipt) => void;
   onOcrText?: (text: string) => void;
   className?: string;
+  initialAction?: "scan" | "upload";
 };
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
@@ -33,21 +35,50 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Simple contrast/brightness enhancement + center auto-crop simulation. */
-async function enhanceImage(dataUrl: string): Promise<{ dataUrl: string; width: number; height: number }> {
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+
+/** Detect the paper boundary, correct perspective, and improve legibility. */
+async function enhanceImage(dataUrl: string): Promise<{
+  dataUrl: string;
+  width: number;
+  height: number;
+  detected: boolean;
+}> {
   const img = await loadImage(dataUrl);
-  const canvas = document.createElement("canvas");
-  const marginX = Math.round(img.width * 0.04);
-  const marginY = Math.round(img.height * 0.04);
-  const width = Math.max(1, img.width - marginX * 2);
-  const height = Math.max(1, img.height - marginY * 2);
-  canvas.width = width;
-  canvas.height = height;
+  const analysis = document.createElement("canvas");
+  const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+  analysis.width = Math.max(1, Math.round(img.width * scale));
+  analysis.height = Math.max(1, Math.round(img.height * scale));
+  const analysisContext = analysis.getContext("2d");
+  if (!analysisContext) return { dataUrl, width: img.width, height: img.height, detected: false };
+  analysisContext.drawImage(img, 0, 0, analysis.width, analysis.height);
+  const detectedCorners = detectDocumentCorners(
+    analysisContext.getImageData(0, 0, analysis.width, analysis.height)
+  );
+  const corners = detectedCorners?.map((point) => ({ x: point.x / scale, y: point.y / scale }));
+  const scan = corners ? warpDocument(img, corners) : null;
+  const canvas = scan?.canvas ?? document.createElement("canvas");
+  if (!scan) {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const fallbackContext = canvas.getContext("2d");
+    fallbackContext?.drawImage(img, 0, 0);
+  }
   const ctx = canvas.getContext("2d");
-  if (!ctx) return { dataUrl, width: img.width, height: img.height };
-  ctx.filter = "contrast(1.12) brightness(1.04) saturate(1.05)";
-  ctx.drawImage(img, marginX, marginY, width, height, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.92), width, height };
+  if (!ctx) return { dataUrl, width: img.width, height: img.height, detected: false };
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < pixels.data.length; i += 4) {
+    pixels.data[i] = Math.min(255, Math.max(0, (pixels.data[i] - 128) * 1.14 + 128 + 3));
+    pixels.data[i + 1] = Math.min(255, Math.max(0, (pixels.data[i + 1] - 128) * 1.14 + 128 + 3));
+    pixels.data[i + 2] = Math.min(255, Math.max(0, (pixels.data[i + 2] - 128) * 1.14 + 128 + 3));
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", 0.94),
+    width: canvas.width,
+    height: canvas.height,
+    detected: Boolean(scan),
+  };
 }
 
 async function rotateImage(dataUrl: string): Promise<string> {
@@ -63,9 +94,10 @@ async function rotateImage(dataUrl: string): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.92);
 }
 
-export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCaptureProps) {
+export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction }: ReceiptCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -80,6 +112,17 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!cameraOpen || !stream || !video) return;
+    video.srcObject = stream;
+    void video.play().catch(() => undefined);
+    return () => {
+      video.pause();
+      video.srcObject = null;
+    };
+  }, [cameraOpen, stream]);
+
   async function startCamera() {
     try {
       const media = await navigator.mediaDevices.getUserMedia({
@@ -88,12 +131,6 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
       });
       setStream(media);
       setCameraOpen(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = media;
-          void videoRef.current.play();
-        }
-      });
     } catch {
       toast.error("Camera access denied. You can upload a photo instead.");
     }
@@ -106,6 +143,15 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
     try {
       for (const file of list) {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const isImage = file.type.startsWith("image/");
+        if ((!isPdf && !isImage) || file.size > MAX_RECEIPT_BYTES) {
+          toast.error(
+            file.size > MAX_RECEIPT_BYTES
+              ? `${file.name} is larger than the 10 MB receipt limit.`
+              : `${file.name} is not a supported receipt image or PDF.`
+          );
+          continue;
+        }
         const storageUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result));
@@ -126,6 +172,11 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
 
         const enhanced = await enhanceImage(storageUrl);
         setPreview(enhanced.dataUrl);
+        if (!enhanced.detected) {
+          toast.message("Receipt edges were not clear", {
+            description: "The image was enhanced without cropping. You can retake it with the receipt fully visible.",
+          });
+        }
         onCaptured({
           fileName: file.name,
           mimeType: "image/jpeg",
@@ -137,6 +188,8 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
           kind: "IMAGE",
         });
       }
+    } catch {
+      toast.error("We couldn’t process that receipt. Try a smaller image or PDF.");
     } finally {
       setBusy(false);
     }
@@ -152,19 +205,31 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const raw = canvas.toDataURL("image/jpeg", 0.92);
-    const enhanced = await enhanceImage(raw);
-    setPreview(enhanced.dataUrl);
-    stopCamera();
-    onCaptured({
-      fileName: `receipt-${Date.now()}.jpg`,
-      mimeType: "image/jpeg",
-      sizeBytes: Math.round((enhanced.dataUrl.length * 3) / 4),
-      storageUrl: enhanced.dataUrl,
-      width: enhanced.width,
-      height: enhanced.height,
-      enhanced: true,
-      kind: "IMAGE",
-    });
+    setBusy(true);
+    try {
+      const enhanced = await enhanceImage(raw);
+      setPreview(enhanced.dataUrl);
+      stopCamera();
+      if (!enhanced.detected) {
+        toast.message("Receipt edges were not clear", {
+          description: "The image was enhanced without cropping. Try moving closer and placing the receipt on a contrasting surface.",
+        });
+      }
+      onCaptured({
+        fileName: `receipt-${Date.now()}.jpg`,
+        mimeType: "image/jpeg",
+        sizeBytes: Math.round((enhanced.dataUrl.length * 3) / 4),
+        storageUrl: enhanced.dataUrl,
+        width: enhanced.width,
+        height: enhanced.height,
+        enhanced: true,
+        kind: "IMAGE",
+      });
+    } catch {
+      toast.error("We couldn’t process the scan. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function rotatePreview() {
@@ -248,13 +313,15 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-slate-900">Scan or upload a receipt</p>
+              <p className="text-base font-semibold text-slate-900">
+                {initialAction === "scan" ? "Scan a receipt" : initialAction === "upload" ? "Upload a receipt" : "Scan or upload a receipt"}
+              </p>
               <p className="mt-1 text-sm text-slate-500">
                 Camera, drag & drop, images, or multi-page PDFs
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2 pt-1">
-              <Button type="button" onClick={() => void startCamera()} className="min-h-11">
+              <Button type="button" onClick={() => void startCamera()} className="min-h-11" autoFocus={initialAction === "scan"}>
                 <Camera className="h-4 w-4" />
                 Take photo
               </Button>
@@ -262,8 +329,9 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
                 type="button"
                 variant="outline"
                 className="min-h-11"
-                onClick={() => fileRef.current?.click()}
+                onClick={() => imageRef.current?.click()}
                 disabled={busy}
+                autoFocus={initialAction === "upload"}
               >
                 <ImagePlus className="h-4 w-4" />
                 Upload image
@@ -272,7 +340,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
                 type="button"
                 variant="outline"
                 className="min-h-11"
-                onClick={() => fileRef.current?.click()}
+                onClick={() => pdfRef.current?.click()}
                 disabled={busy}
               >
                 <FileUp className="h-4 w-4" />
@@ -282,13 +350,25 @@ export function ReceiptCapture({ onCaptured, onOcrText, className }: ReceiptCapt
           </div>
         )}
         <input
-          ref={fileRef}
+          ref={imageRef}
           type="file"
-          accept="image/*,application/pdf"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           className="hidden"
           onChange={(e) => {
             if (e.target.files) void handleFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+        <input
+          ref={pdfRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) void handleFiles(e.target.files);
+            e.currentTarget.value = "";
           }}
         />
       </div>

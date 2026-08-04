@@ -169,7 +169,7 @@ export function ApprovalPanel({
                 r.kind === "PDF" ? (
                   <a
                     key={r.id}
-                    href={r.storageUrl}
+                    href={`/api/expenses/receipts/${r.id}/file`}
                     target="_blank"
                     rel="noreferrer"
                     className="rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium hover:bg-slate-50"
@@ -180,7 +180,7 @@ export function ApprovalPanel({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={r.id}
-                    src={r.storageUrl}
+                    src={`/api/expenses/receipts/${r.id}/file`}
                     alt={r.fileName}
                     className="max-h-80 w-full rounded-xl object-contain bg-slate-50"
                   />

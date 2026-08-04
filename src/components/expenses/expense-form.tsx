@@ -34,6 +34,7 @@ type ExpenseFormProps = {
   defaultLocationId?: string | null;
   defaultDepartment?: string | null;
   canAssignEmployee?: boolean;
+  initialReceiptAction?: "scan" | "upload";
   expenseId?: string;
   initialValues?: Partial<z.infer<typeof expenseCreateSchema>>;
 };
@@ -50,6 +51,7 @@ export function ExpenseForm({
   defaultLocationId,
   defaultDepartment,
   canAssignEmployee,
+  initialReceiptAction,
   expenseId,
   initialValues,
 }: ExpenseFormProps) {
@@ -459,7 +461,11 @@ export function ExpenseForm({
           <CardTitle>Receipt</CardTitle>
         </CardHeader>
         <CardContent>
-          <ReceiptCapture onCaptured={onReceipt} onOcrText={(text) => void runOcr(text)} />
+          <ReceiptCapture
+            initialAction={initialReceiptAction}
+            onCaptured={onReceipt}
+            onOcrText={(text) => void runOcr(text)}
+          />
           {receipts.length > 0 ? (
             <p className="mt-3 text-sm text-slate-500">
               {receipts.length} receipt page{receipts.length === 1 ? "" : "s"} ready to attach

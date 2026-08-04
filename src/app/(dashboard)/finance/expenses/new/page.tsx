@@ -6,8 +6,15 @@ import { ensureExpenseModuleReady } from "@/lib/expenses/expense-service";
 import { ensureDefaultExpenseCategories } from "@/lib/expenses/categories";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 
-export default async function NewExpensePage() {
+export default async function NewExpensePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await requireAuth();
+  const params = await searchParams;
+  const initialReceiptAction =
+    params.scan === "1" ? "scan" : params.upload === "1" ? "upload" : undefined;
   if (!hasPermission(ctx, PERMISSIONS.CREATE_EXPENSE)) {
     redirect("/finance/expenses");
   }
@@ -57,6 +64,7 @@ export default async function NewExpensePage() {
         defaultLocationId={ctx.location?.id}
         defaultDepartment={ctx.employee.department}
         canAssignEmployee={hasPermission(ctx, PERMISSIONS.VIEW_TEAM_EXPENSES)}
+        initialReceiptAction={initialReceiptAction}
       />
     </div>
   );
