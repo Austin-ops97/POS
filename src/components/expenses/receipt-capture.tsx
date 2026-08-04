@@ -96,6 +96,7 @@ async function rotateImage(dataUrl: string): Promise<string> {
 
 export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction }: ReceiptCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
   const nativeCameraRef = useRef<HTMLInputElement>(null);
@@ -108,11 +109,12 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
   const [dragOver, setDragOver] = useState(false);
 
   const stopCamera = useCallback(() => {
-    stream?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     setStream(null);
     setCameraOpen(false);
     setVideoReady(false);
-  }, [stream]);
+  }, []);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
@@ -159,6 +161,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
         }
       }
       if (!media.getVideoTracks().length) throw new Error("No camera track returned");
+      streamRef.current = media;
       setStream(media);
       setCameraOpen(true);
     } catch (error) {
