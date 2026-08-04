@@ -102,12 +102,15 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
   const stopCamera = useCallback(() => {
     stream?.getTracks().forEach((t) => t.stop());
     setStream(null);
     setCameraOpen(false);
+    setVideoReady(false);
   }, [stream]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
@@ -115,24 +118,58 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
   useEffect(() => {
     const video = videoRef.current;
     if (!cameraOpen || !stream || !video) return;
+    setVideoReady(false);
     video.srcObject = stream;
-    void video.play().catch(() => undefined);
+    const play = () => {
+      void video.play().catch(() => {
+        toast.error("The camera preview could not start. Try closing and reopening the camera.");
+      });
+    };
+    video.addEventListener("loadedmetadata", play, { once: true });
+    video.addEventListener("canplay", play, { once: true });
+    play();
     return () => {
+      video.removeEventListener("loadedmetadata", play);
+      video.removeEventListener("canplay", play);
       video.pause();
       video.srcObject = null;
     };
   }, [cameraOpen, stream]);
 
   async function startCamera() {
+    if (cameraStarting || cameraOpen) return;
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      toast.error("Camera scanning requires HTTPS. You can upload a receipt instead.");
+      return;
+    }
+    setCameraStarting(true);
+    setVideoReady(false);
     try {
-      const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
+      let media: MediaStream;
+      try {
+        media = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && ["OverconstrainedError", "NotFoundError"].includes(error.name)) {
+          media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } else {
+          throw error;
+        }
+      }
+      if (!media.getVideoTracks().length) throw new Error("No camera track returned");
       setStream(media);
       setCameraOpen(true);
-    } catch {
-      toast.error("Camera access denied. You can upload a photo instead.");
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      toast.error(
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "Camera access was blocked. Allow camera access in your browser settings, then try again."
+          : "The camera could not be opened. You can upload a receipt instead."
+      );
+    } finally {
+      setCameraStarting(false);
     }
   }
 
@@ -197,7 +234,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
 
   async function captureFrame() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !videoReady || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
@@ -266,7 +303,20 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
       >
         {cameraOpen ? (
           <div className="relative aspect-[3/4] max-h-[420px] overflow-hidden rounded-xl bg-black sm:aspect-video">
-            <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+            <video
+              ref={videoRef}
+              className="h-full w-full object-cover"
+              playsInline
+              muted
+              autoPlay
+              onLoadedMetadata={() => setVideoReady(true)}
+              onCanPlay={() => setVideoReady(true)}
+            />
+            {!videoReady ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-medium text-white">
+                Starting camera…
+              </div>
+            ) : null}
             <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent p-4">
               <Button type="button" variant="secondary" size="icon" onClick={stopCamera} aria-label="Close camera">
@@ -275,7 +325,8 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
               <button
                 type="button"
                 onClick={() => void captureFrame()}
-                className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-white/90 shadow-lg transition hover:scale-105"
+                disabled={!videoReady || busy}
+                className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-white/90 shadow-lg transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Capture receipt"
               >
                 <span className="h-12 w-12 rounded-full bg-slate-900" />
