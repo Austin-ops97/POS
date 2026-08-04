@@ -39,6 +39,10 @@ export default async function ExpenseDetailPage({
         expense={expense as never}
         canApprove={hasPermission(ctx, PERMISSIONS.APPROVE_EXPENSES)}
         canReimburse={hasPermission(ctx, PERMISSIONS.REIMBURSE_EXPENSES)}
+        canDelete={
+          expense.employeeId === ctx.employee.id ||
+          hasPermission(ctx, PERMISSIONS.MANAGE_EXPENSE_SETTINGS)
+        }
       />
     </div>
   );

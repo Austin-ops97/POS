@@ -5,9 +5,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ExpenseStatusBadge } from "./status-badge";
-import { AlertTriangle, Check, Flag, MessageSquare, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, Check, Download, Eye, Flag, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
 
 type ExpenseDetail = {
   id: string;
@@ -45,15 +53,19 @@ export function ApprovalPanel({
   expense,
   canApprove,
   canReimburse,
+  canDelete,
 }: {
   expense: ExpenseDetail;
   canApprove: boolean;
   canReimburse: boolean;
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");
   const [pending, startTransition] = useTransition();
+  const [selectedReceipt, setSelectedReceipt] = useState<ExpenseDetail["receipts"][number] | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function act(action: string, extra?: Record<string, string>) {
     startTransition(async () => {
@@ -90,6 +102,28 @@ export function ApprovalPanel({
       toast.success("Comment added");
       router.refresh();
     });
+  }
+
+  async function deleteExpense() {
+    if (!window.confirm(`Delete the expense from ${expense.merchant}? This will archive it and remove it from expense lists.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/expenses/${expense.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not delete expense");
+        return;
+      }
+      toast.success("Expense deleted");
+      router.push("/finance/expenses?view=list");
+      router.refresh();
+    } catch {
+      toast.error("Could not delete expense");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -170,20 +204,42 @@ export function ApprovalPanel({
                   <a
                     key={r.id}
                     href={`/api/expenses/receipts/${r.id}/file`}
+                    download={r.fileName}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium hover:bg-slate-50"
+                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium hover:bg-slate-50"
                   >
+                    <Download className="h-4 w-4" />
                     {r.fileName}
                   </a>
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={r.id}
-                    src={`/api/expenses/receipts/${r.id}/file`}
-                    alt={r.fileName}
-                    className="max-h-80 w-full rounded-xl object-contain bg-slate-50"
-                  />
+                  <div key={r.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReceipt(r)}
+                      className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                      aria-label={`View ${r.fileName}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/expenses/receipts/${r.id}/file`}
+                        alt={r.fileName}
+                        className="max-h-80 w-full object-contain"
+                      />
+                      <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-black/60 px-3 py-2 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                        <Eye className="h-4 w-4" />
+                        Tap to view full receipt
+                      </span>
+                    </button>
+                    <a
+                      href={`/api/expenses/receipts/${r.id}/file`}
+                      download={r.fileName}
+                      className="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-sm hover:bg-white"
+                      aria-label={`Save ${r.fileName}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </div>
                 )
               )}
             </div>
@@ -208,7 +264,7 @@ export function ApprovalPanel({
           </div>
         ) : null}
 
-        {(canApprove || canReimburse) && (
+        {(canApprove || canReimburse || canDelete) && (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
               Review
@@ -280,6 +336,17 @@ export function ApprovalPanel({
                   </Button>
                 </>
               ) : null}
+              {canDelete ? (
+                <Button
+                  variant="destructive"
+                  className="min-h-11 rounded-xl"
+                  disabled={pending || deleting}
+                  onClick={() => void deleteExpense()}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleting ? "Deleting…" : "Delete expense"}
+                </Button>
+              ) : null}
             </div>
           </div>
         )}
@@ -340,6 +407,34 @@ export function ApprovalPanel({
           </ul>
         </div>
       </div>
+      <Dialog open={Boolean(selectedReceipt)} onOpenChange={(open) => !open && setSelectedReceipt(null)}>
+        <DialogContent className="sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{selectedReceipt?.fileName ?? "Receipt"}</DialogTitle>
+            <DialogDescription>Tap download to save a copy of this receipt.</DialogDescription>
+          </DialogHeader>
+          {selectedReceipt ? (
+            <div className="flex max-h-[65vh] justify-center overflow-auto rounded-xl bg-slate-100 p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/expenses/receipts/${selectedReceipt.id}/file`}
+                alt={selectedReceipt.fileName}
+                className="max-h-[62vh] max-w-full object-contain"
+              />
+            </div>
+          ) : null}
+          <DialogFooter>
+            {selectedReceipt ? (
+              <Button asChild className="min-h-11 rounded-xl">
+                <a href={`/api/expenses/receipts/${selectedReceipt.id}/file`} download={selectedReceipt.fileName}>
+                  <Download className="h-4 w-4" />
+                  Save receipt
+                </a>
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
