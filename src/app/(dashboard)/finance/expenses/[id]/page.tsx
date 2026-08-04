@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
-import { getExpenseById } from "@/lib/expenses/expense-service";
+import { canViewAllExpenses, getExpenseById } from "@/lib/expenses/expense-service";
 import { ApprovalPanel } from "@/components/expenses/approval-panel";
 import { Button } from "@/components/ui/button";
 
@@ -41,7 +41,7 @@ export default async function ExpenseDetailPage({
         canReimburse={hasPermission(ctx, PERMISSIONS.REIMBURSE_EXPENSES)}
         canDelete={
           expense.employeeId === ctx.employee.id ||
-          hasPermission(ctx, PERMISSIONS.MANAGE_EXPENSE_SETTINGS)
+          canViewAllExpenses(ctx)
         }
       />
     </div>

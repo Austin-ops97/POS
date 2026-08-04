@@ -621,9 +621,9 @@ export async function softDeleteExpense(ctx: AuthContext, id: string, ipAddress?
   if (!expense) throw new Error("Expense not found");
   if (
     expense.employeeId !== ctx.employee.id &&
-    !hasPermission(ctx, PERMISSIONS.MANAGE_EXPENSE_SETTINGS)
+    !canViewAllExpenses(ctx)
   ) {
-    throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_EXPENSE_SETTINGS}`);
+    throw new Error(`Missing permission: ${PERMISSIONS.VIEW_TEAM_EXPENSES}`);
   }
 
   const updated = await db.expense.update({
@@ -638,8 +638,8 @@ export async function softDeleteExpense(ctx: AuthContext, id: string, ipAddress?
     action: "ARCHIVE",
     entity: "Expense",
     entityId: id,
-    before: expense,
-    after: updated,
+    before: { status: expense.status, deletedAt: expense.deletedAt },
+    after: { status: updated.status, deletedAt: updated.deletedAt },
     ipAddress,
     systemAction: "EXPENSE_UPDATE",
   });

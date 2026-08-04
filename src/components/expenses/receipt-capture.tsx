@@ -98,6 +98,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+  const nativeCameraRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -121,9 +122,8 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
     setVideoReady(false);
     video.srcObject = stream;
     const play = () => {
-      void video.play().catch(() => {
-        toast.error("The camera preview could not start. Try closing and reopening the camera.");
-      });
+      setVideoReady(video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+      void video.play().then(() => setVideoReady(true)).catch(() => setVideoReady(false));
     };
     video.addEventListener("loadedmetadata", play, { once: true });
     video.addEventListener("canplay", play, { once: true });
@@ -168,6 +168,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
           ? "Camera access was blocked. Allow camera access in your browser settings, then try again."
           : "The camera could not be opened. You can upload a receipt instead."
       );
+      nativeCameraRef.current?.click();
     } finally {
       setCameraStarting(false);
     }
@@ -313,8 +314,11 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
               onCanPlay={() => setVideoReady(true)}
             />
             {!videoReady ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-medium text-white">
-                Starting camera…
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center text-sm font-medium text-white">
+                <span>Starting camera…</span>
+                <Button type="button" variant="secondary" onClick={() => nativeCameraRef.current?.click()}>
+                  Use device camera instead
+                </Button>
               </div>
             ) : null}
             <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
@@ -416,6 +420,17 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
           type="file"
           accept="application/pdf,.pdf"
           multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) void handleFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+        <input
+          ref={nativeCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={(e) => {
             if (e.target.files) void handleFiles(e.target.files);
