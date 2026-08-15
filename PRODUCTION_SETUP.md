@@ -97,7 +97,7 @@ Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer $CRON_SECR
 
 ## End-to-end tests
 
-Public marketing routes run in CI. Authenticated dashboard and register flows need a Clerk session file:
+Public marketing routes can be run with `npm run test:e2e:public` after a production build and real Clerk keys. Authenticated dashboard and register flows need a Clerk session file:
 
 ```bash
 PLAYWRIGHT_STORAGE_STATE=/path/to/clerk-storage.json npm run test:e2e
