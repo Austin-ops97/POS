@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Camera } from "lucide-react";
+import { Camera, Download } from "lucide-react";
 import { requireAuth, hasPermission } from "@/lib/auth";
 import { getInventory } from "@/lib/queries";
 import { InventoryTable } from "@/components/dashboard/inventory-table";
@@ -60,14 +60,22 @@ export default async function InventoryPage() {
             )}
           </p>
         </div>
-        {canScan && (
-          <Button asChild size="lg" className="w-full sm:w-auto">
-            <Link href="/inventory/scan">
-              <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
-              Scan Inventory
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+            <Link href="/inventory/report">
+              <Download className="mr-2 h-5 w-5" aria-hidden="true" />
+              View Report
             </Link>
           </Button>
-        )}
+          {canScan && (
+            <Button asChild size="lg" className="w-full sm:w-auto">
+              <Link href="/inventory/scan">
+                <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
+                Scan Inventory
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
       <InventoryTable items={rows} locations={locations} />
     </div>

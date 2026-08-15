@@ -99,6 +99,11 @@ enum InventoryScanMode {
   LOST
 }
 
+enum SignatureDataFormat {
+  PNG
+  SVG
+}
+
 enum InventoryScanSessionStatus {
   OPEN
   APPLIED
@@ -347,6 +352,8 @@ model Business {
   refunds                   Refund[]
   receipts                  Receipt[]
   inventoryMovements        InventoryMovement[]
+  inventoryReceipts         InventoryReceipt[]
+  signatures                Signature[]
   terminalReaders           TerminalReader[]
   modifierGroups            ModifierGroup[]
   discounts                 Discount[]
@@ -545,6 +552,8 @@ model EmployeeProfile {
   ptoAdjustmentsMade             PtoLedgerEntry[]               @relation("PtoAdjustedBy")
   sickLedgerEntries              SickLedgerEntry[]
   sickAdjustmentsMade            SickLedgerEntry[]               @relation("SickAdjustedBy")
+  inventoryReceipts              InventoryReceipt[]
+  signatures                     Signature[]
   orders                         Order[]
   ordersTerminated               Order[]                        @relation("OrderTerminatedBy")
   refunds                        Refund[]
@@ -1023,6 +1032,7 @@ model InventoryItem {
   location  Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
   product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   movements InventoryMovement[]
+  receipts  InventoryReceipt[]
 
   @@unique([locationId, productId])
   @@index([businessId])
@@ -1050,6 +1060,27 @@ model InventoryMovement {
   @@index([createdAt])
 }
 
+model InventoryReceipt {
+  id              String   @id @default(cuid())
+  businessId      String
+  inventoryItemId String
+  employeeId      String?
+  quantity        Int
+  unitCost        Decimal? @db.Decimal(10, 2)
+  supplier        String?
+  referenceNumber String?
+  receivedAt      DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  employee      EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, receivedAt])
+  @@index([inventoryItemId, receivedAt])
+}
+
 // ─── Customers ───────────────────────────────────────────────────────────────
 
 model Customer {
@@ -1072,11 +1103,35 @@ model Customer {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   orders   Order[]
+  signatures Signature[]
 
   @@index([businessId])
   @@index([businessId, deletedAt])
   @@index([email])
   @@index([phone])
+}
+
+model Signature {
+  id              String             @id @default(cuid())
+  businessId      String
+  orderId         String
+  customerId      String?
+  employeeId      String?
+  signerName      String
+  consentText     String
+  dataFormat      SignatureDataFormat
+  signatureData   String
+  deviceSessionId String?
+  capturedAt      DateTime           @default(now())
+  revokedAt       DateTime?
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order    Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  employee EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, orderId])
+  @@index([customerId])
 }
 
 // ─── Orders & Payments ───────────────────────────────────────────────────────
@@ -1099,6 +1154,7 @@ model Order {
   terminatedAt        DateTime?
   terminatedById      String?
   terminatedByName    String?
+  signatures          Signature[]
   terminationReason   OrderTerminationReason?
   terminationNotes    String?
   inventoryRestoredAt DateTime?
@@ -1388,6 +1444,8 @@ model BusinessSetting {
   showSkuOnReceipt            Boolean  @default(false)
   enableBarcodeScanning       Boolean  @default(true)
   enableReceiptPrinting       Boolean  @default(true)
+  enableDigitalSignatures     Boolean  @default(false)
+  showSignatureOnReceipt      Boolean  @default(false)
   // Feature controls (platform modules gate availability; these refine behavior)
   enableOrderTermination      Boolean  @default(true)
   enableProjectReminders      Boolean  @default(true)

@@ -20,6 +20,7 @@ import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions
 import { OrderTerminateActions } from "@/components/dashboard/order-terminate-actions";
 import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import { PERMISSIONS } from "@/lib/permissions";
+import { SignatureCapture } from "@/components/dashboard/signature-capture";
 
 export default async function OrderDetailPage({
   params,
@@ -34,7 +35,7 @@ export default async function OrderDetailPage({
     getEmployeeModuleAccess(ctx),
     db.businessSetting.findUnique({
       where: { businessId: ctx.business.id },
-      select: { enableOrderTermination: true },
+      select: { enableOrderTermination: true, enableDigitalSignatures: true },
     }),
   ]);
   if (!order) notFound();
@@ -169,6 +170,13 @@ export default async function OrderDetailPage({
             )}
             {order.terminationNotes && <p>Notes: {order.terminationNotes}</p>}
           </CardContent>
+        </Card>
+      )}
+
+      {settings?.enableDigitalSignatures && canRefund && (
+        <Card>
+          <CardHeader><CardTitle>Customer signature</CardTitle></CardHeader>
+          <CardContent><SignatureCapture orderId={order.id} signerName={customerName} /></CardContent>
         </Card>
       )}
 

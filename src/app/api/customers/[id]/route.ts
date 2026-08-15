@@ -95,3 +95,63 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return handleApiError(error, "PATCH /api/customers/[id]");
   }
 }
+
+export async function DELETE(_request: Request, { params }: RouteParams) {
+  try {
+    const ctx = await requireAuth();
+    if (!hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS)) {
+      throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_CUSTOMERS}`);
+    }
+    const { id } = await params;
+    const existing = await db.customer.findFirst({
+      where: { id, businessId: ctx.business.id, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!existing) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+
+    const deletedAt = new Date();
+    await db.$transaction([
+      db.customer.update({ where: { id }, data: { deletedAt } }),
+      db.order.updateMany({ where: { businessId: ctx.business.id, customerId: id }, data: { customerId: null } }),
+    ]);
+    await createAuditLog({
+      businessId: ctx.business.id,
+      employeeId: ctx.employee.id,
+      action: "DELETE",
+      entity: "Customer",
+      entityId: id,
+      details: { deletedAt, historicalOrdersPreserved: true },
+    });
+    return NextResponse.json({ id, deletedAt, archived: true });
+  } catch (error) {
+    return handleApiError(error, "DELETE /api/customers/[id]");
+  }
+}
+
+export async function POST(request: Request, { params }: RouteParams) {
+  try {
+    const ctx = await requireAuth();
+    if (!hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS)) {
+      throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_CUSTOMERS}`);
+    }
+    const { id } = await params;
+    const body = await request.json().catch(() => ({}));
+    if (body.action !== "restore") {
+      return NextResponse.json({ error: "Only restore is supported" }, { status: 400 });
+    }
+    const customer = await db.customer.findFirst({ where: { id, businessId: ctx.business.id, deletedAt: { not: null } } });
+    if (!customer) return NextResponse.json({ error: "Archived customer not found" }, { status: 404 });
+    const restored = await db.customer.update({ where: { id }, data: { deletedAt: null } });
+    await createAuditLog({
+      businessId: ctx.business.id,
+      employeeId: ctx.employee.id,
+      action: "UPDATE",
+      entity: "Customer",
+      entityId: id,
+      details: { action: "restore" },
+    });
+    return NextResponse.json(restored);
+  } catch (error) {
+    return handleApiError(error, "POST /api/customers/[id]");
+  }
+}
