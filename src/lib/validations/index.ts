@@ -217,6 +217,7 @@ export const employeeSchema = z.object({
   locationIds: z.array(z.string()).optional(),
   hourlyWage: z.number().min(0).optional(),
   ptoAnnualHours: z.number().min(0).optional(),
+  ptoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]).optional(),
 });
 
 export const businessInfoSchema = businessProfileSchema.omit({ type: true });

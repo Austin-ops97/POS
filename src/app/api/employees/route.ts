@@ -9,6 +9,9 @@ import { handleApiError } from "@/lib/api-utils";
 import { assertRoleAssignmentAllowed } from "@/lib/employee-security";
 import { createInvitationToken, INVITATION_TTL_MS } from "@/lib/employee-invitations";
 import { requireModule } from "@/lib/access-control";
+import { getCurrentPayPeriod } from "@/lib/workforce/pay-period";
+import { openingPtoGrant } from "@/lib/workforce/pto-accrual";
+import { recordPtoLedgerEntry } from "@/lib/workforce/pto-service";
 
 export async function GET() {
   try {
@@ -104,6 +107,19 @@ export async function POST(request: Request) {
     const defaultPto = workforceSettings
       ? Number(workforceSettings.defaultPtoAnnualHours)
       : 80;
+    const policy = data.ptoAccrualPolicy ?? workforceSettings?.defaultPtoAccrualPolicy ?? "ANNUAL_GRANT";
+    const annualHours = data.ptoAnnualHours ?? defaultPto;
+    const payPeriodType = workforceSettings?.payPeriodType ?? "BIWEEKLY";
+    const weekStartDay = workforceSettings?.weekStartDay ?? 0;
+    const now = new Date();
+    const payPeriod = getCurrentPayPeriod(payPeriodType, weekStartDay, now);
+    const opening = openingPtoGrant({
+      policy,
+      annualHours,
+      payPeriodType,
+      now,
+      payPeriodStart: payPeriod.start,
+    });
 
     const employee = await db.$transaction(async (tx) => {
       const created = await tx.employeeProfile.create({
@@ -115,8 +131,9 @@ export async function POST(request: Request) {
           phone: data.phone,
           pinHash,
           hourlyWage: data.hourlyWage,
-          ptoAnnualHours: data.ptoAnnualHours ?? defaultPto,
-          ptoBalanceHours: data.ptoAnnualHours ?? defaultPto,
+          ptoAnnualHours: annualHours,
+          ptoAccrualPolicy: policy,
+          ptoBalanceHours: 0,
           status: "INVITED",
           inviteTokenHash: invitation.hash,
           inviteExpiresAt: new Date(Date.now() + INVITATION_TTL_MS),
@@ -126,6 +143,19 @@ export async function POST(request: Request) {
           role: { select: { id: true, name: true } },
         },
       });
+
+      if (opening.hours > 0 && opening.periodKey) {
+        await recordPtoLedgerEntry({
+          businessId: ctx.business.id,
+          employeeId: created.id,
+          type: "ACCRUAL",
+          hours: opening.hours,
+          reason: "Opening PTO grant",
+          referenceId: opening.periodKey,
+          adjustedById: ctx.employee.id,
+          tx,
+        });
+      }
 
       if (data.locationIds && data.locationIds.length > 0) {
         await tx.employeeLocation.createMany({

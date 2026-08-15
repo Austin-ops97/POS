@@ -5,6 +5,7 @@ export const workforceSettingsSchema = z.object({
   weekStartDay: z.number().int().min(0).max(6),
   overtimeThresholdHours: z.number().min(0).max(168),
   defaultPtoAnnualHours: z.number().min(0).max(1000),
+  defaultPtoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]),
   paidBreaks: z.boolean(),
 });
 
@@ -128,6 +129,7 @@ export const employeePersonnelSchema = z.object({
   employmentNotes: z.string().max(2000).optional().nullable(),
   sickBalanceHours: z.number().min(0).optional(),
   ptoCarryoverLimit: z.number().min(0).nullable().optional(),
+  ptoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]).optional(),
 });
 
 export const employeeUpdateSchema = employeePersonnelSchema.extend({

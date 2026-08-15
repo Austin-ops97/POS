@@ -7,6 +7,7 @@ import {
   validateCashTender,
 } from "./cash-tender";
 import { isValidReceiptEmail, normalizeReceiptEmail } from "./receipt-email";
+import { signatureCaptureSchema } from "../validations";
 
 // Cart store reset is validated via getState (no React render required).
 import { useCartStore } from "../../stores/cart-store";
@@ -56,6 +57,29 @@ describe("receipt email", () => {
 
   it("normalizes email", () => {
     assert.equal(normalizeReceiptEmail("  User@Example.COM "), "user@example.com");
+  });
+});
+
+describe("signature capture payload", () => {
+  it("accepts a PNG signature with consent metadata", () => {
+    const parsed = signatureCaptureSchema.parse({
+      signerName: "Alex Customer",
+      consentText: "I acknowledge and approve this transaction.",
+      dataFormat: "PNG",
+      signatureData: "data:image/png;base64,abc",
+    });
+    assert.equal(parsed.signerName, "Alex Customer");
+  });
+
+  it("rejects an empty signer name", () => {
+    assert.throws(() =>
+      signatureCaptureSchema.parse({
+        signerName: "  ",
+        consentText: "ok",
+        dataFormat: "PNG",
+        signatureData: "data:image/png;base64,abc",
+      })
+    );
   });
 });
 

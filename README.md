@@ -14,7 +14,7 @@ The service owner has a platform control plane at `/admin`. Each customer busine
 - **Employee Permissions** — Role-based access with PIN unlock for registers
 - **Reports & Analytics** — Sales dashboards, charts, and CSV export
 - **Refunds & Receipts** — Full/partial refunds via Stripe with digital receipts
-- **Workforce** — Scheduling, time clock, PTO, and payroll exports
+- **Workforce** — Scheduling, time clock, PTO with a daily accrual job, and payroll exports
 - **Expenses / Finance** — Company cards, approvals, budgets, and receipt capture
 - **Office & Admin Suite** — Connected documents, files, CRM workflows, forms, projects, knowledge, security, utilities, and approval-first AI automation
 

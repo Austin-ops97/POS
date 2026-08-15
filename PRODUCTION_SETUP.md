@@ -54,6 +54,9 @@ npm run build
 # or:
 node scripts/prisma-with-direct.mjs migrate deploy
 ```
+
+Vercel production builds already run `migrate deploy` via `npm run build`. Deploying the current `main` branch applies any pending additive migrations, including payroll correctness (`20260815090000_payroll_correctness`), inventory/customers/signatures (`20260815100000_inventory_customers_signatures`), and the PTO accrual job (`20260815180000_pto_accrual_job`).
+
 The `20260714180000_remove_demo_subscription_onboarding` migration removes confirmed demo seed records and drops the Subscription / onboarding schema. Review it before applying to production.
 
 Optional: seed system roles and permissions only (no merchant data):
@@ -82,3 +85,22 @@ https://your-production-domain.com/api/webhooks/stripe
 3. The app automatically provisions a business, default location, Owner employee, settings, modules, tax rate, and Stripe Connect placeholder.
 4. Add products, tax rates, employees, and payment hardware in Settings.
 5. Open `/register` to start checkout.
+
+## Cron jobs
+
+Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer $CRON_SECRET`.
+
+| Path | Schedule | Purpose |
+|------|----------|---------|
+| `/api/cron/reminders` | every 5 minutes (daily on Hobby) | Project reminder emails |
+| `/api/cron/pto-accrual` | `15 8 * * *` (08:15 UTC daily) | Recurring / annual PTO grants |
+
+## End-to-end tests
+
+Public marketing routes run in CI. Authenticated dashboard and register flows need a Clerk session file:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/path/to/clerk-storage.json npm run test:e2e
+```
+
+Database-backed tests need a reachable `DATABASE_URL` / `DIRECT_URL` and `RUN_DB_TESTS=1`. `npm test` covers accrual, payroll, and checkout logic without a live database.
