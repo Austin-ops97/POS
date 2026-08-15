@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Minus,
-  Plus,
   Trash2,
   User,
   Percent,
@@ -11,8 +9,8 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
@@ -218,40 +216,13 @@ export function CartPanel({
                   </button>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={dark ? "secondary" : "outline"}
-                      size="icon"
-                      className="h-11 w-11 rounded-lg"
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      aria-label={`Decrease quantity of ${item.name}`}
-                    >
-                      <Minus className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateQuantity(item.id, parseInt(e.target.value) || 1)
-                      }
-                      className={cn(
-                        "h-11 w-14 text-center text-base font-semibold",
-                        dark && "border-slate-600 bg-slate-700 text-white"
-                      )}
-                      aria-label={`Quantity of ${item.name}`}
-                    />
-                    <Button
-                      variant={dark ? "secondary" : "outline"}
-                      size="icon"
-                      className="h-11 w-11 rounded-lg"
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                      aria-label={`Increase quantity of ${item.name}`}
-                    >
-                      <Plus className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
+                  <QuantityStepper
+                    value={item.quantity}
+                    onChange={(next) => updateQuantity(item.id, next)}
+                    min={1}
+                    tone={dark ? "dark" : "light"}
+                    aria-label={`Quantity of ${item.name}`}
+                  />
                   <p className="text-lg font-bold">
                     {formatCurrency(item.unitPrice * item.quantity)}
                   </p>

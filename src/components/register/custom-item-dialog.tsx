@@ -12,11 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 
 type CustomItemDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (item: { name: string; unitPrice: number }) => void;
+  onSubmit: (item: { name: string; unitPrice: number; quantity: number }) => void;
 };
 
 export function CustomItemDialog({
@@ -26,11 +27,13 @@ export function CustomItemDialog({
 }: CustomItemDialogProps) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
     setName("");
     setPrice("");
+    setQuantity(1);
     setError(null);
   };
 
@@ -51,7 +54,7 @@ export function CustomItemDialog({
       setError("Enter a valid price");
       return;
     }
-    onSubmit({ name: trimmed, unitPrice: parsed });
+    onSubmit({ name: trimmed, unitPrice: parsed, quantity });
     handleOpenChange(false);
   };
 
@@ -87,6 +90,16 @@ export function CustomItemDialog({
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-item-qty">Quantity</Label>
+              <QuantityStepper
+                id="custom-item-qty"
+                value={quantity}
+                onChange={setQuantity}
+                min={1}
+                aria-label="Custom item quantity"
               />
             </div>
             {error ? (
