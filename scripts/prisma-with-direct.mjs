@@ -8,37 +8,8 @@
  * This wrapper only affects the Prisma CLI subprocess. The Next.js app should
  * continue using the pooled DATABASE_URL at runtime.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-
-/**
- * @param {string} filename
- * @returns {Record<string, string>}
- */
-function readEnvFile(filename) {
-  const path = resolve(process.cwd(), filename);
-  /** @type {Record<string, string>} */
-  const values = {};
-  if (!existsSync(path)) return values;
-
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    values[key] = value;
-  }
-  return values;
-}
+import { envWithLocalOverrides } from "./apply-env-local.mjs";
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -46,12 +17,8 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Precedence: .env < .env.local < process.env (Vercel / shell wins)
-const mergedEnv = {
-  ...readEnvFile(".env"),
-  ...readEnvFile(".env.local"),
-  ...process.env,
-};
+// Precedence: process.env, then .env / .env.local for empty or CI placeholder values.
+const mergedEnv = envWithLocalOverrides();
 
 const databaseUrl = String(mergedEnv.DATABASE_URL ?? "").trim();
 const explicitDirect = String(mergedEnv.DIRECT_URL ?? "").trim();
