@@ -1,4 +1,4 @@
-import type { DisplayNameStrategy, EmployeeProfile, EmploymentType, PayType } from "@prisma/client";
+import type { DisplayNameStrategy, EmployeeProfile, EmploymentType, PayType, PtoAccrualPolicy } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
@@ -233,6 +233,9 @@ export function buildEmployeeProfileData(
       ? { ptoCarryoverLimit: data.ptoCarryoverLimit as number }
       : {}),
     ...(data.ptoAnnualHours !== undefined ? { ptoAnnualHours: data.ptoAnnualHours as number } : {}),
+    ...(data.ptoAccrualPolicy !== undefined
+      ? { ptoAccrualPolicy: data.ptoAccrualPolicy as PtoAccrualPolicy }
+      : {}),
     ...(data.roleId !== undefined ? { roleId: data.roleId as string } : {}),
     ...(data.status !== undefined ? { status: data.status as never } : {}),
     ...(data.hourlyWage !== undefined ? { hourlyWage: data.hourlyWage as number } : {}),

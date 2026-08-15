@@ -35,7 +35,7 @@ export function DashboardShell({
         onOpenChange={setNavOpen}
         visibility={navVisibility}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar
           businessName={businessName}
           locationName={locationName}

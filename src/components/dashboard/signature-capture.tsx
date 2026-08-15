@@ -5,17 +5,36 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
-export function SignatureCapture({ orderId, signerName: initialSignerName }: { orderId: string; signerName?: string | null }) {
+const DEFAULT_CONSENT = "I acknowledge and approve this transaction.";
+
+type SignatureCaptureProps = {
+  orderId: string;
+  signerName?: string | null;
+  variant?: "default" | "compact";
+  onSaved?: () => void;
+  onSkip?: () => void;
+};
+
+export function SignatureCapture({
+  orderId,
+  signerName: initialSignerName,
+  variant = "default",
+  onSaved,
+  onSkip,
+}: SignatureCaptureProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signerName, setSignerName] = useState(initialSignerName ?? "");
-  const [consentText, setConsentText] = useState("I acknowledge and approve this transaction.");
+  const [consentText, setConsentText] = useState(DEFAULT_CONSENT);
   const [saving, setSaving] = useState(false);
   const [hasInk, setHasInk] = useState(false);
+  const [captured, setCaptured] = useState(false);
+  const compact = variant === "compact";
 
   function draw(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || captured) return;
     const rect = canvas.getBoundingClientRect();
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -57,27 +76,58 @@ export function SignatureCapture({ orderId, signerName: initialSignerName }: { o
         return;
       }
       toast.success("Signature captured");
-      clear();
+      setCaptured(true);
+      onSaved?.();
     } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2 text-sm font-medium"><Label>Signer name</Label><Input value={signerName} onChange={(e) => setSignerName(e.target.value)} /></label>
-        <label className="space-y-2 text-sm font-medium"><Label>Consent statement</Label><Input value={consentText} onChange={(e) => setConsentText(e.target.value)} /></label>
+  if (captured) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        Signature captured for {signerName.trim() || "this order"}.
       </div>
+    );
+  }
+
+  return (
+    <div className={cn("space-y-4", compact && "space-y-3")}>
+      <div className={cn("grid gap-4", compact ? "grid-cols-1" : "sm:grid-cols-2")}>
+        <label className="space-y-2 text-sm font-medium">
+          <Label>Signer name</Label>
+          <Input value={signerName} onChange={(e) => setSignerName(e.target.value)} />
+        </label>
+        {!compact && (
+          <label className="space-y-2 text-sm font-medium">
+            <Label>Consent statement</Label>
+            <Input value={consentText} onChange={(e) => setConsentText(e.target.value)} />
+          </label>
+        )}
+      </div>
+      {compact && (
+        <p className="text-left text-xs text-slate-500">{consentText}</p>
+      )}
       <canvas
         ref={canvasRef}
-        width={900}
-        height={240}
-        className="h-48 w-full touch-none rounded-lg border-2 border-dashed border-slate-300 bg-white"
+        width={compact ? 640 : 900}
+        height={compact ? 160 : 240}
+        className={cn(
+          "w-full touch-none rounded-lg border-2 border-dashed border-slate-300 bg-white",
+          compact ? "h-28" : "h-48"
+        )}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); draw(e); }}
         onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) draw(e); }}
       />
-      <div className="flex gap-2"><Button type="button" variant="outline" onClick={clear}>Clear</Button><Button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Capture signature"}</Button></div>
+      <div className={cn("flex gap-2", compact && "flex-col sm:flex-row")}>
+        <Button type="button" variant="outline" onClick={clear}>Clear</Button>
+        <Button type="button" onClick={save} disabled={saving}>
+          {saving ? "Saving..." : "Capture signature"}
+        </Button>
+        {onSkip && (
+          <Button type="button" variant="ghost" onClick={onSkip}>Skip for now</Button>
+        )}
+      </div>
     </div>
   );
 }

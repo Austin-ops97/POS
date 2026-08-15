@@ -294,6 +294,8 @@ enum DisplayNameStrategy {
 
 enum PtoAccrualPolicy {
   ANNUAL_GRANT
+  PER_PAY_PERIOD
+  MONTHLY
   NONE
 }
 
@@ -754,6 +756,7 @@ model PtoLedgerEntry {
   @@index([businessId])
   @@index([employeeId])
   @@index([createdAt])
+  @@index([employeeId, type, referenceId])
 }
 
 model SickLedgerEntry {
@@ -1501,15 +1504,16 @@ model AuditLog {
 // ─── Workforce ───────────────────────────────────────────────────────────────
 
 model WorkforceSettings {
-  id                     String        @id @default(cuid())
-  businessId             String        @unique
-  payPeriodType          PayPeriodType @default(BIWEEKLY)
-  weekStartDay           Int           @default(0)
-  overtimeThresholdHours Decimal       @default(40) @db.Decimal(6, 2)
-  defaultPtoAnnualHours  Decimal       @default(80) @db.Decimal(8, 2)
-  paidBreaks             Boolean       @default(false)
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  id                       String           @id @default(cuid())
+  businessId               String           @unique
+  payPeriodType            PayPeriodType    @default(BIWEEKLY)
+  weekStartDay             Int              @default(0)
+  overtimeThresholdHours   Decimal          @default(40) @db.Decimal(6, 2)
+  defaultPtoAnnualHours    Decimal          @default(80) @db.Decimal(8, 2)
+  defaultPtoAccrualPolicy  PtoAccrualPolicy @default(ANNUAL_GRANT)
+  paidBreaks               Boolean          @default(false)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }

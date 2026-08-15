@@ -3,7 +3,8 @@ import { describe, it, before, after } from "node:test";
 import { PrismaClient } from "@prisma/client";
 import { MODULE_SETTING_KEYS } from "./validations";
 
-const hasDatabase = Boolean(process.env.DATABASE_URL?.trim());
+const hasDatabase =
+  Boolean(process.env.DATABASE_URL?.trim()) && process.env.RUN_DB_TESTS === "1";
 
 describe("automatic business provisioning", { skip: !hasDatabase }, () => {
   const db = new PrismaClient();

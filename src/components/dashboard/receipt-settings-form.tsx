@@ -177,7 +177,7 @@ export function ReceiptSettingsForm({
           <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
             <div className="flex items-center gap-3">
               <Checkbox id="enableDigitalSignatures" checked={enableDigitalSignatures} onCheckedChange={(v) => setValue("enableDigitalSignatures", v === true)} />
-              <Label htmlFor="enableDigitalSignatures">Enable digital signatures for completed orders</Label>
+              <Label htmlFor="enableDigitalSignatures">Enable digital signatures at checkout and on completed orders</Label>
             </div>
             <div className="flex items-center gap-3">
               <Checkbox id="showSignatureOnReceipt" checked={showSignatureOnReceipt} disabled={!enableDigitalSignatures} onCheckedChange={(v) => setValue("showSignatureOnReceipt", v === true)} />

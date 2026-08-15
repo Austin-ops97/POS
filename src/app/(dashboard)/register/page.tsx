@@ -123,6 +123,7 @@ export default function RegisterPage() {
   const [registerUnlocked, setRegisterUnlocked] = useState(false);
   const [cashierName, setCashierName] = useState<string | null>(null);
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
+  const [signaturesEnabled, setSignaturesEnabled] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   const {
@@ -167,6 +168,7 @@ export default function RegisterPage() {
           const settings = biz.settings ?? null;
           const pinRequired = Boolean(settings?.requirePinAtRegister);
           setRequirePin(pinRequired);
+          setSignaturesEnabled(Boolean(settings?.enableDigitalSignatures));
           if (settings?.sessionTimeoutMinutes) {
             setSessionTimeoutMinutes(Number(settings.sessionTimeoutMinutes));
           }
@@ -882,6 +884,7 @@ export default function RegisterPage() {
           setSkipReceiptEmail(skip);
           skipReceiptRef.current = skip;
         }}
+        signaturesEnabled={signaturesEnabled}
         cardCheckout={
           cardCheckout
             ? {

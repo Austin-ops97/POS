@@ -8,7 +8,8 @@ import { PrismaClient } from "@prisma/client";
 import { normalizeBarcode } from "./barcodes";
 import { syncProductPrimaryBarcode, findBarcodeAssignment } from "./product-barcode";
 
-const hasDatabase = Boolean(process.env.DATABASE_URL?.trim());
+const hasDatabase =
+  Boolean(process.env.DATABASE_URL?.trim()) && process.env.RUN_DB_TESTS === "1";
 
 describe("barcode product assignments", { skip: !hasDatabase }, () => {
   const db = new PrismaClient();

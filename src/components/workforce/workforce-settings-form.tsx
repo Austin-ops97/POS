@@ -50,6 +50,7 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
   const payPeriodType = watch("payPeriodType");
   const weekStartDay = watch("weekStartDay");
   const paidBreaks = watch("paidBreaks");
+  const defaultPtoAccrualPolicy = watch("defaultPtoAccrualPolicy");
 
   async function onSubmit(data: FormValues) {
     const res = await fetch("/api/workforce/settings", {
@@ -139,6 +140,29 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
                 {...register("defaultPtoAnnualHours", { valueAsNumber: true })}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Default PTO accrual</Label>
+            <Select
+              value={defaultPtoAccrualPolicy}
+              onValueChange={(v) =>
+                setValue("defaultPtoAccrualPolicy", v as FormValues["defaultPtoAccrualPolicy"], {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ANNUAL_GRANT">Annual grant (once per year)</SelectItem>
+                <SelectItem value="PER_PAY_PERIOD">Each pay period</SelectItem>
+                <SelectItem value="MONTHLY">Monthly</SelectItem>
+                <SelectItem value="NONE">No automatic accrual</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500">
+              Recurring policies grant a portion of the annual hours on the daily accrual job.
+              Annual grants run on January 1, or the hire-date anniversary when a hire date is set.
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -27,6 +27,8 @@ const employeeFormSchema = employeeUpdateSchema.extend({
   pin: z.union([z.string().length(4), z.literal("")]).optional(),
   hourlyWage: z.coerce.number().min(0).optional(),
   ptoAnnualHours: z.coerce.number().min(0).optional(),
+  ptoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]).optional(),
+  ptoCarryoverLimit: z.coerce.number().min(0).optional(),
   ptoBalanceHours: z.coerce.number().min(0).optional(),
   sickBalanceHours: z.coerce.number().min(0).optional(),
   compensationHourlyRate: z.coerce.number().min(0).optional(),
@@ -94,6 +96,8 @@ export function EmployeeForm({
       locationIds: defaultValues?.locationIds ?? [],
       hourlyWage: defaultValues?.hourlyWage ?? undefined,
       ptoAnnualHours: defaultValues?.ptoAnnualHours ?? undefined,
+      ptoAccrualPolicy: defaultValues?.ptoAccrualPolicy ?? "ANNUAL_GRANT",
+      ptoCarryoverLimit: defaultValues?.ptoCarryoverLimit ?? undefined,
       jobTitle: defaultValues?.jobTitle ?? "",
       department: defaultValues?.department ?? "",
       employeeNumber: defaultValues?.employeeNumber ?? "",
@@ -115,6 +119,7 @@ export function EmployeeForm({
   const status = watch("status");
   const employmentType = watch("employmentType");
   const payType = watch("compensation.payType") ?? (watch("hourlyWage") ? "HOURLY" : "HOURLY");
+  const ptoAccrualPolicy = watch("ptoAccrualPolicy") ?? "ANNUAL_GRANT";
 
   function markDirty() {
     if (!dirty) setDirty(true);
@@ -149,6 +154,10 @@ export function EmployeeForm({
       ...(data.hourlyWage !== undefined ? { hourlyWage: Number(data.hourlyWage) } : {}),
       ...(data.ptoAnnualHours !== undefined
         ? { ptoAnnualHours: Number(data.ptoAnnualHours) }
+        : {}),
+      ...(data.ptoAccrualPolicy ? { ptoAccrualPolicy: data.ptoAccrualPolicy } : {}),
+      ...(data.ptoCarryoverLimit !== undefined
+        ? { ptoCarryoverLimit: data.ptoCarryoverLimit === null ? null : Number(data.ptoCarryoverLimit) }
         : {}),
       ...(data.status ? { status: data.status } : {}),
     };
@@ -514,6 +523,29 @@ export function EmployeeForm({
               <div className="space-y-2">
                 <Label htmlFor="ptoAnnualHours">Annual PTO hours</Label>
                 <Input id="ptoAnnualHours" type="number" step="0.5" min="0" {...register("ptoAnnualHours")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Accrual policy</Label>
+                <Select
+                  value={ptoAccrualPolicy}
+                  onValueChange={(v) => {
+                    setValue("ptoAccrualPolicy", v as EmployeeFormValues["ptoAccrualPolicy"], { shouldValidate: true });
+                    markDirty();
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ANNUAL_GRANT">Annual grant</SelectItem>
+                    <SelectItem value="PER_PAY_PERIOD">Each pay period</SelectItem>
+                    <SelectItem value="MONTHLY">Monthly</SelectItem>
+                    <SelectItem value="NONE">No automatic accrual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ptoCarryoverLimit">Carryover limit (hours)</Label>
+                <Input id="ptoCarryoverLimit" type="number" step="0.5" min="0" {...register("ptoCarryoverLimit")} />
+                <p className="text-xs text-slate-500">Unused hours above this cap are forfeited on the next annual grant.</p>
               </div>
               {isEdit && (
                 <div className="space-y-2">

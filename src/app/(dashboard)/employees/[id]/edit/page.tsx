@@ -78,6 +78,8 @@ export default async function EmployeeEditPage({
           hourlyWage: employee.hourlyWage ? Number(employee.hourlyWage) : undefined,
           ptoAnnualHours: Number(employee.ptoAnnualHours ?? 0),
           ptoBalanceHours: Number(employee.ptoBalanceHours ?? 0),
+          ptoAccrualPolicy: employee.ptoAccrualPolicy,
+          ptoCarryoverLimit: employee.ptoCarryoverLimit == null ? undefined : Number(employee.ptoCarryoverLimit),
           status: employee.status as "ACTIVE" | "INACTIVE" | "INVITED",
         }}
       />

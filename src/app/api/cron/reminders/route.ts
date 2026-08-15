@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { claimDueReminders, processReminder } from "@/lib/office/reminder-service";
-import { jsonError } from "@/lib/api-utils";
+import { authorizeCron } from "@/lib/cron-auth";
 
 /**
  * Processes due project reminders every few minutes when the platform supports it.
@@ -8,11 +8,8 @@ import { jsonError } from "@/lib/api-utils";
  * scheduler hitting this route with CRON_SECRET) for a every-5-minutes cadence.
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return jsonError("CRON_SECRET is not configured", 503);
-
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${secret}`) return jsonError("Unauthorized", 401);
+  const denied = authorizeCron(request);
+  if (denied) return denied;
 
   const claimed = await claimDueReminders(new Date(), 25);
   const results = [];

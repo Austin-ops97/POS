@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { CardPaymentCheckout } from "@/components/register/card-payment-form";
 import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
+import { SignatureCapture } from "@/components/dashboard/signature-capture";
 
 export type PaymentModalState =
   | "idle"
@@ -52,6 +53,7 @@ type PaymentModalProps = {
   skipReceiptEmail?: boolean;
   onSkipReceiptEmailChange?: (skip: boolean) => void;
   cardCheckout?: CardCheckoutProps | null;
+  signaturesEnabled?: boolean;
 };
 
 export function PaymentModal({
@@ -72,6 +74,7 @@ export function PaymentModal({
   skipReceiptEmail,
   onSkipReceiptEmailChange,
   cardCheckout,
+  signaturesEnabled = false,
 }: PaymentModalProps) {
   const titleId = useId();
   const descId = useId();
@@ -113,7 +116,10 @@ export function PaymentModal({
             : undefined
         }
       />
-      <div className="relative flex max-h-[95vh] w-full max-w-md flex-col overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-6 shadow-2xl sm:rounded-2xl sm:p-8">
+      <div className={cn(
+        "relative flex max-h-[95vh] w-full flex-col overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-6 shadow-2xl sm:rounded-2xl sm:p-8",
+        state === "success" && signaturesEnabled && orderId ? "max-w-lg" : "max-w-md"
+      )}>
         {state !== "loading" && (
           <button
             type="button"
@@ -236,6 +242,16 @@ export function PaymentModal({
                 <div className="mt-3 w-full rounded-lg bg-slate-50 px-4 py-3 text-left text-sm text-slate-600">
                   {customerName && <p>Customer: {customerName}</p>}
                   {defaultReceiptEmail && <p>Email: {defaultReceiptEmail}</p>}
+                </div>
+              )}
+              {orderId && signaturesEnabled && (
+                <div className="mt-6 w-full text-left">
+                  <p className="mb-3 text-sm font-medium text-slate-800">Customer signature</p>
+                  <SignatureCapture
+                    orderId={orderId}
+                    signerName={customerName}
+                    variant="compact"
+                  />
                 </div>
               )}
               {orderId && (
