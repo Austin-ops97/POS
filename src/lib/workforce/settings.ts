@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   weekStartDay: 0,
   overtimeThresholdHours: 40,
   defaultPtoAnnualHours: 80,
+  paidBreaks: false,
 };
 
 export async function ensureWorkforceSettings(

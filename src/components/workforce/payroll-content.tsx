@@ -27,6 +27,11 @@ type PayrollRow = {
   breakHours: number;
   regularHours: number;
   overtimeHours: number;
+  ptoHours?: number;
+  sickHours?: number;
+  vacationHours?: number;
+  holidayHours?: number;
+  unpaidHours?: number;
   regularPay: number;
   overtimePay: number;
   bonusTotal: number;
@@ -46,6 +51,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
   const [periodEnd, setPeriodEnd] = useState(
     defaultPeriod.end.toISOString().split("T")[0]
   );
+  const [payDate, setPayDate] = useState(defaultPeriod.end.toISOString().split("T")[0]);
   const [rows, setRows] = useState<PayrollRow[]>([]);
   const [totals, setTotals] = useState({ scheduledHours: 0, actualHours: 0, totalPay: 0 });
   const [loading, setLoading] = useState(true);
@@ -56,7 +62,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/workforce/payroll?periodStart=${periodStart}&periodEnd=${periodEnd}`
+        `/api/workforce/payroll?periodStart=${periodStart}&periodEnd=${periodEnd}&payDate=${payDate}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -66,7 +72,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
     } finally {
       setLoading(false);
     }
-  }, [periodStart, periodEnd]);
+  }, [periodStart, periodEnd, payDate]);
 
   useEffect(() => {
     loadPayroll();
@@ -82,7 +88,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
 
   function exportCsv() {
     window.open(
-      `/api/workforce/payroll?periodStart=${periodStart}&periodEnd=${periodEnd}&format=csv`,
+      `/api/workforce/payroll?periodStart=${periodStart}&periodEnd=${periodEnd}&payDate=${payDate}&format=csv`,
       "_blank"
     );
   }
@@ -140,6 +146,10 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
           <div className="space-y-2">
             <Label>End</Label>
             <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Pay date</Label>
+            <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
           </div>
         </div>
         <Button variant="outline" onClick={exportCsv}>
@@ -224,6 +234,9 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                       <th className="px-4 py-3 font-medium">Sched</th>
                       <th className="px-4 py-3 font-medium">Actual</th>
                       <th className="px-4 py-3 font-medium">Breaks</th>
+                      <th className="px-4 py-3 font-medium">PTO</th>
+                      <th className="px-4 py-3 font-medium">Sick</th>
+                      <th className="px-4 py-3 font-medium">Vacation</th>
                       <th className="px-4 py-3 font-medium">Regular</th>
                       <th className="px-4 py-3 font-medium">OT</th>
                       <th className="px-4 py-3 font-medium">Bonuses</th>
@@ -239,6 +252,9 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                         <td className="px-4 py-3">{row.scheduledHours.toFixed(1)}</td>
                         <td className="px-4 py-3">{row.actualHours.toFixed(1)}</td>
                         <td className="px-4 py-3">{row.breakHours.toFixed(1)}</td>
+                        <td className="px-4 py-3">{(row.ptoHours ?? 0).toFixed(1)}</td>
+                        <td className="px-4 py-3">{(row.sickHours ?? 0).toFixed(1)}</td>
+                        <td className="px-4 py-3">{(row.vacationHours ?? 0).toFixed(1)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.regularPay)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.overtimePay)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.bonusTotal)}</td>

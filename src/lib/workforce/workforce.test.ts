@@ -120,6 +120,22 @@ describe("computeWeeklyOvertimeHours", () => {
     assert.equal(result.regularHours, 40);
     assert.equal(result.overtimeHours, 5);
   });
+
+  it("includes paid breaks in overtime calculations when configured", () => {
+    const monday = new Date("2026-07-06T14:00:00Z");
+    const entries = [{
+      clockIn: monday,
+      clockOut: new Date(monday.getTime() + 41 * 60 * 60 * 1000),
+      status: "COMPLETED" as const,
+      breaks: [{
+        breakStart: new Date(monday.getTime() + 10 * 60 * 60 * 1000),
+        breakEnd: new Date(monday.getTime() + 11 * 60 * 60 * 1000),
+      }],
+    }];
+    const result = computeWeeklyOvertimeHours(entries as never, 0, 40, true);
+    assert.equal(result.regularHours, 40);
+    assert.equal(result.overtimeHours, 1);
+  });
 });
 
 describe("payrollToCsv", () => {
@@ -144,5 +160,11 @@ describe("payrollToCsv", () => {
     ]);
     assert.ok(csv.includes('"Smith, ""Ace"""'));
     assert.ok(csv.includes('"Schedule variance, note"'));
+  });
+
+  it("includes accountant-facing period and leave columns", () => {
+    const csv = payrollToCsv([], { start: "2026-08-01", end: "2026-08-14", payDate: "2026-08-20" });
+    assert.match(csv, /Pay Period,Pay Date/);
+    assert.match(csv, /PTO Hrs,Sick Hrs,Vacation Hrs,Holiday Hrs,Unpaid Hrs/);
   });
 });

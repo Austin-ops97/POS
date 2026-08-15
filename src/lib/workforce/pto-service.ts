@@ -112,3 +112,39 @@ export async function reverseApprovedTimeOff(params: {
     tx: params.tx,
   });
 }
+
+export async function recordSickLedgerEntry(params: {
+  businessId: string;
+  employeeId: string;
+  type: "USAGE" | "REVERSAL" | "ADJUSTMENT" | "ACCRUAL";
+  hours: number;
+  reason?: string;
+  referenceId?: string;
+  adjustedById?: string;
+  tx?: Prisma.TransactionClient;
+}) {
+  const client = params.tx ?? db;
+  const employee = await client.employeeProfile.findFirst({
+    where: { id: params.employeeId, businessId: params.businessId },
+    select: { sickBalanceHours: true },
+  });
+  if (!employee) throw new Error("Employee not found");
+
+  const next = Math.max(0, Number(employee.sickBalanceHours) + params.hours);
+  await client.employeeProfile.update({
+    where: { id: params.employeeId },
+    data: { sickBalanceHours: next },
+  });
+  return client.sickLedgerEntry.create({
+    data: {
+      businessId: params.businessId,
+      employeeId: params.employeeId,
+      type: params.type,
+      hours: params.hours,
+      balanceAfter: next,
+      reason: params.reason,
+      referenceId: params.referenceId,
+      adjustedById: params.adjustedById,
+    },
+  });
+}

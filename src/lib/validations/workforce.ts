@@ -5,6 +5,7 @@ export const workforceSettingsSchema = z.object({
   weekStartDay: z.number().int().min(0).max(6),
   overtimeThresholdHours: z.number().min(0).max(168),
   defaultPtoAnnualHours: z.number().min(0).max(1000),
+  paidBreaks: z.boolean(),
 });
 
 export const timeClockActionSchema = z.object({
@@ -47,7 +48,7 @@ export const timeEntryAdjustSchema = z.object({
 export const timeOffRequestSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  type: z.enum(["PTO", "SICK", "UNPAID", "OTHER"]),
+  type: z.enum(["PTO", "SICK", "VACATION", "HOLIDAY", "UNPAID", "OTHER"]),
   notes: z.string().optional(),
   hoursRequested: z.number().min(0.5).max(1000).optional(),
 });

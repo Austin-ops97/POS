@@ -37,6 +37,7 @@ export default async function WorkforceSettingsPage() {
           weekStartDay: settings.weekStartDay,
           overtimeThresholdHours: Number(settings.overtimeThresholdHours),
           defaultPtoAnnualHours: Number(settings.defaultPtoAnnualHours),
+          paidBreaks: settings.paidBreaks,
         }}
       />
     </div>

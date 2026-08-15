@@ -5,7 +5,7 @@ import { timeOffReviewSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { handleApiError } from "@/lib/api-utils";
-import { applyApprovedTimeOff, reverseApprovedTimeOff } from "@/lib/workforce/pto-service";
+import { applyApprovedTimeOff, reverseApprovedTimeOff, recordSickLedgerEntry } from "@/lib/workforce/pto-service";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -81,12 +81,38 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         });
       }
 
+      if (data.status === "APPROVED" && existing.type === "SICK") {
+        await recordSickLedgerEntry({
+          businessId: ctx.business.id,
+          employeeId: existing.employeeId,
+          type: "USAGE",
+          hours: -Number(existing.hoursRequested),
+          reason: "Approved sick leave",
+          referenceId: id,
+          adjustedById: ctx.employee.id,
+          tx,
+        });
+      }
+
       if (data.status === "CANCELLED" && existing.status === "APPROVED" && existing.type === "PTO") {
         await reverseApprovedTimeOff({
           businessId: ctx.business.id,
           employeeId: existing.employeeId,
           hours: Number(existing.hoursRequested),
           requestId: id,
+          adjustedById: ctx.employee.id,
+          tx,
+        });
+      }
+
+      if (data.status === "CANCELLED" && existing.status === "APPROVED" && existing.type === "SICK") {
+        await recordSickLedgerEntry({
+          businessId: ctx.business.id,
+          employeeId: existing.employeeId,
+          type: "REVERSAL",
+          hours: Number(existing.hoursRequested),
+          reason: "Cancelled approved sick leave",
+          referenceId: id,
           adjustedById: ctx.employee.id,
           tx,
         });

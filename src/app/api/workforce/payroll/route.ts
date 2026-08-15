@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const periodStart = searchParams.get("periodStart");
     const periodEnd = searchParams.get("periodEnd");
+    const payDate = searchParams.get("payDate") ?? periodEnd;
     const format = searchParams.get("format");
 
     if (!periodStart || !periodEnd) {
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
     const start = parseDateOnly(periodStart);
     const end = parseDateOnly(periodEnd);
     end.setHours(23, 59, 59, 999);
+    const selectedPayDate = parseDateOnly(payDate!);
 
     const rows = await computePayrollSummary({
       businessId: ctx.business.id,
@@ -39,14 +41,16 @@ export async function GET(request: Request) {
       periodEnd: end,
       overtimeThreshold: Number(settings.overtimeThresholdHours),
       weekStartDay: settings.weekStartDay,
+      payPeriodType: settings.payPeriodType,
+      paidBreaks: settings.paidBreaks,
     });
 
     if (format === "csv") {
-      const csv = payrollToCsv(rows);
+      const csv = payrollToCsv(rows, { start: periodStart, end: periodEnd, payDate: payDate! });
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv",
-          "Content-Disposition": `attachment; filename="payroll-${periodStart}-${periodEnd}.csv"`,
+          "Content-Disposition": `attachment; filename="payroll-${periodStart}-${periodEnd}-${payDate}.csv"`,
         },
       });
     }
@@ -60,7 +64,7 @@ export async function GET(request: Request) {
       { scheduledHours: 0, actualHours: 0, totalPay: 0 }
     );
 
-    return NextResponse.json({ rows, totals, periodStart, periodEnd });
+    return NextResponse.json({ rows, totals, periodStart, periodEnd, payDate: payDate!, payDateIso: selectedPayDate.toISOString() });
   } catch (error) {
     return handleApiError(error, "GET /api/workforce/payroll");
   }
