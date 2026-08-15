@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 import {
   Select,
   SelectContent,
@@ -62,6 +63,9 @@ export function OrderRefundActions({
   const [returnToStock, setReturnToStock] = useState(false);
   const [partialAmount, setPartialAmount] = useState("");
   const [refundType, setRefundType] = useState<"full" | "partial">("full");
+  const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(
+    () => Object.fromEntries(items.map((item) => [item.id, item.availableQty]))
+  );
 
   if (!canRefund) return null;
 
@@ -108,10 +112,10 @@ export function OrderRefundActions({
       payload.customAmount = amount;
     } else if (returnToStock) {
       const refundableItems = items
-        .filter((item) => item.availableQty > 0)
+        .filter((item) => (itemQuantities[item.id] ?? 0) > 0)
         .map((item) => ({
           orderItemId: item.id,
-          quantity: item.availableQty,
+          quantity: Math.min(item.availableQty, itemQuantities[item.id] ?? 0),
         }));
 
       if (refundableItems.length > 0) {
@@ -243,14 +247,51 @@ export function OrderRefundActions({
               </div>
 
               {refundType === "full" && items.some((i) => i.availableQty > 0) && (
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="returnToStock"
-                    checked={returnToStock}
-                    onCheckedChange={(v) => setReturnToStock(v === true)}
-                    disabled={submitting}
-                  />
-                  <Label htmlFor="returnToStock">Return items to stock</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id="returnToStock"
+                      checked={returnToStock}
+                      onCheckedChange={(v) => setReturnToStock(v === true)}
+                      disabled={submitting}
+                    />
+                    <Label htmlFor="returnToStock">Return items to stock</Label>
+                  </div>
+                  {returnToStock ? (
+                    <ul className="space-y-3 rounded-xl border border-slate-200 p-3">
+                      {items
+                        .filter((item) => item.availableQty > 0)
+                        .map((item) => (
+                          <li
+                            key={item.id}
+                            className="flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-slate-900">
+                                {item.name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Up to {item.availableQty}
+                              </p>
+                            </div>
+                            <QuantityStepper
+                              value={itemQuantities[item.id] ?? item.availableQty}
+                              onChange={(next) =>
+                                setItemQuantities((current) => ({
+                                  ...current,
+                                  [item.id]: next,
+                                }))
+                              }
+                              min={0}
+                              max={item.availableQty}
+                              size="sm"
+                              disabled={submitting}
+                              aria-label={`Return quantity for ${item.name}`}
+                            />
+                          </li>
+                        ))}
+                    </ul>
+                  ) : null}
                 </div>
               )}
             </div>

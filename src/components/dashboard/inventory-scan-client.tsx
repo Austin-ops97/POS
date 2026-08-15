@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, PackagePlus, Search } from "lucide-react";
+import { Camera, PackagePlus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 import {
   Select,
   SelectContent,
@@ -267,12 +268,29 @@ export function InventoryScanClient({
 
   const updateLineQty = async (lineId: string, scannedQty: number) => {
     if (!sessionId) return;
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, scannedQty } : l))
+    );
     const res = await fetch(`/api/inventory/scan-sessions/${sessionId}/lines`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lineId, scannedQty }),
     });
     if (res.ok) await refreshSession(sessionId);
+  };
+
+  const removeLine = async (lineId: string) => {
+    if (!sessionId) return;
+    const res = await fetch(
+      `/api/inventory/scan-sessions/${sessionId}/lines/${lineId}`,
+      { method: "DELETE" }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      toast.error(err?.error ?? "Failed to remove line");
+      return;
+    }
+    setLines((prev) => prev.filter((l) => l.id !== lineId));
   };
 
   useEffect(() => {
@@ -483,7 +501,7 @@ export function InventoryScanClient({
             {lines.map((line) => (
               <div
                 key={line.id}
-                className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2"
+                className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3"
               >
                 <div className="min-w-0">
                   <p className="truncate font-mono text-xs text-slate-500">
@@ -493,23 +511,25 @@ export function InventoryScanClient({
                     Expected {line.expectedQty} · Δ {line.proposedDelta}
                   </p>
                 </div>
-                <Input
-                  className="w-24"
-                  type="text"
-                  inputMode="numeric"
-                  min={0}
-                  value={line.scannedQty}
-                  aria-label={`Scanned quantity for ${line.normalizedCode}`}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setLines((prev) =>
-                      prev.map((l) =>
-                        l.id === line.id ? { ...l, scannedQty: v } : l
-                      )
-                    );
-                  }}
-                  onBlur={() => void updateLineQty(line.id, line.scannedQty)}
-                />
+                <div className="flex items-center gap-1">
+                  <QuantityStepper
+                    value={line.scannedQty}
+                    onChange={(next) => void updateLineQty(line.id, next)}
+                    min={0}
+                    size="sm"
+                    aria-label={`Scanned quantity for ${line.normalizedCode}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 text-red-600"
+                    onClick={() => void removeLine(line.id)}
+                    aria-label={`Remove ${line.normalizedCode}`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
               </div>
             ))}
             <div className="flex gap-2 pt-2">

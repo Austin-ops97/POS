@@ -266,6 +266,26 @@ export async function updateScanLine(
   });
 }
 
+export async function removeScanLine(
+  ctx: AuthContext,
+  sessionId: string,
+  lineId: string
+) {
+  const session = await getScanSession(ctx, sessionId);
+  if (session.status !== "OPEN") {
+    throw new ScanSessionError("Session is not open", 409, "SESSION_CLOSED");
+  }
+  assertScanModePermission(ctx, session.mode);
+
+  const line = session.lines.find((l) => l.id === lineId);
+  if (!line) {
+    throw new ScanSessionError("Scan line not found", 404, "NOT_FOUND");
+  }
+
+  await db.inventoryScanLine.delete({ where: { id: lineId } });
+  return { ok: true, id: lineId };
+}
+
 export async function cancelScanSession(ctx: AuthContext, sessionId: string) {
   const session = await getScanSession(ctx, sessionId);
   if (session.status === "APPLIED") {

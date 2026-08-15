@@ -929,10 +929,10 @@ export default function RegisterPage() {
       <CustomItemDialog
         open={customItemOpen}
         onOpenChange={setCustomItemOpen}
-        onSubmit={({ name, unitPrice }) => {
+        onSubmit={({ name, unitPrice, quantity }) => {
           addItem({
             name,
-            quantity: 1,
+            quantity,
             unitPrice,
             taxable: true,
             type: "CUSTOM",

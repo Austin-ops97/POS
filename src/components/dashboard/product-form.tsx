@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
+import { QuantityStepper } from "@/components/ui/quantity-stepper";
 
 type ProductFormValues = z.infer<typeof productSchema>;
 
@@ -80,6 +81,7 @@ export function ProductForm({
   const isActive = watch("isActive");
   const productType = watch("type");
   const imageUrl = watch("imageUrl");
+  const initialStock = watch("initialStock") ?? 0;
 
   async function checkBarcodeConflict(code: string) {
     if (!code.trim()) {
@@ -358,12 +360,14 @@ export function ProductForm({
             {productType === "PHYSICAL" && trackInventory && (
               <div className="space-y-2">
                 <Label htmlFor="initialStock">Initial stock</Label>
-                <Input
+                <QuantityStepper
                   id="initialStock"
-                  type="number"
-                  step="1"
-                  min="0"
-                  {...register("initialStock", { valueAsNumber: true })}
+                  value={Number.isFinite(initialStock) ? initialStock : 0}
+                  onChange={(next) =>
+                    setValue("initialStock", next, { shouldDirty: true, shouldValidate: true })
+                  }
+                  min={0}
+                  aria-label="Initial stock"
                 />
                 {errors.initialStock && (
                   <p className="text-sm text-red-600">

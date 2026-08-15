@@ -151,7 +151,14 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
                   <div>
                     <p className="text-lg font-bold text-slate-900">{formatCurrency(product.price)}</p>
                     <p className="text-sm text-slate-500">
-                      Stock: {product.stock !== null ? product.stock : "—"}
+                      Stock:{" "}
+                      {product.stock !== null ? (
+                        <Link href="/inventory" className="font-medium text-slate-700 underline-offset-2 hover:underline">
+                          {product.stock}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -197,7 +204,13 @@ export function ProductsTable({ products, categories }: ProductsTableProps) {
                     <td className="px-4 py-3 text-slate-600">{product.categoryName || "—"}</td>
                     <td className="px-4 py-3 text-slate-900">{formatCurrency(product.price)}</td>
                     <td className="px-4 py-3 text-slate-600">
-                      {product.stock !== null ? product.stock : "—"}
+                      {product.stock !== null ? (
+                        <Link href="/inventory" className="hover:underline">
+                          {product.stock}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={product.isActive ? "success" : "secondary"}>
