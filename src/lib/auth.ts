@@ -1,7 +1,10 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { db } from "./db";
+import { isClerkConfigured } from "./clerk-config";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
+
+export { isClerkConfigured };
 
 const SINGLE_USER_CLERK_ID = "single-user-pos";
 const SINGLE_USER_EMAIL = "owner@pos.local";
@@ -28,13 +31,6 @@ export type AuthContext = {
   business: Business;
   location: Location | null;
 };
-
-export function isClerkConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-      process.env.CLERK_SECRET_KEY
-  );
-}
 
 /**
  * Local single-user auth is only allowed when Clerk is unset AND

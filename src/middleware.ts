@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { isClerkConfigured } from "@/lib/clerk-config";
 
 function moduleForPath(pathname: string): string | null {
   const routes: Array<[string, string]> = [
@@ -34,13 +35,6 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron(.*)",
   "/api/health",
 ]);
-
-function isClerkConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-      process.env.CLERK_SECRET_KEY
-  );
-}
 
 function allowDevAuthBypass() {
   return (

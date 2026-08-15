@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Outfit, Fraunces } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
+import { isClerkConfigured } from "@/lib/clerk-config";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -59,10 +60,8 @@ export default function RootLayout({
       <Toaster position="top-center" richColors closeButton />
     </>
   );
-  const clerkEnabled = Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-      process.env.CLERK_SECRET_KEY
-  );
+  const clerkEnabled = isClerkConfigured();
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
   return (
     <html
@@ -70,7 +69,11 @@ export default function RootLayout({
       className={`${outfit.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full min-h-dvh">
-        {clerkEnabled ? <ClerkProvider>{content}</ClerkProvider> : content}
+        {clerkEnabled && publishableKey ? (
+          <ClerkProvider publishableKey={publishableKey}>{content}</ClerkProvider>
+        ) : (
+          content
+        )}
       </body>
     </html>
   );

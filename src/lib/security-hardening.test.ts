@@ -95,7 +95,11 @@ describe("dev auth bypass policy", () => {
       allowBypass?: string;
       nodeEnv?: string;
     }) {
-      const clerkConfigured = Boolean(env.clerkPublishable && env.clerkSecret);
+      const clerkConfigured =
+        /^pk_(test|live)_[A-Za-z0-9+/=_-]{20,}$/.test(
+          env.clerkPublishable ?? ""
+        ) &&
+        /^sk_(test|live)_[A-Za-z0-9+/=_-]{20,}$/.test(env.clerkSecret ?? "");
       return (
         !clerkConfigured &&
         env.allowBypass === "true" &&
@@ -126,8 +130,17 @@ describe("dev auth bypass policy", () => {
     );
     assert.equal(
       allowDevAuthBypass({
-        clerkPublishable: "pk",
-        clerkSecret: "sk",
+        clerkPublishable: "pk_test_ci",
+        clerkSecret: "sk_test_ci",
+        allowBypass: "true",
+        nodeEnv: "development",
+      }),
+      true
+    );
+    assert.equal(
+      allowDevAuthBypass({
+        clerkPublishable: "pk_test_abcdefghijklmnopqrstuvwxyz123456",
+        clerkSecret: "sk_test_abcdefghijklmnopqrstuvwxyz123456",
         allowBypass: "true",
         nodeEnv: "development",
       }),
