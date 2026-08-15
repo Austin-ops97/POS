@@ -49,6 +49,7 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
 
   const payPeriodType = watch("payPeriodType");
   const weekStartDay = watch("weekStartDay");
+  const paidBreaks = watch("paidBreaks");
 
   async function onSubmit(data: FormValues) {
     const res = await fetch("/api/workforce/settings", {
@@ -113,6 +114,10 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
               </Select>
             </div>
           </div>
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" {...register("paidBreaks")} checked={paidBreaks} onChange={(e) => setValue("paidBreaks", e.target.checked, { shouldValidate: true })} />
+            Count tracked breaks as paid time
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="overtimeThresholdHours">Overtime threshold (hours/week)</Label>

@@ -60,16 +60,14 @@ export async function POST(request: Request) {
     const hoursRequested =
       data.hoursRequested ?? calculateHoursRequested(startDate, endDate);
 
-    if (data.type === "PTO") {
+    if (data.type === "PTO" || data.type === "SICK") {
       const employee = await db.employeeProfile.findUnique({
         where: { id: ctx.employee.id },
-        select: { ptoBalanceHours: true },
+        select: { ptoBalanceHours: true, sickBalanceHours: true },
       });
-      if (employee && Number(employee.ptoBalanceHours) < hoursRequested) {
-        return NextResponse.json(
-          { error: "Insufficient PTO balance" },
-          { status: 400 }
-        );
+      const balance = data.type === "PTO" ? Number(employee?.ptoBalanceHours ?? 0) : Number(employee?.sickBalanceHours ?? 0);
+      if (balance < hoursRequested) {
+        return NextResponse.json({ error: `Insufficient ${data.type === "PTO" ? "PTO" : "sick leave"} balance` }, { status: 400 });
       }
     }
 

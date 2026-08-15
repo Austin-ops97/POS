@@ -255,6 +255,8 @@ enum TimeEntryStatus {
 enum TimeOffType {
   PTO
   SICK
+  VACATION
+  HOLIDAY
   UNPAID
   OTHER
 }
@@ -362,6 +364,7 @@ model Business {
   timeOffRequests           TimeOffRequest[]
   payrollBonuses            PayrollBonus[]
   ptoLedgerEntries          PtoLedgerEntry[]
+  sickLedgerEntries         SickLedgerEntry[]
   barcodeMigrationConflicts BarcodeMigrationConflict[]
   expenseCategories         ExpenseCategory[]
   expenseVendors            ExpenseVendor[]
@@ -540,6 +543,8 @@ model EmployeeProfile {
   compensationCreated            EmployeeCompensation[]         @relation("CompensationCreatedBy")
   ptoLedgerEntries               PtoLedgerEntry[]
   ptoAdjustmentsMade             PtoLedgerEntry[]               @relation("PtoAdjustedBy")
+  sickLedgerEntries              SickLedgerEntry[]
+  sickAdjustmentsMade            SickLedgerEntry[]               @relation("SickAdjustedBy")
   orders                         Order[]
   ordersTerminated               Order[]                        @relation("OrderTerminatedBy")
   refunds                        Refund[]
@@ -736,6 +741,27 @@ model PtoLedgerEntry {
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   adjustedBy EmployeeProfile? @relation("PtoAdjustedBy", fields: [adjustedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([createdAt])
+}
+
+model SickLedgerEntry {
+  id           String        @id @default(cuid())
+  businessId   String
+  employeeId   String
+  type         PtoLedgerType
+  hours        Decimal       @db.Decimal(8, 2)
+  balanceAfter Decimal       @db.Decimal(8, 2)
+  reason       String?
+  referenceId  String?
+  adjustedById String?
+  createdAt    DateTime      @default(now())
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  adjustedBy EmployeeProfile? @relation("SickAdjustedBy", fields: [adjustedById], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([employeeId])
@@ -1423,6 +1449,7 @@ model WorkforceSettings {
   weekStartDay           Int           @default(0)
   overtimeThresholdHours Decimal       @default(40) @db.Decimal(6, 2)
   defaultPtoAnnualHours  Decimal       @default(80) @db.Decimal(8, 2)
+  paidBreaks             Boolean       @default(false)
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 

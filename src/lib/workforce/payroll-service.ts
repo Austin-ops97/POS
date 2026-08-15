@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getBreakMinutes, getWorkedMinutes } from "./time-clock-service";
-import { getEffectiveCompensation } from "./employee-service";
+import { getEffectiveCompensation, resolveDisplayName } from "./employee-service";
 import { getWeekStart } from "./pay-period";
 import type { TimeEntry, TimeBreak, Shift, PayrollBonus } from "@prisma/client";
 
@@ -14,6 +14,11 @@ export type PayrollEmployeeRow = {
   scheduledHours: number;
   actualHours: number;
   breakHours: number;
+  ptoHours?: number;
+  sickHours?: number;
+  vacationHours?: number;
+  holidayHours?: number;
+  unpaidHours?: number;
   regularHours: number;
   overtimeHours: number;
   regularPay: number;
@@ -47,14 +52,16 @@ export function computeEntryHours(entry: TimeEntryWithBreaks): {
 export function computeWeeklyOvertimeHours(
   entries: TimeEntryWithBreaks[],
   weekStartDay: number,
-  overtimeThreshold: number
+  overtimeThreshold: number,
+  paidBreaks = false
 ): { regularHours: number; overtimeHours: number } {
   const hoursByWeek = new Map<string, number>();
 
   for (const entry of entries) {
     if (entry.status === "ACTIVE" || !entry.clockOut) continue;
     const weekKey = getWeekStart(entry.clockIn, weekStartDay).toISOString();
-    const { actualHours } = computeEntryHours(entry);
+    const { actualHours: rawActualHours, breakHours } = computeEntryHours(entry);
+    const actualHours = paidBreaks ? rawActualHours + breakHours : rawActualHours;
     hoursByWeek.set(weekKey, (hoursByWeek.get(weekKey) ?? 0) + actualHours);
   }
 
@@ -81,8 +88,10 @@ export async function computePayrollSummary(params: {
   periodEnd: Date;
   overtimeThreshold: number;
   weekStartDay?: number;
+  payPeriodType?: "WEEKLY" | "BIWEEKLY" | "SEMIMONTHLY" | "MONTHLY";
+  paidBreaks?: boolean;
 }): Promise<PayrollEmployeeRow[]> {
-  const { businessId, periodStart, periodEnd, overtimeThreshold, weekStartDay = 0 } = params;
+  const { businessId, periodStart, periodEnd, overtimeThreshold, weekStartDay = 0, payPeriodType = "BIWEEKLY", paidBreaks = false } = params;
 
   const employees = await db.employeeProfile.findMany({
     where: { businessId, deletedAt: null, status: "ACTIVE" },
@@ -157,16 +166,30 @@ export async function computePayrollSummary(params: {
     const empShifts = shiftsByEmployee.get(emp.id) ?? [];
     const empBonuses = bonusesByEmployee.get(emp.id) ?? [];
     const empTimeOff = timeOffByEmployee.get(emp.id) ?? [];
-    const paidLeaveHours = empTimeOff
-      .filter((request) => request.type === "PTO" || request.type === "SICK")
-      .reduce((sum, request) => sum + Number(request.hoursRequested), 0);
+    const leaveHours = { PTO: 0, SICK: 0, VACATION: 0, HOLIDAY: 0, UNPAID: 0, OTHER: 0 };
+    for (const request of empTimeOff) {
+      const requestStart = new Date(request.startDate).getTime();
+      const requestEnd = new Date(request.endDate).getTime();
+      const totalDays = Math.max(1, Math.round((requestEnd - requestStart) / 86400000) + 1);
+      const overlapStart = Math.max(requestStart, periodStart.getTime());
+      const overlapEnd = Math.min(requestEnd, periodEnd.getTime());
+      const overlapDays = Math.max(0, Math.round((overlapEnd - overlapStart) / 86400000) + 1);
+      leaveHours[request.type] += Number(request.hoursRequested) * (overlapDays / totalDays);
+    }
+    const ptoHours = leaveHours.PTO;
+    const sickHours = leaveHours.SICK;
+    const vacationHours = leaveHours.VACATION;
+    const holidayHours = leaveHours.HOLIDAY;
+    const unpaidHours = leaveHours.UNPAID;
+    const paidLeaveHours = ptoHours + sickHours + vacationHours + holidayHours;
 
     let actualHours = 0;
     let breakHours = 0;
     const flags: string[] = [];
 
     for (const entry of empEntries) {
-      const { actualHours: ah, breakHours: bh } = computeEntryHours(entry);
+      const { actualHours: rawActualHours, breakHours: bh } = computeEntryHours(entry);
+      const ah = paidBreaks ? rawActualHours + bh : rawActualHours;
       actualHours += ah;
       breakHours += bh;
       if (entry.status === "ACTIVE" || !entry.clockOut) {
@@ -201,14 +224,12 @@ export async function computePayrollSummary(params: {
 
     if (payType === "SALARY") {
       const annual = Number(compensation?.annualSalary ?? 0);
-      const startDay = Date.UTC(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate());
-      const endDay = Date.UTC(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate());
-      const periodDays = Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
-      totalPay = (annual / 365) * periodDays;
+      const periodsPerYear = { WEEKLY: 52, BIWEEKLY: 26, SEMIMONTHLY: 24, MONTHLY: 12 }[payPeriodType];
+      totalPay = annual / periodsPerYear;
       regularHours = actualHours;
       flags.push("Salary employee");
     } else {
-      const ot = computeWeeklyOvertimeHours(empEntries, weekStartDay, overtimeThreshold);
+      const ot = computeWeeklyOvertimeHours(empEntries, weekStartDay, overtimeThreshold, paidBreaks);
       regularHours = ot.regularHours + paidLeaveHours;
       overtimeHours = otEligible ? ot.overtimeHours : 0;
       regularPay = regularHours * hourlyWage;
@@ -221,12 +242,17 @@ export async function computePayrollSummary(params: {
 
     rows.push({
       employeeId: emp.id,
-      employeeName: emp.name,
+      employeeName: resolveDisplayName(emp),
       payType,
       hourlyWage,
       scheduledHours: Math.round(scheduledHours * 100) / 100,
       actualHours: Math.round(actualHours * 100) / 100,
       breakHours: Math.round(breakHours * 100) / 100,
+      ptoHours: Math.round(ptoHours * 100) / 100,
+      sickHours: Math.round(sickHours * 100) / 100,
+      vacationHours: Math.round(vacationHours * 100) / 100,
+      holidayHours: Math.round(holidayHours * 100) / 100,
+      unpaidHours: Math.round(unpaidHours * 100) / 100,
       regularHours: Math.round(regularHours * 100) / 100,
       overtimeHours: Math.round(overtimeHours * 100) / 100,
       regularPay: Math.round(regularPay * 100) / 100,
@@ -240,16 +266,20 @@ export async function computePayrollSummary(params: {
   return rows;
 }
 
-export function payrollToCsv(rows: PayrollEmployeeRow[]): string {
+export function payrollToCsv(rows: PayrollEmployeeRow[], period = { start: "", end: "", payDate: "" }): string {
   const headers = [
     "Employee",
     "Pay Type",
+    "Pay Period",
+    "Pay Date",
     "Hourly Wage",
-    "Scheduled Hrs",
-    "Actual Hrs",
-    "Break Hrs",
     "Regular Hrs",
     "OT Hrs",
+    "PTO Hrs",
+    "Sick Hrs",
+    "Vacation Hrs",
+    "Holiday Hrs",
+    "Unpaid Hrs",
     "Regular Pay",
     "OT Pay",
     "Bonuses",
@@ -260,12 +290,16 @@ export function payrollToCsv(rows: PayrollEmployeeRow[]): string {
     [
       escapeCsvValue(r.employeeName),
       r.payType,
+      `${period.start} to ${period.end}`,
+      period.payDate,
       r.hourlyWage.toFixed(2),
-      r.scheduledHours.toFixed(2),
-      r.actualHours.toFixed(2),
-      r.breakHours.toFixed(2),
       r.regularHours.toFixed(2),
       r.overtimeHours.toFixed(2),
+      (r.ptoHours ?? 0).toFixed(2),
+      (r.sickHours ?? 0).toFixed(2),
+      (r.vacationHours ?? 0).toFixed(2),
+      (r.holidayHours ?? 0).toFixed(2),
+      (r.unpaidHours ?? 0).toFixed(2),
       r.regularPay.toFixed(2),
       r.overtimePay.toFixed(2),
       r.bonusTotal.toFixed(2),
