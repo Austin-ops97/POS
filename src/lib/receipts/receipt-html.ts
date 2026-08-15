@@ -100,6 +100,10 @@ export function renderReceiptPlainText(data: ReceiptData): string {
     lines.push("");
     lines.push(data.settings.returnPolicy);
   }
+  if (data.settings.showSignature && data.signature) {
+    lines.push("");
+    lines.push(`Signature captured by: ${data.signature.signerName}`);
+  }
 
   return lines.join("\n");
 }
@@ -108,6 +112,9 @@ export function renderReceiptHtml(data: ReceiptData): string {
   const businessName = escapeHtml(data.business.legalName || data.business.name);
   const locationLines = data.location.addressLines.map(escapeHtml).join("<br />");
   const dateStr = escapeHtml(formatReceiptDate(data.paidAt ?? data.createdAt));
+  const signatureMarkup = data.settings.showSignature && data.signature?.dataFormat === "PNG" && data.signature.signatureData.startsWith("data:image/png;base64,")
+    ? `<div class="footer"><div class="muted">Signature: ${escapeHtml(data.signature.signerName)}</div><img alt="Customer signature" src="${data.signature.signatureData}" style="max-width:280px;max-height:90px" /></div>`
+    : "";
 
   const itemsHtml = data.lineItems
     .map((item) => {
@@ -282,6 +289,7 @@ export function renderReceiptHtml(data: ReceiptData): string {
         : ""
     }
     ${refundsHtml}
+    ${signatureMarkup}
     ${data.settings.footer ? `<div class="footer">${escapeHtml(data.settings.footer)}</div>` : ""}
     ${data.settings.returnPolicy ? `<div class="footer muted">${escapeHtml(data.settings.returnPolicy)}</div>` : ""}
   </div>

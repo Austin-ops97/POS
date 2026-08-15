@@ -18,6 +18,8 @@ export default async function ReceiptsSettingsPage() {
     showBusinessPhoneOnReceipt: settings?.showBusinessPhoneOnReceipt ?? true,
     showSkuOnReceipt: settings?.showSkuOnReceipt ?? false,
     enableReceiptPrinting: settings?.enableReceiptPrinting ?? true,
+    enableDigitalSignatures: settings?.enableDigitalSignatures ?? false,
+    showSignatureOnReceipt: settings?.showSignatureOnReceipt ?? false,
   };
 
   return (

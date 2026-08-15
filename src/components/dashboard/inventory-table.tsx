@@ -60,6 +60,12 @@ function AdjustForm({
   saving,
   onSave,
   onCancel,
+  supplier,
+  setSupplier,
+  referenceNumber,
+  setReferenceNumber,
+  unitCost,
+  setUnitCost,
 }: {
   itemId: string;
   idPrefix: string;
@@ -76,6 +82,12 @@ function AdjustForm({
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
+  supplier: string;
+  setSupplier: (v: string) => void;
+  referenceNumber: string;
+  setReferenceNumber: (v: string) => void;
+  unitCost: string;
+  setUnitCost: (v: string) => void;
 }) {
   const typeId = `${idPrefix}-type-${itemId}`;
   const qtyId = `${idPrefix}-qty-${itemId}`;
@@ -83,6 +95,7 @@ function AdjustForm({
   const locationFieldId = `${idPrefix}-location-${itemId}`;
   const destLocations = locations.filter((l) => l.id !== sourceLocationId);
   const isTransfer = adjustType === "TRANSFER";
+  const isReceive = adjustType === "RECEIVED";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
@@ -145,6 +158,13 @@ function AdjustForm({
           disabled={saving}
         />
       </div>
+      {isReceive ? (
+        <>
+          <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Supplier" className="w-full sm:w-40" />
+          <Input value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="Invoice / ref" className="w-full sm:w-40" />
+          <Input value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="Unit cost" type="number" step="0.01" min="0" className="w-full sm:w-28" />
+        </>
+      ) : null}
       <div className="flex w-full gap-2 sm:w-auto">
         <Button
           size="sm"
@@ -182,6 +202,9 @@ export function InventoryTable({
   const [reason, setReason] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [supplier, setSupplier] = useState("");
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [unitCost, setUnitCost] = useState("");
 
   function resetAdjust() {
     setAdjustingId(null);
@@ -189,6 +212,9 @@ export function InventoryTable({
     setAdjustType("MANUAL_ADJUSTMENT");
     setReason("");
     setToLocationId("");
+    setSupplier("");
+    setReferenceNumber("");
+    setUnitCost("");
   }
 
   function startAdjust(itemId: string) {
@@ -197,12 +223,19 @@ export function InventoryTable({
     setAdjustType("MANUAL_ADJUSTMENT");
     setReason("");
     setToLocationId("");
+    setSupplier("");
+    setReferenceNumber("");
+    setUnitCost("");
   }
 
   async function handleSave(itemId: string) {
     const quantity = Number.parseInt(adjustQty, 10);
     if (!Number.isInteger(quantity) || quantity === 0) {
       toast.error("Enter a valid non-zero quantity");
+      return;
+    }
+    if (adjustType === "RECEIVED" && quantity < 1) {
+      toast.error("Received quantity must be positive");
       return;
     }
 
@@ -234,6 +267,22 @@ export function InventoryTable({
         }
         toast.success("Inventory transferred");
       } else {
+        if (adjustType === "RECEIVED") {
+          const res = await fetch("/api/inventory/receive", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ inventoryItemId: itemId, quantity, supplier: supplier.trim() || undefined, referenceNumber: referenceNumber.trim() || undefined, unitCost: unitCost ? Number(unitCost) : undefined, notes: reason.trim() || undefined }),
+          });
+          if (!res.ok) {
+            const err = (await res.json().catch(() => null)) as { error?: string } | null;
+            toast.error(err?.error ?? "Failed to receive inventory");
+            return;
+          }
+          toast.success("Inventory received");
+          resetAdjust();
+          router.refresh();
+          return;
+        }
         const payload: {
           inventoryItemId: string;
           quantity: number;
@@ -344,7 +393,13 @@ export function InventoryTable({
                     sourceLocationId={item.locationId}
                     saving={saving}
                     onSave={() => handleSave(item.id)}
-                    onCancel={resetAdjust}
+          onCancel={resetAdjust}
+          supplier={supplier}
+          setSupplier={setSupplier}
+          referenceNumber={referenceNumber}
+          setReferenceNumber={setReferenceNumber}
+          unitCost={unitCost}
+          setUnitCost={setUnitCost}
                   />
                 </div>
               )}
@@ -423,6 +478,12 @@ export function InventoryTable({
                           saving={saving}
                           onSave={() => handleSave(item.id)}
                           onCancel={resetAdjust}
+                          supplier={supplier}
+                          setSupplier={setSupplier}
+                          referenceNumber={referenceNumber}
+                          setReferenceNumber={setReferenceNumber}
+                          unitCost={unitCost}
+                          setUnitCost={setUnitCost}
                         />
                       </td>
                     </tr>

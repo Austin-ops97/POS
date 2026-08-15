@@ -22,6 +22,8 @@ export async function PATCH(request: Request) {
         showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
         showSkuOnReceipt: data.showSkuOnReceipt,
         enableReceiptPrinting: data.enableReceiptPrinting,
+        enableDigitalSignatures: data.enableDigitalSignatures,
+        showSignatureOnReceipt: data.enableDigitalSignatures && data.showSignatureOnReceipt,
       },
       update: {
         receiptFooter: data.receiptFooter || null,
@@ -32,6 +34,8 @@ export async function PATCH(request: Request) {
         showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
         showSkuOnReceipt: data.showSkuOnReceipt,
         enableReceiptPrinting: data.enableReceiptPrinting,
+        enableDigitalSignatures: data.enableDigitalSignatures,
+        showSignatureOnReceipt: data.enableDigitalSignatures && data.showSignatureOnReceipt,
       },
     });
 
@@ -44,6 +48,8 @@ export async function PATCH(request: Request) {
       showBusinessPhoneOnReceipt: settings.showBusinessPhoneOnReceipt,
       showSkuOnReceipt: settings.showSkuOnReceipt,
       enableReceiptPrinting: settings.enableReceiptPrinting,
+      enableDigitalSignatures: settings.enableDigitalSignatures,
+      showSignatureOnReceipt: settings.showSignatureOnReceipt,
     });
   } catch (error) {
     return handleApiError(error, "PATCH /api/business/settings");

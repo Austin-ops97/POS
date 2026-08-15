@@ -39,6 +39,8 @@ export function ReceiptSettingsForm({
       showBusinessPhoneOnReceipt: settings.showBusinessPhoneOnReceipt,
       showSkuOnReceipt: settings.showSkuOnReceipt,
       enableReceiptPrinting: settings.enableReceiptPrinting,
+      enableDigitalSignatures: settings.enableDigitalSignatures,
+      showSignatureOnReceipt: settings.showSignatureOnReceipt,
     },
   });
 
@@ -48,6 +50,8 @@ export function ReceiptSettingsForm({
   const showBusinessPhone = watch("showBusinessPhoneOnReceipt");
   const showSku = watch("showSkuOnReceipt");
   const enablePrinting = watch("enableReceiptPrinting");
+  const enableDigitalSignatures = watch("enableDigitalSignatures");
+  const showSignatureOnReceipt = watch("showSignatureOnReceipt");
 
   async function onSubmit(data: ReceiptSettings) {
     try {
@@ -63,6 +67,8 @@ export function ReceiptSettingsForm({
           showBusinessPhoneOnReceipt: data.showBusinessPhoneOnReceipt,
           showSkuOnReceipt: data.showSkuOnReceipt,
           enableReceiptPrinting: data.enableReceiptPrinting,
+          enableDigitalSignatures: data.enableDigitalSignatures,
+          showSignatureOnReceipt: data.showSignatureOnReceipt,
         }),
       });
 
@@ -167,6 +173,16 @@ export function ReceiptSettingsForm({
               onCheckedChange={(v) => setValue("enableReceiptPrinting", v === true)}
             />
             <Label htmlFor="enablePrinting">Enable receipt printing</Label>
+          </div>
+          <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+            <div className="flex items-center gap-3">
+              <Checkbox id="enableDigitalSignatures" checked={enableDigitalSignatures} onCheckedChange={(v) => setValue("enableDigitalSignatures", v === true)} />
+              <Label htmlFor="enableDigitalSignatures">Enable digital signatures for completed orders</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox id="showSignatureOnReceipt" checked={showSignatureOnReceipt} disabled={!enableDigitalSignatures} onCheckedChange={(v) => setValue("showSignatureOnReceipt", v === true)} />
+              <Label htmlFor="showSignatureOnReceipt">Show captured signature on receipts</Label>
+            </div>
           </div>
         </CardContent>
       </Card>

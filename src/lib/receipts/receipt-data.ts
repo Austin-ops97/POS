@@ -59,6 +59,7 @@ export type ReceiptSettingsView = {
   showSku: boolean;
   showBusinessEmail: boolean;
   showBusinessPhone: boolean;
+  showSignature?: boolean;
 };
 
 export type ReceiptData = {
@@ -99,6 +100,7 @@ export type ReceiptData = {
   lastEmailedAt?: string;
   printed: boolean;
   printedAt?: string;
+  signature?: { dataFormat: "PNG" | "SVG"; signatureData: string; signerName: string };
 };
 
 function formatAddress(parts: Array<string | null | undefined>): string[] {
@@ -135,6 +137,7 @@ export async function getReceiptData(
       payments: { where: { status: "SUCCEEDED" }, orderBy: { createdAt: "asc" } },
       refunds: { orderBy: { createdAt: "asc" } },
       receipts: { orderBy: { createdAt: "desc" }, take: 1 },
+      signatures: { where: { revokedAt: null }, orderBy: { capturedAt: "desc" }, take: 1 },
       customer: true,
       employee: true,
       location: true,
@@ -192,6 +195,7 @@ export async function getReceiptData(
       showSku: settings?.showSkuOnReceipt ?? false,
       showBusinessEmail: settings?.showBusinessEmailOnReceipt ?? true,
       showBusinessPhone: settings?.showBusinessPhoneOnReceipt ?? true,
+      showSignature: settings?.showSignatureOnReceipt ?? false,
     },
     employee: order.employee ? { name: order.employee.name } : undefined,
     customer: customerName
@@ -245,6 +249,9 @@ export async function getReceiptData(
     lastEmailedAt: receipt.lastEmailedAt?.toISOString(),
     printed: receipt.printed,
     printedAt: receipt.printedAt?.toISOString(),
+    signature: settings?.showSignatureOnReceipt && order.signatures[0]
+      ? { dataFormat: order.signatures[0].dataFormat, signatureData: order.signatures[0].signatureData, signerName: order.signatures[0].signerName }
+      : undefined,
   };
 }
 

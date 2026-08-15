@@ -51,6 +51,8 @@ export const receiptSettingsSchema = z.object({
   showBusinessPhoneOnReceipt: z.boolean(),
   showSkuOnReceipt: z.boolean(),
   enableReceiptPrinting: z.boolean(),
+  enableDigitalSignatures: z.boolean(),
+  showSignatureOnReceipt: z.boolean(),
 });
 
 export const MODULE_SETTING_KEYS = [
@@ -186,6 +188,24 @@ export const inventoryAdjustSchema = z.object({
     "RETURN_TO_STOCK",
   ]),
   reason: z.string().optional(),
+});
+
+export const inventoryReceiveSchema = z.object({
+  inventoryItemId: z.string().min(1),
+  quantity: z.number().int().positive(),
+  unitCost: z.number().min(0).optional(),
+  supplier: z.string().max(200).optional(),
+  referenceNumber: z.string().max(120).optional(),
+  receivedAt: z.string().datetime().optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const signatureCaptureSchema = z.object({
+  signerName: z.string().trim().min(1).max(200),
+  consentText: z.string().trim().min(1).max(1000),
+  dataFormat: z.enum(["PNG", "SVG"]),
+  signatureData: z.string().min(1).max(2_000_000),
+  deviceSessionId: z.string().max(200).optional(),
 });
 
 export const employeeSchema = z.object({

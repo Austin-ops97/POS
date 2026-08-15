@@ -12,6 +12,7 @@ import {
   formatOrderStatus,
   getOrderStatusVariant,
 } from "@/lib/status-utils";
+import { CustomerLifecycleActions } from "@/components/dashboard/customer-lifecycle-actions";
 
 export default async function CustomerDetailPage({
   params,
@@ -52,6 +53,7 @@ export default async function CustomerDetailPage({
             Customer since {formatDate(customer.createdAt)}
           </p>
         </div>
+        <CustomerLifecycleActions customerId={customer.id} name={`${customer.firstName} ${customer.lastName ?? ""}`.trim()} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
