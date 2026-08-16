@@ -29,6 +29,7 @@ export async function GET() {
       where: {
         businessId: ctx.business.id,
         deletedAt: null,
+        archivedAt: null,
       },
       include: {
         role: { select: { id: true, name: true } },

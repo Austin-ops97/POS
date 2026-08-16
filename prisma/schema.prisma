@@ -503,6 +503,7 @@ model EmployeeProfile {
   ptoCarryoverLimit   Decimal?            @db.Decimal(8, 2)
   ptoAccrualPolicy    PtoAccrualPolicy    @default(ANNUAL_GRANT)
   status              EmployeeStatus      @default(ACTIVE)
+  archivedAt          DateTime?
   legalFirstName      String?
   legalMiddleName     String?
   legalLastName       String?
@@ -605,6 +606,7 @@ model EmployeeProfile {
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
+  @@index([businessId, archivedAt])
   @@index([email])
   @@index([businessId, status])
   @@index([managerId])

@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { UserCog, Plus, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Archive, UserCog, Plus, Search, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,23 +18,44 @@ export type EmployeeRow = {
   name: string;
   email: string;
   status: string;
+  archivedAt?: Date | string | null;
   hourlyWage: number | string | null;
   role: { name: string };
 };
 
 export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function changeEmployee(employee: EmployeeRow, action: "archive" | "restore" | "delete") {
+    if (!window.confirm(`${action[0].toUpperCase()}${action.slice(1)} ${employee.name}?`)) return;
+    setBusyId(employee.id);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: action === "delete" ? "DELETE" : "PATCH",
+        ...(action === "delete" ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) { toast.error(body?.error ?? `Failed to ${action} employee`); return; }
+      toast.success(`Employee ${action === "delete" ? "deleted" : `${action}d`}`);
+      router.refresh();
+    } catch { toast.error(`Failed to ${action} employee`); }
+    finally { setBusyId(null); }
+  }
 
   const filtered = useMemo(() => {
-    if (!search) return employees;
+    const available = employees.filter((employee) => showArchived ? employee.archivedAt : !employee.archivedAt);
+    if (!search) return available;
     const q = search.toLowerCase();
-    return employees.filter(
+    return available.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
         e.role.name.toLowerCase().includes(q)
     );
-  }, [employees, search]);
+  }, [employees, search, showArchived]);
 
   if (employees.length === 0) {
     return (
@@ -63,12 +86,12 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
             aria-label="Search employees"
           />
         </div>
-        <Button asChild className="w-full sm:w-auto">
+        <div className="flex gap-2"><Button variant="outline" onClick={() => setShowArchived((value) => !value)}>{showArchived ? "Show active" : "View archived"}</Button><Button asChild className="w-full sm:w-auto">
           <Link href="/employees/new">
             <Plus className="h-4 w-4" aria-hidden="true" />
             Invite Employee
           </Link>
-        </Button>
+        </Button></div>
       </div>
 
       {filtered.length === 0 ? (
@@ -105,9 +128,7 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                       ? `${formatCurrency(Number(emp.hourlyWage))}/hr`
                       : "No wage set"}
                   </p>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/employees/${emp.id}`}>View</Link>
-                  </Button>
+                  <div className="flex gap-2"><Button variant="outline" size="sm" asChild><Link href={`/employees/${emp.id}`}>View</Link></Button><Button variant="ghost" size="icon" onClick={() => changeEmployee(emp, showArchived ? "restore" : "archive")} disabled={busyId === emp.id}>{showArchived ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}</Button><Button variant="ghost" size="icon" onClick={() => changeEmployee(emp, "delete")} disabled={busyId === emp.id}><Trash2 className="h-4 w-4 text-red-600" /></Button></div>
                 </div>
               </li>
             ))}
@@ -122,6 +143,7 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Role</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Wage</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-3 text-right font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,6 +171,7 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                         {emp.status}
                       </Badge>
                     </td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" asChild><Link href={`/employees/${emp.id}`}><UserCog className="h-4 w-4" /></Link></Button><Button variant="ghost" size="icon" onClick={() => changeEmployee(emp, showArchived ? "restore" : "archive")} disabled={busyId === emp.id}>{showArchived ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}</Button><Button variant="ghost" size="icon" onClick={() => changeEmployee(emp, "delete")} disabled={busyId === emp.id}><Trash2 className="h-4 w-4 text-red-600" /></Button></div></td>
                   </tr>
                 ))}
               </tbody>

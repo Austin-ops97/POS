@@ -7,13 +7,14 @@ export const metadata = { title: "Employees" };
 
 export default async function EmployeesPage() {
   const ctx = await requireAuth();
-  const employees = await getEmployees(ctx);
+  const employees = await getEmployees(ctx, true);
 
   const rows = employees.map((emp) => ({
     id: emp.id,
     name: emp.name,
     email: emp.email,
     status: emp.status,
+    archivedAt: emp.archivedAt,
     hourlyWage:
       "hourlyWage" in emp && emp.hourlyWage != null
         ? Number(emp.hourlyWage)

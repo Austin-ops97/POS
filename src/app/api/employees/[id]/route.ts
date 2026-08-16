@@ -70,6 +70,21 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await request.json();
+    if (body?.action === "archive" || body?.action === "restore") {
+      const employee = await db.employeeProfile.findFirst({
+        where: { id, businessId: ctx.business.id, deletedAt: null },
+        include: { role: { select: { name: true } } },
+      });
+      if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      if (id === ctx.employee.id) return NextResponse.json({ error: "Cannot archive your own employee profile" }, { status: 400 });
+      assertEmployeeManagementAllowed(ctx, employee.role.name);
+      const updated = await db.employeeProfile.update({
+        where: { id },
+        data: body.action === "archive" ? { archivedAt: new Date(), status: "INACTIVE" } : { archivedAt: null, status: "ACTIVE" },
+      });
+      await createAuditLog({ businessId: ctx.business.id, employeeId: ctx.employee.id, action: "EMPLOYEE_CHANGE", entity: "EmployeeProfile", entityId: id, details: { action: body.action, name: employee.name } });
+      return NextResponse.json(updated);
+    }
     const data = employeeUpdateSchema.parse(body);
 
     const existing = await db.employeeProfile.findFirst({

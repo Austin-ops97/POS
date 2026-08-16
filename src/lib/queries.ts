@@ -377,15 +377,16 @@ export async function getInventory(ctx: AuthContext) {
   });
 }
 
-export async function getEmployees(ctx: AuthContext) {
+export async function getEmployees(ctx: AuthContext, includeArchived = false) {
   return db.employeeProfile.findMany({
-    where: { businessId: ctx.business.id, deletedAt: null },
+    where: { businessId: ctx.business.id, deletedAt: null, ...(includeArchived ? {} : { archivedAt: null }) },
     select: {
       id: true,
       name: true,
       email: true,
       phone: true,
       status: true,
+      archivedAt: true,
       hourlyWage: true,
       ptoBalanceHours: true,
       ptoAnnualHours: true,
