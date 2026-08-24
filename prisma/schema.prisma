@@ -156,6 +156,8 @@ enum AuditAction {
   PAYMENT
   WORKFORCE_CHANGE
   TIME_ENTRY_ADJUSTMENT
+  TIME_ENTRY_EDIT_REQUESTED
+  TIME_ENTRY_EDIT_REVIEW
   TIME_OFF_REVIEW
   PAYROLL_BONUS
   EXPENSE_CREATE
@@ -255,6 +257,13 @@ enum TimeEntryStatus {
   ACTIVE
   COMPLETED
   ADJUSTED
+}
+
+enum TimeEntryEditStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
 }
 
 enum TimeOffType {
@@ -370,6 +379,7 @@ model Business {
   workforceSettings         WorkforceSettings?
   shifts                    Shift[]
   timeEntries               TimeEntry[]
+  timeEntryEditRequests     TimeEntryEditRequest[]
   timeOffRequests           TimeOffRequest[]
   payrollBonuses            PayrollBonus[]
   ptoLedgerEntries          PtoLedgerEntry[]
@@ -566,6 +576,8 @@ model EmployeeProfile {
   shiftsCreated                  Shift[]                        @relation("ShiftCreatedBy")
   timeEntries                    TimeEntry[]
   timeEntriesAdjusted            TimeEntry[]                    @relation("TimeEntryAdjustedBy")
+  timeEntryEditRequests          TimeEntryEditRequest[]
+  timeEntryEditReviews           TimeEntryEditRequest[]         @relation("TimeEntryEditReviewedBy")
   timeOffRequests                TimeOffRequest[]
   timeOffReviews                 TimeOffRequest[]               @relation("TimeOffReviewedBy")
   payrollBonuses                 PayrollBonus[]
@@ -1565,11 +1577,41 @@ model TimeEntry {
   shift      Shift?           @relation(fields: [shiftId], references: [id])
   adjustedBy EmployeeProfile? @relation("TimeEntryAdjustedBy", fields: [adjustedById], references: [id])
   breaks     TimeBreak[]
+  editRequests TimeEntryEditRequest[]
 
   @@index([businessId])
   @@index([businessId, status])
   @@index([employeeId])
   @@index([clockIn])
+  @@index([status])
+}
+
+model TimeEntryEditRequest {
+  id                String              @id @default(cuid())
+  businessId        String
+  timeEntryId       String
+  employeeId        String
+  originalClockIn   DateTime
+  originalClockOut  DateTime?
+  proposedClockIn   DateTime
+  proposedClockOut  DateTime?
+  reason            String
+  status            TimeEntryEditStatus @default(PENDING)
+  reviewedById      String?
+  reviewedAt        DateTime?
+  denialReason      String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  timeEntry  TimeEntry        @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy EmployeeProfile? @relation("TimeEntryEditReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([timeEntryId])
+  @@index([employeeId])
   @@index([status])
 }
 

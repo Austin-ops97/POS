@@ -46,6 +46,32 @@ export const timeEntryAdjustSchema = z.object({
   adjustmentNote: z.string().min(1),
 });
 
+export const timeEntryEditRequestSchema = z
+  .object({
+    timeEntryId: z.string().min(1),
+    clockIn: isoDateTime,
+    clockOut: isoDateTime.nullable(),
+    reason: z.string().min(1).max(1000),
+  })
+  .superRefine((data, ctx) => {
+    if (data.clockOut) {
+      const start = new Date(data.clockIn);
+      const end = new Date(data.clockOut);
+      if (end <= start) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Clock out must be after clock in",
+          path: ["clockOut"],
+        });
+      }
+    }
+  });
+
+export const timeEntryEditReviewSchema = z.object({
+  status: z.enum(["APPROVED", "DENIED", "CANCELLED"]),
+  denialReason: z.string().optional(),
+});
+
 export const timeOffRequestSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
