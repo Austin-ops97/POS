@@ -188,47 +188,82 @@ export default async function EmployeeDetailPage({
           {summary.timeEntries.length === 0 ? (
             <p className="text-sm text-slate-500">No time entries this week</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-500">
-                  <th className="pb-2 font-medium">Clock In</th>
-                  <th className="pb-2 font-medium">Clock Out</th>
-                  <th className="pb-2 font-medium">Hours</th>
-                  <th className="pb-2 font-medium">Flags</th>
-                  <th className="pb-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <ul className="space-y-3 md:hidden">
                 {summary.timeEntries.map((entry) => {
                   const flags = collectTimeEntryFlags(entry);
                   return (
-                  <tr key={entry.id} className="border-b border-slate-100">
-                    <td className="py-2">{formatDate(entry.clockIn)}</td>
-                    <td className="py-2">
-                      {entry.clockOut ? formatDate(entry.clockOut) : "—"}
-                    </td>
-                    <td className="py-2">
-                      {(getWorkedMinutes(entry) / 60).toFixed(2)}h
-                    </td>
-                    <td className="py-2">
-                      {flags.length === 0 ? (
-                        <span className="text-slate-400">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
+                    <li key={entry.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-slate-600">
+                            {formatDate(entry.clockIn)}
+                            <span className="text-slate-400"> → </span>
+                            {entry.clockOut ? formatDate(entry.clockOut) : "Open"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {(getWorkedMinutes(entry) / 60).toFixed(2)}h
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">{entry.status}</Badge>
+                      </div>
+                      {flags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
                           {flags.map((flag) => (
-                            <Badge key={flag} variant="warning">{flag}</Badge>
+                            <Badge key={flag} variant="warning" className="max-w-full whitespace-normal leading-snug">
+                              {flag}
+                            </Badge>
                           ))}
                         </div>
                       )}
-                    </td>
-                    <td className="py-2">
-                      <Badge variant="secondary">{entry.status}</Badge>
-                    </td>
-                  </tr>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-slate-500">
+                      <th className="pb-2 font-medium">Clock In</th>
+                      <th className="pb-2 font-medium">Clock Out</th>
+                      <th className="pb-2 font-medium">Hours</th>
+                      <th className="pb-2 font-medium">Flags</th>
+                      <th className="pb-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.timeEntries.map((entry) => {
+                      const flags = collectTimeEntryFlags(entry);
+                      return (
+                      <tr key={entry.id} className="border-b border-slate-100">
+                        <td className="py-2 whitespace-nowrap">{formatDate(entry.clockIn)}</td>
+                        <td className="py-2 whitespace-nowrap">
+                          {entry.clockOut ? formatDate(entry.clockOut) : "—"}
+                        </td>
+                        <td className="py-2">
+                          {(getWorkedMinutes(entry) / 60).toFixed(2)}h
+                        </td>
+                        <td className="py-2">
+                          {flags.length === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {flags.map((flag) => (
+                                <Badge key={flag} variant="warning">{flag}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          <Badge variant="secondary">{entry.status}</Badge>
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

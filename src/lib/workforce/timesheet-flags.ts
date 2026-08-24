@@ -34,9 +34,9 @@ export function longShiftFlagLabel(
   const hours = getShiftElapsedHours(entry, asOf);
   const rounded = Math.round(hours * 10) / 10;
   if (entry.status === "ACTIVE" || !entry.clockOut) {
-    return `Forgot to clock out (>${LONG_SHIFT_HOURS}h, ${rounded}h open)`;
+    return `Forgot to clock out · ${rounded}h open`;
   }
-  return `Long day (>${LONG_SHIFT_HOURS}h, ${rounded}h)`;
+  return `Long day · ${rounded}h`;
 }
 
 export function collectTimeEntryFlags(

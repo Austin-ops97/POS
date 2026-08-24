@@ -127,7 +127,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
               defaultValue={defaultPeriod.label}
               onValueChange={selectPeriod}
             >
-              <SelectTrigger className="w-[240px]">
+              <SelectTrigger className="w-full sm:w-[240px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -152,7 +152,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
             <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
           </div>
         </div>
-        <Button variant="outline" onClick={exportCsv}>
+        <Button variant="outline" className="w-full sm:w-auto" onClick={exportCsv}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
@@ -212,7 +212,16 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                           {row.actualHours.toFixed(1)}h actual · {row.scheduledHours.toFixed(1)}h sched
                         </p>
                         {row.flags.length > 0 ? (
-                          <p className="mt-1 text-xs text-amber-700">{row.flags.join(", ")}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {row.flags.map((flag) => (
+                              <span
+                                key={flag}
+                                className="rounded-full bg-amber-50 px-2 py-0.5 text-xs leading-snug text-amber-800"
+                              >
+                                {flag}
+                              </span>
+                            ))}
+                          </div>
                         ) : null}
                       </div>
                       <p className="font-bold text-slate-900">{formatCurrency(row.totalPay)}</p>
@@ -259,8 +268,8 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                         <td className="px-4 py-3">{formatCurrency(row.overtimePay)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.bonusTotal)}</td>
                         <td className="px-4 py-3 font-medium">{formatCurrency(row.totalPay)}</td>
-                        <td className="px-4 py-3 text-xs text-amber-700">
-                          {row.flags.join(", ") || "—"}
+                        <td className="max-w-xs px-4 py-3 text-xs leading-snug text-amber-700">
+                          {row.flags.join("; ") || "—"}
                         </td>
                         <td className="px-4 py-3">
                           <Button
