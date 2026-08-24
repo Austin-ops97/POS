@@ -128,12 +128,12 @@ export function TimeClockKiosk() {
 
   if (successMessage) {
     return (
-      <Card className="mx-auto max-w-md border-2 border-emerald-200 bg-emerald-50">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+      <Card className="mx-auto w-full max-w-md border-2 border-emerald-200 bg-emerald-50">
+        <CardContent className="flex flex-col items-center justify-center px-4 py-12 text-center sm:px-6 sm:py-16">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 text-white">
             <Clock className="h-8 w-8" />
           </div>
-          <h2 className="text-2xl font-bold text-emerald-900">{successMessage}</h2>
+          <h2 className="break-words text-xl font-bold text-emerald-900 sm:text-2xl">{successMessage}</h2>
           {verified && (
             <p className="mt-2 text-emerald-700">
               Today: {verified.todayHours.toFixed(1)} hours worked
@@ -147,10 +147,10 @@ export function TimeClockKiosk() {
   if (verified) {
     const actions = getAvailableActions(clockState);
     return (
-      <Card className="mx-auto max-w-md">
-        <CardContent className="space-y-6 py-8">
+      <Card className="mx-auto w-full max-w-md">
+        <CardContent className="space-y-6 px-4 py-6 sm:px-6 sm:py-8">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-900">{verified.employeeName}</h2>
+            <h2 className="break-words text-xl font-bold text-slate-900 sm:text-2xl">{verified.employeeName}</h2>
             <p className="mt-1 text-sm text-slate-500">
               Status:{" "}
               <span className="font-medium text-slate-700">
@@ -185,11 +185,11 @@ export function TimeClockKiosk() {
                 <Button
                   key={action}
                   size="lg"
-                  className={cn("h-16 text-lg text-white", config.color)}
+                  className={cn("h-14 text-base text-white sm:h-16 sm:text-lg", config.color)}
                   disabled={loading}
                   onClick={() => handleAction(action)}
                 >
-                  <Icon className="mr-2 h-6 w-6" />
+                  <Icon className="mr-2 h-5 w-5 sm:h-6 sm:w-6" />
                   {config.label}
                 </Button>
               );
@@ -204,10 +204,10 @@ export function TimeClockKiosk() {
   }
 
   return (
-    <Card className="mx-auto max-w-md">
-      <CardContent className="space-y-6 py-8">
+    <Card className="mx-auto w-full max-w-md">
+      <CardContent className="space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 sm:py-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900">Time Clock</h2>
+          <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Time Clock</h2>
           <p className="mt-1 text-sm text-slate-500">Enter your 4-digit PIN</p>
         </div>
 
@@ -224,12 +224,12 @@ export function TimeClockKiosk() {
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "←"].map((key) => (
             <Button
               key={key || "empty"}
               variant={key === "" ? "ghost" : "outline"}
-              className="h-16 text-2xl font-semibold"
+              className="h-14 text-xl font-semibold sm:h-16 sm:text-2xl"
               disabled={key === "" || loading}
               onClick={() => {
                 if (key === "←") backspace();
@@ -243,7 +243,7 @@ export function TimeClockKiosk() {
 
         <Button
           size="lg"
-          className="h-14 w-full text-lg"
+          className="h-12 w-full text-base sm:h-14 sm:text-lg"
           disabled={pin.length !== 4 || loading}
           onClick={verifyPin}
         >

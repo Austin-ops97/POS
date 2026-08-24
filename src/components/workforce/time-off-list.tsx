@@ -198,8 +198,8 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button asChild>
+      <div className="flex">
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/workforce/time-off/new">
             <Plus className="h-4 w-4" aria-hidden="true" />
             Request Time Off
@@ -210,15 +210,21 @@ export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps)
       <Card>
         <CardContent className="p-0">
           <Tabs defaultValue={canApprove && pending.length > 0 ? "pending" : "all"}>
-            <TabsList className="m-4">
-              {canApprove && (
-                <TabsTrigger value="pending">
-                  Pending ({pending.length})
+            <div className="overflow-x-auto px-3 pt-3 sm:px-4 sm:pt-4">
+              <TabsList className="flex h-auto w-max min-w-full justify-start gap-1">
+                {canApprove && (
+                  <TabsTrigger value="pending" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                    Pending ({pending.length})
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="all" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  All
                 </TabsTrigger>
-              )}
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
-            </TabsList>
+                <TabsTrigger value="history" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  History
+                </TabsTrigger>
+              </TabsList>
+            </div>
             {canApprove && (
               <TabsContent value="pending" className="mt-0">
                 <RequestTable items={pending} />

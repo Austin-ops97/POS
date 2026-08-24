@@ -59,6 +59,16 @@ function fromLocalInputValue(value: string): string {
   return new Date(value).toISOString();
 }
 
+function formatPunch(iso: string | null | undefined): string {
+  if (!iso) return "Open";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPanelProps) {
   const router = useRouter();
   const [entries, setEntries] = useState<TimeEntryRow[]>([]);
@@ -177,6 +187,62 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
     }
   }
 
+  function FlagList({ flags }: { flags: string[] }) {
+    if (flags.length === 0) return <span className="text-slate-400">—</span>;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {flags.map((flag) => (
+          <Badge key={flag} variant="warning" className="max-w-full gap-1 whitespace-normal text-left leading-snug">
+            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {flag}
+          </Badge>
+        ))}
+      </div>
+    );
+  }
+
+  function EntryCard({ entry }: { entry: TimeEntryRow }) {
+    const isOwn = entry.employee.id === currentEmployeeId;
+    const canRequestEdit = isOwn && entry.status !== "ACTIVE" && !entry.pendingEdit;
+    return (
+      <li className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {canApprove ? (
+              <p className="truncate font-semibold text-slate-900">{entry.employee.name}</p>
+            ) : null}
+            <p className="text-sm text-slate-600">
+              {formatPunch(entry.clockIn)}
+              <span className="text-slate-400"> → </span>
+              {formatPunch(entry.clockOut)}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">{entry.workedHours.toFixed(2)}h worked</p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant={statusVariant(entry.status)}>{entry.status}</Badge>
+            {entry.pendingEdit && <Badge variant="warning">Edit pending</Badge>}
+          </div>
+        </div>
+        {entry.flags.length > 0 && (
+          <div className="mt-3">
+            <FlagList flags={entry.flags} />
+          </div>
+        )}
+        {canRequestEdit && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3 w-full"
+            onClick={() => openEdit(entry)}
+          >
+            <Pencil className="h-3 w-3" aria-hidden="true" />
+            Request edit
+          </Button>
+        )}
+      </li>
+    );
+  }
+
   function EntriesTable({ items }: { items: TimeEntryRow[] }) {
     if (loading) {
       return (
@@ -199,72 +265,66 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
       );
     }
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
-              {canApprove && <th className="px-4 py-3 font-medium">Employee</th>}
-              <th className="px-4 py-3 font-medium">Clock In</th>
-              <th className="px-4 py-3 font-medium">Clock Out</th>
-              <th className="px-4 py-3 font-medium">Hours</th>
-              <th className="px-4 py-3 font-medium">Flags</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((entry) => {
-              const isOwn = entry.employee.id === currentEmployeeId;
-              const canRequestEdit =
-                isOwn &&
-                entry.status !== "ACTIVE" &&
-                !entry.pendingEdit;
-              return (
-                <tr key={entry.id} className="border-b border-slate-100 align-top">
-                  {canApprove && (
-                    <td className="px-4 py-3 font-medium">{entry.employee.name}</td>
-                  )}
-                  <td className="px-4 py-3 text-slate-600">{formatDate(entry.clockIn)}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {entry.clockOut ? formatDate(entry.clockOut) : "—"}
-                  </td>
-                  <td className="px-4 py-3">{entry.workedHours.toFixed(2)}h</td>
-                  <td className="px-4 py-3">
-                    {entry.flags.length === 0 ? (
-                      <span className="text-slate-400">—</span>
-                    ) : (
+      <>
+        <ul className="space-y-3 p-4 md:hidden">
+          {items.map((entry) => (
+            <EntryCard key={entry.id} entry={entry} />
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                {canApprove && <th className="px-4 py-3 font-medium">Employee</th>}
+                <th className="px-4 py-3 font-medium">Clock In</th>
+                <th className="px-4 py-3 font-medium">Clock Out</th>
+                <th className="px-4 py-3 font-medium">Hours</th>
+                <th className="px-4 py-3 font-medium">Flags</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((entry) => {
+                const isOwn = entry.employee.id === currentEmployeeId;
+                const canRequestEdit =
+                  isOwn && entry.status !== "ACTIVE" && !entry.pendingEdit;
+                return (
+                  <tr key={entry.id} className="border-b border-slate-100 align-top">
+                    {canApprove && (
+                      <td className="px-4 py-3 font-medium">{entry.employee.name}</td>
+                    )}
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                      {formatDate(entry.clockIn)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                      {entry.clockOut ? formatDate(entry.clockOut) : "—"}
+                    </td>
+                    <td className="px-4 py-3">{entry.workedHours.toFixed(2)}h</td>
+                    <td className="px-4 py-3">
+                      <FlagList flags={entry.flags} />
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {entry.flags.map((flag) => (
-                          <Badge key={flag} variant="warning" className="gap-1">
-                            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                            {flag}
-                          </Badge>
-                        ))}
+                        <Badge variant={statusVariant(entry.status)}>{entry.status}</Badge>
+                        {entry.pendingEdit && <Badge variant="warning">Edit pending</Badge>}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant(entry.status)}>{entry.status}</Badge>
-                    {entry.pendingEdit && (
-                      <Badge variant="warning" className="ml-2">
-                        Edit pending
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {canRequestEdit && (
-                      <Button size="sm" variant="outline" onClick={() => openEdit(entry)}>
-                        <Pencil className="h-3 w-3" aria-hidden="true" />
-                        Request edit
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {canRequestEdit && (
+                        <Button size="sm" variant="outline" onClick={() => openEdit(entry)}>
+                          <Pencil className="h-3 w-3" aria-hidden="true" />
+                          Request edit
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>
     );
   }
 
@@ -293,44 +353,73 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
       <ul className="space-y-3 p-4">
         {items.map((req) => {
           const isOwn = req.employee.id === currentEmployeeId;
+          const canReview =
+            canApprove || req.employee.managerId === currentEmployeeId;
           return (
-            <li
-              key={req.id}
-              className="rounded-xl border border-slate-200 bg-white p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{req.employee.name}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {formatDate(req.originalClockIn)}
-                    {req.originalClockOut ? ` – ${formatDate(req.originalClockOut)}` : " (open)"}
-                    {" → "}
-                    {formatDate(req.proposedClockIn)}
-                    {req.proposedClockOut ? ` – ${formatDate(req.proposedClockOut)}` : " (open)"}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-500">{req.reason}</p>
-                  {req.denialReason && (
-                    <p className="mt-1 text-sm text-red-600">Denied: {req.denialReason}</p>
-                  )}
-                </div>
-                <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
+            <li key={req.id} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 truncate font-semibold text-slate-900">
+                  {req.employee.name}
+                </p>
+                <Badge variant={statusVariant(req.status)} className="shrink-0">
+                  {req.status}
+                </Badge>
               </div>
+              <dl className="mt-3 grid gap-2 text-sm">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Current
+                  </dt>
+                  <dd className="text-slate-600">
+                    {formatPunch(req.originalClockIn)} – {formatPunch(req.originalClockOut)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Requested
+                  </dt>
+                  <dd className="text-slate-600">
+                    {formatPunch(req.proposedClockIn)} – {formatPunch(req.proposedClockOut)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-2 break-words text-sm text-slate-500">{req.reason}</p>
+              {req.denialReason && (
+                <p className="mt-1 break-words text-sm text-red-600">
+                  Denied: {req.denialReason}
+                </p>
+              )}
               {req.status === "PENDING" && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(canApprove || req.employee.managerId === currentEmployeeId) && (
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  {canReview && (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => review(req.id, "APPROVED")}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => review(req.id, "APPROVED")}
+                      >
                         <Check className="h-3 w-3" aria-hidden="true" />
                         Approve
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setDenyId(req.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => setDenyId(req.id)}
+                      >
                         <X className="h-3 w-3" aria-hidden="true" />
                         Deny
                       </Button>
                     </>
                   )}
                   {isOwn && (
-                    <Button size="sm" variant="ghost" onClick={() => review(req.id, "CANCELLED")}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="col-span-2 w-full sm:col-auto sm:w-auto"
+                      onClick={() => review(req.id, "CANCELLED")}
+                    >
                       Cancel
                     </Button>
                   )}
@@ -345,24 +434,30 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm leading-relaxed text-slate-500">
         Shifts open or lasting longer than {LONG_SHIFT_HOURS} hours are flagged. Employees can
         request timesheet edits; managers approve before hours change.
       </p>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           <Tabs defaultValue={canApprove && pending.length > 0 ? "pending" : "entries"}>
-            <TabsList className="m-4">
-              <TabsTrigger value="entries">Entries ({entries.length})</TabsTrigger>
-              <TabsTrigger value="flagged">
-                Flags ({flagged.length})
-              </TabsTrigger>
-              <TabsTrigger value="pending">
-                Pending edits ({pending.length})
-              </TabsTrigger>
-              <TabsTrigger value="history">Edit history ({history.length})</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto px-3 pt-3 sm:px-4 sm:pt-4">
+              <TabsList className="flex h-auto w-max min-w-full justify-start gap-1">
+                <TabsTrigger value="entries" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  Entries ({entries.length})
+                </TabsTrigger>
+                <TabsTrigger value="flagged" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  Flags ({flagged.length})
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  Pending ({pending.length})
+                </TabsTrigger>
+                <TabsTrigger value="history" className="shrink-0 px-2.5 text-xs sm:px-3 sm:text-sm">
+                  History ({history.length})
+                </TabsTrigger>
+              </TabsList>
+            </div>
             <TabsContent value="entries" className="mt-0">
               <EntriesTable items={entries} />
             </TabsContent>
@@ -382,25 +477,25 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
           <Card className="flex max-h-[min(92dvh,100%)] w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:max-h-[min(90dvh,900px)] sm:rounded-xl sm:pb-0">
-            <CardContent className="space-y-4 overflow-y-auto pt-6">
+            <CardContent className="space-y-4 overflow-y-auto px-4 pt-6 sm:px-6">
               <h3 className="text-lg font-semibold">Request timesheet edit</h3>
               <p className="text-sm text-slate-500">
                 Your manager will need to approve this change before it applies.
               </p>
-              <label className="block text-sm font-medium">
+              <label className="block min-w-0 text-sm font-medium">
                 Clock in
                 <Input
                   type="datetime-local"
-                  className="mt-1"
+                  className="mt-1 min-w-0"
                   value={clockIn}
                   onChange={(e) => setClockIn(e.target.value)}
                 />
               </label>
-              <label className="block text-sm font-medium">
+              <label className="block min-w-0 text-sm font-medium">
                 Clock out
                 <Input
                   type="datetime-local"
-                  className="mt-1"
+                  className="mt-1 min-w-0"
                   value={clockOut}
                   onChange={(e) => setClockOut(e.target.value)}
                 />
@@ -415,12 +510,12 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
                   placeholder="Why does this entry need to change?"
                 />
               </label>
-              <div className="flex gap-2 pb-2 sm:pb-0">
-                <Button disabled={submitting} onClick={submitEdit}>
-                  {submitting ? "Submitting..." : "Submit for approval"}
-                </Button>
-                <Button variant="outline" onClick={() => setEditing(null)}>
+              <div className="flex flex-col-reverse gap-2 pb-2 sm:flex-row sm:pb-0">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => setEditing(null)}>
                   Cancel
+                </Button>
+                <Button disabled={submitting} className="w-full sm:w-auto" onClick={submitEdit}>
+                  {submitting ? "Submitting..." : "Submit for approval"}
                 </Button>
               </div>
             </CardContent>
@@ -431,7 +526,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
       {denyId && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
           <Card className="flex max-h-[min(92dvh,100%)] w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:max-h-[min(90dvh,900px)] sm:rounded-xl sm:pb-0">
-            <CardContent className="space-y-4 overflow-y-auto pt-6">
+            <CardContent className="space-y-4 overflow-y-auto px-4 pt-6 sm:px-6">
               <h3 className="text-lg font-semibold">Deny timesheet edit</h3>
               <textarea
                 className="w-full rounded-md border border-slate-200 p-3 text-sm"
@@ -440,16 +535,17 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
                 value={denyReason}
                 onChange={(e) => setDenyReason(e.target.value)}
               />
-              <div className="flex gap-2 pb-2 sm:pb-0">
+              <div className="flex flex-col-reverse gap-2 pb-2 sm:flex-row sm:pb-0">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => setDenyId(null)}>
+                  Cancel
+                </Button>
                 <Button
                   variant="destructive"
+                  className="w-full sm:w-auto"
                   disabled={!denyReason.trim()}
                   onClick={() => review(denyId, "DENIED", denyReason)}
                 >
                   Confirm Denial
-                </Button>
-                <Button variant="outline" onClick={() => setDenyId(null)}>
-                  Cancel
                 </Button>
               </div>
             </CardContent>

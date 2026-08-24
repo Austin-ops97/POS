@@ -13,16 +13,16 @@ export default async function TimesheetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/workforce">
+      <div className="flex items-start gap-3 sm:items-center sm:gap-4">
+        <Link href="/workforce" className="shrink-0">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Timesheets</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Timesheets</h1>
           <p className="text-sm text-slate-500">
-            Review hours, long-shift flags, and approve employee edits
+            Review hours, flags, and approve edits
           </p>
         </div>
       </div>
