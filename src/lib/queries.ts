@@ -518,7 +518,8 @@ export async function getWorkforceOverview(ctx: AuthContext) {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  const [clockedIn, todayShifts, pendingTimeOff, activeEmployees] = await Promise.all([
+  const [clockedIn, todayShifts, pendingTimeOff, pendingTimesheetEdits, activeEmployees] =
+    await Promise.all([
     db.timeEntry.findMany({
       where: {
         businessId: ctx.business.id,
@@ -552,12 +553,29 @@ export async function getWorkforceOverview(ctx: AuthContext) {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    db.timeEntryEditRequest.findMany({
+      where: {
+        businessId: ctx.business.id,
+        status: "PENDING",
+      },
+      include: {
+        employee: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
     db.employeeProfile.count({
       where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE" },
     }),
   ]);
 
-  return { clockedIn, todayShifts, pendingTimeOff, activeEmployees };
+  return {
+    clockedIn,
+    todayShifts,
+    pendingTimeOff,
+    pendingTimesheetEdits,
+    activeEmployees,
+  };
 }
 
 export async function getEmployeeWorkforceSummary(ctx: AuthContext, employeeId: string) {

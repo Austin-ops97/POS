@@ -10,6 +10,12 @@ import { buildShiftInstants } from "./timezone";
 import { resolveDisplayName, buildLegalName } from "./employee-service";
 import { computeWeeklyOvertimeHours } from "./payroll-service";
 import { payrollToCsv } from "./payroll-service";
+import {
+  collectTimeEntryFlags,
+  isLongShift,
+  longShiftFlagLabel,
+  validateTimesheetEditTimes,
+} from "./timesheet-flags";
 
 describe("schedule-week", () => {
   it("returns stable ISO range for the same week start", () => {
@@ -166,5 +172,43 @@ describe("payrollToCsv", () => {
     const csv = payrollToCsv([], { start: "2026-08-01", end: "2026-08-14", payDate: "2026-08-20" });
     assert.match(csv, /Pay Period,Pay Date/);
     assert.match(csv, /PTO Hrs,Sick Hrs,Vacation Hrs,Holiday Hrs,Unpaid Hrs/);
+  });
+});
+
+describe("timesheet long-shift flags", () => {
+  it("flags open punches past 12 hours as forgot to clock out", () => {
+    const clockIn = new Date("2026-08-24T08:00:00Z");
+    const asOf = new Date("2026-08-24T21:00:00Z");
+    assert.equal(isLongShift({ clockIn, status: "ACTIVE" }, asOf), true);
+    const flag = longShiftFlagLabel({ clockIn, status: "ACTIVE" }, asOf);
+    assert.ok(flag?.includes("Forgot to clock out"));
+  });
+
+  it("does not flag shifts under 12 hours", () => {
+    const clockIn = new Date("2026-08-24T08:00:00Z");
+    const clockOut = new Date("2026-08-24T16:00:00Z");
+    assert.equal(isLongShift({ clockIn, clockOut, status: "COMPLETED" }, clockOut), false);
+  });
+
+  it("flags completed shifts longer than 12 hours", () => {
+    const clockIn = new Date("2026-08-24T08:00:00Z");
+    const clockOut = new Date("2026-08-24T21:30:00Z");
+    assert.equal(isLongShift({ clockIn, clockOut, status: "COMPLETED" }, clockOut), true);
+    const flags = collectTimeEntryFlags({ clockIn, clockOut, status: "COMPLETED", breaks: [] });
+    assert.ok(flags.some((f) => f.includes("Long day")));
+  });
+});
+
+describe("validateTimesheetEditTimes", () => {
+  it("rejects clock out before clock in", () => {
+    const start = new Date("2026-08-24T09:00:00Z");
+    const end = new Date("2026-08-24T08:00:00Z");
+    assert.ok(validateTimesheetEditTimes(start, end));
+  });
+
+  it("allows a normal edit window", () => {
+    const start = new Date("2026-08-24T09:00:00Z");
+    const end = new Date("2026-08-24T17:00:00Z");
+    assert.equal(validateTimesheetEditTimes(start, end), null);
   });
 });

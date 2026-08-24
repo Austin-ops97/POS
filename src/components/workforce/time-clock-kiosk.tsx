@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Clock, Coffee, LogIn, LogOut } from "lucide-react";
+import { Clock, Coffee, LogIn, LogOut, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,9 @@ type PunchResponse = {
   action: string;
   clockState: ClockState;
   todayHours: number;
+  longShiftWarning?: boolean;
+  elapsedHours?: number;
+  longShiftThresholdHours?: number;
 };
 
 const ACTION_CONFIG = {
@@ -160,7 +163,19 @@ export function TimeClockKiosk() {
             </p>
             <p className="mt-1 text-sm text-slate-500">
               Today: {verified.todayHours.toFixed(1)} hours
+              {typeof verified.elapsedHours === "number" && clockState !== "OFF_CLOCK"
+                ? ` · This punch: ${verified.elapsedHours.toFixed(1)}h`
+                : ""}
             </p>
+            {verified.longShiftWarning && clockState !== "OFF_CLOCK" && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm text-amber-900">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  This shift is past {verified.longShiftThresholdHours ?? 12} hours.
+                  Please clock out if you forgot.
+                </span>
+              </div>
+            )}
           </div>
           <div className="grid gap-3">
             {actions.map((action) => {

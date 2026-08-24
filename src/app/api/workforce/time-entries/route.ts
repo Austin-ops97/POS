@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { hasPermission, requireAuth, requireAnyPermission } from "@/lib/auth";
 import { handleApiError } from "@/lib/api-utils";
 import { PERMISSIONS } from "@/lib/permissions";
+import { collectTimeEntryFlags } from "@/lib/workforce/timesheet-flags";
+import { getWorkedMinutes } from "@/lib/workforce/time-clock-service";
 
 export async function GET(request: Request) {
   try {
@@ -40,15 +42,40 @@ export async function GET(request: Request) {
           : {}),
       },
       include: {
-        employee: { select: { id: true, name: true } },
+        employee: { select: { id: true, name: true, managerId: true } },
         location: { select: { id: true, name: true } },
         breaks: true,
+        editRequests: {
+          where: { status: "PENDING" },
+          select: {
+            id: true,
+            status: true,
+            proposedClockIn: true,
+            proposedClockOut: true,
+            reason: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
       orderBy: { clockIn: "desc" },
       take: 100,
     });
 
-    return NextResponse.json(entries);
+    const enriched = entries.map((entry) => {
+      const flags = collectTimeEntryFlags(entry);
+      const pendingEdit = entry.editRequests[0] ?? null;
+      return {
+        ...entry,
+        editRequests: undefined,
+        pendingEdit,
+        flags,
+        workedHours: Math.round((getWorkedMinutes(entry) / 60) * 100) / 100,
+      };
+    });
+
+    return NextResponse.json(enriched);
   } catch (error) {
     return handleApiError(error, "GET /api/workforce/time-entries");
   }

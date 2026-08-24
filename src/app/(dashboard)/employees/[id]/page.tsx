@@ -8,6 +8,7 @@ import {
 } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getWorkedMinutes } from "@/lib/workforce/time-clock-service";
+import { collectTimeEntryFlags } from "@/lib/workforce/timesheet-flags";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -193,11 +194,14 @@ export default async function EmployeeDetailPage({
                   <th className="pb-2 font-medium">Clock In</th>
                   <th className="pb-2 font-medium">Clock Out</th>
                   <th className="pb-2 font-medium">Hours</th>
+                  <th className="pb-2 font-medium">Flags</th>
                   <th className="pb-2 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.timeEntries.map((entry) => (
+                {summary.timeEntries.map((entry) => {
+                  const flags = collectTimeEntryFlags(entry);
+                  return (
                   <tr key={entry.id} className="border-b border-slate-100">
                     <td className="py-2">{formatDate(entry.clockIn)}</td>
                     <td className="py-2">
@@ -207,10 +211,22 @@ export default async function EmployeeDetailPage({
                       {(getWorkedMinutes(entry) / 60).toFixed(2)}h
                     </td>
                     <td className="py-2">
+                      {flags.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {flags.map((flag) => (
+                            <Badge key={flag} variant="warning">{flag}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2">
                       <Badge variant="secondary">{entry.status}</Badge>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

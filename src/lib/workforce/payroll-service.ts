@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getBreakMinutes, getWorkedMinutes } from "./time-clock-service";
 import { getEffectiveCompensation, resolveDisplayName } from "./employee-service";
 import { getWeekStart } from "./pay-period";
+import { collectTimeEntryFlags, isLongShift } from "./timesheet-flags";
 import type { TimeEntry, TimeBreak, Shift, PayrollBonus } from "@prisma/client";
 
 type TimeEntryWithBreaks = TimeEntry & { breaks: TimeBreak[] };
@@ -192,11 +193,16 @@ export async function computePayrollSummary(params: {
       const ah = paidBreaks ? rawActualHours + bh : rawActualHours;
       actualHours += ah;
       breakHours += bh;
-      if (entry.status === "ACTIVE" || !entry.clockOut) {
-        flags.push("Missing clock-out");
+      for (const flag of collectTimeEntryFlags(entry)) {
+        if (!flags.includes(flag)) flags.push(flag);
       }
-      for (const br of entry.breaks) {
-        if (!br.breakEnd) flags.push("Open break");
+      // Deduplicate the generic missing clock-out when a more specific long-shift flag exists
+      if (
+        (entry.status === "ACTIVE" || !entry.clockOut) &&
+        isLongShift(entry)
+      ) {
+        const idx = flags.indexOf("Missing clock-out");
+        if (idx >= 0) flags.splice(idx, 1);
       }
     }
 

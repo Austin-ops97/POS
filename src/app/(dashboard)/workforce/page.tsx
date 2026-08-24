@@ -9,20 +9,31 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
 import { getClockState } from "@/lib/workforce/time-clock-service";
 import {
+  isLongShift,
+  getShiftElapsedHours,
+  LONG_SHIFT_HOURS,
+} from "@/lib/workforce/timesheet-flags";
+import {
   Clock,
   Calendar,
   Palmtree,
   DollarSign,
   Settings,
   ArrowRight,
+  ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
 
 export default async function WorkforcePage() {
   const ctx = await requireAuth();
   const overview = await getWorkforceOverview(ctx);
   const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE);
+  const canApproveTimesheets =
+    canManage || hasPermission(ctx, PERMISSIONS.MANAGE_TIME_ENTRIES);
   const canViewSchedule =
     canManage || hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
+  const longShiftOpen = overview.clockedIn.filter((entry) => isLongShift(entry));
+
 
   return (
     <div className="space-y-6">
@@ -38,6 +49,12 @@ export default async function WorkforcePage() {
             <Link href="/workforce/time-clock">
               <Clock className="h-4 w-4" />
               Time Clock
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/workforce/timesheets">
+              <ClipboardList className="h-4 w-4" />
+              Timesheets
             </Link>
           </Button>
           {canManage && (
@@ -57,6 +74,65 @@ export default async function WorkforcePage() {
         <StatCard title="Shifts Today" value={String(overview.todayShifts.length)} />
         <StatCard title="Pending Time Off" value={String(overview.pendingTimeOff.length)} />
       </div>
+
+      {longShiftOpen.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-amber-900">
+              <AlertTriangle className="h-5 w-5" />
+              Possible missed clock-outs ({LONG_SHIFT_HOURS}h+)
+            </CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/workforce/timesheets">
+                Review timesheets <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {longShiftOpen.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-4 py-3"
+                >
+                  <div>
+                    <p className="font-medium text-slate-900">{entry.employee.name}</p>
+                    <p className="text-xs text-slate-500">
+                      Since {formatDate(entry.clockIn)} ·{" "}
+                      {getShiftElapsedHours(entry).toFixed(1)}h open
+                    </p>
+                  </div>
+                  <Badge variant="warning">Forgot to clock out?</Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {(overview.pendingTimesheetEdits.length > 0) && canApproveTimesheets && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Pending Timesheet Edits</CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/workforce/timesheets">View all</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {overview.pendingTimesheetEdits.map((req) => (
+                <li
+                  key={req.id}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="font-medium">{req.employee.name}</span>
+                  <span className="text-slate-500">{req.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -85,11 +161,19 @@ export default async function WorkforcePage() {
                       <p className="font-medium text-slate-900">{entry.employee.name}</p>
                       <p className="text-xs text-slate-500">
                         Since {formatDate(entry.clockIn)}
+                        {isLongShift(entry)
+                          ? ` · ${getShiftElapsedHours(entry).toFixed(1)}h open`
+                          : ""}
                       </p>
                     </div>
-                    <Badge variant="success">
-                      {getClockState(entry) === "ON_BREAK" ? "On Break" : "Working"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {isLongShift(entry) && (
+                        <Badge variant="warning">12h+ open</Badge>
+                      )}
+                      <Badge variant="success">
+                        {getClockState(entry) === "ON_BREAK" ? "On Break" : "Working"}
+                      </Badge>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -148,6 +232,19 @@ export default async function WorkforcePage() {
               <div>
                 <p className="font-semibold text-slate-900">Time Clock</p>
                 <p className="text-xs text-slate-500">PIN punch in/out</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/workforce/timesheets">
+          <Card className="h-full transition-colors hover:bg-slate-50">
+            <CardContent className="flex items-center gap-4 pt-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <ClipboardList className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Timesheets</p>
+                <p className="text-xs text-slate-500">Edits & long-day flags</p>
               </div>
             </CardContent>
           </Card>

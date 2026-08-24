@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
 import { verifyPin } from "@/lib/pin";
 import type { TimeBreak, TimeEntry } from "@prisma/client";
+import {
+  getShiftElapsedHours,
+  isLongShift,
+  LONG_SHIFT_HOURS,
+} from "./timesheet-flags";
 
 export type ClockState = "OFF_CLOCK" | "ON_CLOCK" | "ON_BREAK";
 
@@ -87,7 +92,26 @@ export type PunchResult = {
   clockState: ClockState;
   clockedInAt?: Date;
   todayHours: number;
+  longShiftWarning?: boolean;
+  elapsedHours?: number;
+  longShiftThresholdHours?: number;
 };
+
+function withLongShiftMeta(
+  result: PunchResult,
+  activeEntry: TimeEntryWithBreaks | null | undefined
+): PunchResult {
+  if (!activeEntry || result.clockState === "OFF_CLOCK") {
+    return result;
+  }
+  const elapsedHours = Math.round(getShiftElapsedHours(activeEntry) * 10) / 10;
+  return {
+    ...result,
+    elapsedHours,
+    longShiftThresholdHours: LONG_SHIFT_HOURS,
+    longShiftWarning: isLongShift(activeEntry),
+  };
+}
 
 export async function lookupEmployeeClockState(
   businessId: string,
@@ -102,13 +126,16 @@ export async function lookupEmployeeClockState(
   const clockState = getClockState(activeEntry);
   const todayHours = await getTodayHours(employee.id);
 
-  return {
-    employeeName: employee.name,
-    action: "LOOKUP",
-    clockState,
-    clockedInAt: activeEntry?.clockIn,
-    todayHours,
-  };
+  return withLongShiftMeta(
+    {
+      employeeName: employee.name,
+      action: "LOOKUP",
+      clockState,
+      clockedInAt: activeEntry?.clockIn,
+      todayHours,
+    },
+    activeEntry
+  );
 }
 
 export async function executePunch(params: {
@@ -143,6 +170,9 @@ export async function executePunch(params: {
       clockState: "ON_CLOCK",
       clockedInAt: now,
       todayHours,
+      longShiftWarning: false,
+      elapsedHours: 0,
+      longShiftThresholdHours: LONG_SHIFT_HOURS,
     };
   }
 
@@ -161,6 +191,7 @@ export async function executePunch(params: {
         data: { breakEnd: now },
       });
     }
+    const wasLong = isLongShift(activeEntry, now);
     await db.timeEntry.update({
       where: { id: activeEntry.id },
       data: { clockOut: now, status: "COMPLETED" },
@@ -171,6 +202,9 @@ export async function executePunch(params: {
       action: "CLOCK_OUT",
       clockState: "OFF_CLOCK",
       todayHours,
+      longShiftWarning: wasLong,
+      elapsedHours: Math.round(getShiftElapsedHours(activeEntry, now) * 10) / 10,
+      longShiftThresholdHours: LONG_SHIFT_HOURS,
     };
   }
 
@@ -182,13 +216,16 @@ export async function executePunch(params: {
       data: { timeEntryId: activeEntry.id, breakStart: now },
     });
     const todayHours = await getTodayHours(params.employeeId);
-    return {
-      employeeName: params.employeeName,
-      action: "START_BREAK",
-      clockState: "ON_BREAK",
-      clockedInAt: activeEntry.clockIn,
-      todayHours,
-    };
+    return withLongShiftMeta(
+      {
+        employeeName: params.employeeName,
+        action: "START_BREAK",
+        clockState: "ON_BREAK",
+        clockedInAt: activeEntry.clockIn,
+        todayHours,
+      },
+      activeEntry
+    );
   }
 
   if (params.action === "END_BREAK") {
@@ -204,13 +241,16 @@ export async function executePunch(params: {
       data: { breakEnd: now },
     });
     const todayHours = await getTodayHours(params.employeeId);
-    return {
-      employeeName: params.employeeName,
-      action: "END_BREAK",
-      clockState: "ON_CLOCK",
-      clockedInAt: activeEntry.clockIn,
-      todayHours,
-    };
+    return withLongShiftMeta(
+      {
+        employeeName: params.employeeName,
+        action: "END_BREAK",
+        clockState: "ON_CLOCK",
+        clockedInAt: activeEntry.clockIn,
+        todayHours,
+      },
+      activeEntry
+    );
   }
 
   throw new Error("Invalid action");
