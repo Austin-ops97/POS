@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
-import { PROJECT_ARCHIVE_HELPER } from "@/lib/office/workspace-archive";
 import { OfficeAppHeader } from "./app-header";
 import {
   archiveWorkspaceRecord,
@@ -197,13 +196,15 @@ export function ProjectsApp({
 
   return (
     <div className="page-flush-fill flex min-h-0 flex-col bg-slate-50">
-      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2 sm:px-5">
         <OfficeAppHeader module={module} compact>
-          <Button variant="outline" onClick={() => setAdding("TODO")} disabled={!active || !permissions.canEdit || view === "archived"}>
+          <Button variant="outline" size="sm" className="h-9 min-h-9" onClick={() => setAdding("TODO")} disabled={!active || !permissions.canEdit || view === "archived"}>
             <Plus className="h-4 w-4" />
             Add task
           </Button>
           <Button
+            size="sm"
+            className="h-9 min-h-9"
             onClick={() => (active ? save() : setAdding("DONE"))}
             disabled={busy || (active ? !permissions.canEdit : !permissions.canCreate) || view === "archived"}
           >
@@ -239,11 +240,10 @@ export function ProjectsApp({
             </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-            <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
               {view === "archived" ? "Archived" : "Projects"}
             </p>
-            <p className="px-1 pb-3 text-[11px] leading-relaxed text-slate-400">{PROJECT_ARCHIVE_HELPER}</p>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {records.map((record) => {
                 const project = recordMetadata<ProjectData>(record, empty);
                 const percent = project.tasks.length
@@ -254,7 +254,7 @@ export function ProjectsApp({
                   <button
                     key={record.id}
                     onClick={() => load(record)}
-                    className={`w-full rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
                       selected
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-transparent bg-slate-50 text-slate-800 hover:bg-slate-100"
@@ -277,8 +277,8 @@ export function ProjectsApp({
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4">
           {active ? (
             <>
-              <header className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
-                <div className="mb-3 flex gap-2 md:hidden">
+              <header className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+                <div className="mb-2 flex gap-2 md:hidden">
                   <select
                     className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium"
                     value={activeId}
@@ -308,41 +308,37 @@ export function ProjectsApp({
                     </Button>
                   ) : null}
                 </div>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Project board</p>
-                    <h2 className="mt-0.5 truncate text-xl font-semibold text-slate-900 sm:text-2xl">{active.title}</h2>
-                    {active.summary ? <p className="mt-1 text-sm leading-relaxed text-slate-500">{active.summary}</p> : null}
-                    {view === "active" ? (
-                      <p className="mt-2 text-xs text-slate-500">{PROJECT_ARCHIVE_HELPER}</p>
-                    ) : (
-                      <p className="mt-2 text-xs text-slate-500">This archived project keeps its tasks, reminders, and history.</p>
-                    )}
+                <div className="flex items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-lg font-semibold text-slate-900">{active.title}</h2>
+                    {active.summary ? <p className="truncate text-sm text-slate-500">{active.summary}</p> : null}
                   </div>
-                  <div className="flex w-full shrink-0 flex-col gap-3 lg:w-52">
+                  <div className="flex w-36 shrink-0 flex-col gap-2 sm:w-44">
                     {permissions.canDelete && view === "active" && ["COMPLETE", "APPROVED"].includes(active.status) ? (
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
+                        className="h-8 min-h-8"
                         onClick={() => setArchiveTarget(active)}
                         disabled={busy}
                       >
                         <Archive className="h-4 w-4" />
-                        Archive project
+                        Archive
                       </Button>
                     ) : null}
                     {permissions.canDelete && view === "archived" ? (
-                      <Button type="button" variant="outline" onClick={() => void restoreProject(active)} disabled={busy}>
+                      <Button type="button" variant="outline" size="sm" className="h-8 min-h-8" onClick={() => void restoreProject(active)} disabled={busy}>
                         <RotateCcw className="h-4 w-4" />
-                        Restore project
+                        Restore
                       </Button>
                     ) : null}
                     <div>
-                      <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
+                      <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-slate-500">
                         <span>Progress</span>
                         <span>{completion}%</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                         <div className="h-full rounded-full bg-slate-900" style={{ width: `${completion}%` }} />
                       </div>
                     </div>
@@ -354,9 +350,9 @@ export function ProjectsApp({
                 {columns.map((column) => (
                   <section
                     key={column.id}
-                    className={`flex min-h-0 w-[min(18.5rem,82vw)] shrink-0 flex-col overflow-hidden rounded-2xl p-3 lg:w-auto ${column.tone}`}
+                    className={`flex min-h-0 w-[min(18.5rem,82vw)] shrink-0 flex-col overflow-hidden rounded-2xl p-2.5 lg:w-auto ${column.tone}`}
                   >
-                    <div className="flex shrink-0 items-center justify-between">
+                    <div className="flex shrink-0 items-center justify-between px-0.5">
                       <h3 className="text-sm font-semibold">
                         {column.name}{" "}
                         <span className="ml-1 text-slate-400">
@@ -371,17 +367,17 @@ export function ProjectsApp({
                         <Plus className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
+                    <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden pr-0.5">
                       {data.tasks.filter((task) => task.status === column.id).length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-slate-200/80 bg-white/60 px-3 py-6 text-center text-sm text-slate-400">
+                        <p className="rounded-xl border border-dashed border-slate-200/80 bg-white/60 px-3 py-4 text-center text-sm text-slate-400">
                           Nothing here yet
                         </p>
                       ) : null}
                       {data.tasks
                         .filter((task) => task.status === column.id)
                         .map((task) => (
-                          <article key={task.id} className="rounded-xl border border-white/80 bg-white p-3 shadow-sm">
-                            <div className="flex gap-2">
+                          <article key={task.id} className="rounded-xl border border-white/80 bg-white px-3 py-2 shadow-sm">
+                            <div className="flex items-start gap-2">
                               <button
                                 onClick={() => moveTask(task.id, task.complete ? "TODO" : "DONE")}
                                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
@@ -394,46 +390,44 @@ export function ProjectsApp({
                                 {task.complete ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-0" />}
                               </button>
                               <span
-                                className={`flex-1 text-sm leading-relaxed ${
+                                className={`min-w-0 flex-1 text-sm leading-snug ${
                                   task.complete ? "text-slate-400 line-through" : "text-slate-800"
                                 }`}
                               >
                                 {task.title}
                               </span>
-                              <button
-                                onClick={() => {
-                                  const next = {
-                                    ...data,
-                                    tasks: data.tasks.filter((item) => item.id !== task.id),
-                                  };
-                                  setData(next);
-                                  void save(next);
-                                }}
-                                className="text-slate-300 hover:text-red-500"
-                                aria-label="Delete task"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                            <div className="mt-3 flex items-center justify-between">
-                              {column.id !== "TODO" ? (
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                {column.id !== "TODO" ? (
+                                  <button
+                                    onClick={() => moveTask(task.id, column.id === "DONE" ? "DOING" : "TODO")}
+                                    className="rounded-md px-1.5 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-50"
+                                  >
+                                    Back
+                                  </button>
+                                ) : null}
+                                {column.id !== "DONE" ? (
+                                  <button
+                                    onClick={() => moveTask(task.id, column.id === "TODO" ? "DOING" : "DONE")}
+                                    className="rounded-md px-1.5 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50"
+                                  >
+                                    Forward
+                                  </button>
+                                ) : null}
                                 <button
-                                  onClick={() => moveTask(task.id, column.id === "DONE" ? "DOING" : "TODO")}
-                                  className="text-[11px] font-medium text-slate-500"
+                                  onClick={() => {
+                                    const next = {
+                                      ...data,
+                                      tasks: data.tasks.filter((item) => item.id !== task.id),
+                                    };
+                                    setData(next);
+                                    void save(next);
+                                  }}
+                                  className="rounded-md p-1 text-slate-300 hover:text-red-500"
+                                  aria-label="Delete task"
                                 >
-                                  ← Move back
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </button>
-                              ) : (
-                                <span />
-                              )}
-                              {column.id !== "DONE" ? (
-                                <button
-                                  onClick={() => moveTask(task.id, column.id === "TODO" ? "DOING" : "DONE")}
-                                  className="text-[11px] font-medium text-blue-600"
-                                >
-                                  Move forward →
-                                </button>
-                              ) : null}
+                              </div>
                             </div>
                           </article>
                         ))}
@@ -442,7 +436,7 @@ export function ProjectsApp({
                 ))}
               </div>
 
-              <div className="mt-3 min-h-0 max-h-[min(38vh,22rem)] shrink-0 space-y-3 overflow-y-auto pb-2">
+              <div className="mt-3 grid shrink-0 gap-3 lg:grid-cols-2">
                 {view === "active" && permissions.canManageReminders ? (
                   <ProjectRemindersPanel projectId={active.id} employees={employees} />
                 ) : null}

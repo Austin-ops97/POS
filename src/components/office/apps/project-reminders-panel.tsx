@@ -46,7 +46,6 @@ function localInputValue(iso: string) {
 
 export function ProjectRemindersPanel({
   projectId,
-  employees,
 }: {
   projectId: string;
   employees: EmployeeOption[];
@@ -56,7 +55,6 @@ export function ProjectRemindersPanel({
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const submittingRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -83,13 +81,11 @@ export function ProjectRemindersPanel({
     const parsed = reminderPayloadFromFormData(new FormData(form));
     if ("error" in parsed) {
       setFormError(parsed.error);
-      setFormSuccess(null);
       return;
     }
     submittingRef.current = true;
     setBusy(true);
     setFormError(null);
-    setFormSuccess(null);
     try {
       const res = await fetch(`/api/office/projects/${projectId}/reminders`, {
         method: "POST",
@@ -98,7 +94,6 @@ export function ProjectRemindersPanel({
       });
       if (!res.ok) throw new Error(await apiError(res));
       toast.success("Reminder scheduled");
-      setFormSuccess("Reminder scheduled");
       setShowForm(false);
       resetFormSafely(form);
       await load();
@@ -162,136 +157,69 @@ export function ProjectRemindersPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Bell className="h-4 w-4 text-amber-600" />
+    <section className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Bell className="h-3.5 w-3.5 shrink-0 text-amber-600" />
           <h3 className="text-sm font-semibold text-slate-900">Reminders</h3>
+          {reminders.length ? <span className="text-xs text-slate-400">{reminders.length}</span> : null}
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Add reminder"}
+        <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Cancel" : "Add"}
         </Button>
       </div>
 
       {showForm ? (
-        <form onSubmit={createReminder} className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4">
-          <label className="text-sm font-medium">
-            Title
-            <Input name="title" required className="mt-1" placeholder="Follow up on deliverables" />
-          </label>
-          <label className="text-sm font-medium">
-            Message
-            <textarea
-              name="message"
-              rows={3}
-              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Optional email body"
+        <form onSubmit={createReminder} className="mt-2 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <Input name="title" required className="h-9" placeholder="Follow up" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input
+              name="scheduledAt"
+              type="datetime-local"
+              required
+              className="h-9"
+              defaultValue={localInputValue(new Date(Date.now() + 3600_000).toISOString())}
             />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium">
-              Send at
-              <Input
-                name="scheduledAt"
-                type="datetime-local"
-                required
-                className="mt-1"
-                defaultValue={localInputValue(new Date(Date.now() + 3600_000).toISOString())}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Timezone
-              <Input name="timezone" className="mt-1" defaultValue="America/Chicago" />
-            </label>
+            <Input name="timezone" className="h-9" defaultValue="America/Chicago" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="text-sm font-medium">
-              Recurrence
-              <select name="recurrence" className="mt-1 h-10 w-full rounded-md border px-3 text-sm" defaultValue="ONE_TIME">
-                <option value="ONE_TIME">One time</option>
-                <option value="DAILY">Daily</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              Interval
-              <Input name="intervalCount" type="number" min={1} defaultValue={1} className="mt-1" />
-            </label>
-            <label className="text-sm font-medium">
-              Minutes before
-              <Input name="sendBeforeMinutes" type="number" min={0} defaultValue={0} className="mt-1" />
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" name="includeOwner" defaultChecked /> Project owner
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" name="includeAdmins" /> Admins
-            </label>
-          </div>
-          <label className="text-sm font-medium">
-            Team members
-            <select name="employeeIds" multiple className="mt-1 h-28 w-full rounded-md border px-3 py-2 text-sm">
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            Extra emails
-            <Input name="emails" className="mt-1" placeholder="person@example.com" />
-          </label>
+          <input type="hidden" name="recurrence" value="ONE_TIME" />
+          <input type="hidden" name="intervalCount" value="1" />
+          <input type="hidden" name="sendBeforeMinutes" value="0" />
+          <input type="hidden" name="includeOwner" value="on" />
           {formError ? (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="text-xs text-red-600" role="alert">
               {formError}
             </p>
           ) : null}
-          {formSuccess ? (
-            <p className="text-sm text-emerald-700" role="status">
-              {formSuccess}
-            </p>
-          ) : null}
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" size="sm" className="h-8 min-h-8" disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? "Scheduling…" : "Schedule reminder"}
+            {busy ? "Scheduling…" : "Schedule"}
           </Button>
         </form>
       ) : null}
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-1.5 max-h-16 space-y-1 overflow-y-auto">
         {loading ? (
-          <p className="text-sm text-slate-500">Loading reminders…</p>
+          <p className="text-xs text-slate-500">Loading…</p>
         ) : reminders.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
-            No reminders yet for this project.
-          </p>
+          <p className="text-xs text-slate-400">No reminders yet</p>
         ) : (
           reminders.map((reminder) => (
-            <article key={reminder.id} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-slate-900">{reminder.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Next: {new Date(reminder.nextSendAt).toLocaleString()} · {reminder.recurrence.toLowerCase().replace("_", " ")}
-                    {reminder.paused ? " · paused" : ""}
-                    {!reminder.enabled ? " · completed" : ""}
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void testSend(reminder)} aria-label="Test send">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void togglePause(reminder)} aria-label={reminder.paused ? "Resume" : "Pause"}>
-                    {reminder.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void remove(reminder)} aria-label="Delete">
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                </div>
+            <article key={reminder.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1">
+              <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800">{reminder.title}</p>
+              <p className="hidden shrink-0 text-[11px] text-slate-400 sm:block">
+                {new Date(reminder.nextSendAt).toLocaleDateString()}
+              </p>
+              <div className="flex shrink-0">
+                <button type="button" className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700" disabled={busy} onClick={() => void testSend(reminder)} aria-label="Test send">
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700" disabled={busy} onClick={() => void togglePause(reminder)} aria-label={reminder.paused ? "Resume" : "Pause"}>
+                  {reminder.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                </button>
+                <button type="button" className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-red-500" disabled={busy} onClick={() => void remove(reminder)} aria-label="Delete">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </article>
           ))

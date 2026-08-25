@@ -18,8 +18,27 @@ export function OfficeAppHeader({
 }) {
   const Icon = OFFICE_SUITE_ICONS[module.icon];
   const accent = OFFICE_ACCENTS[module.accent] ?? OFFICE_ACCENTS.slate;
+  if (compact) {
+    return (
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/office" className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900">
+            <ArrowLeft className="h-4 w-4" />Office & Admin
+          </Link>
+          <div className={cn("rounded-xl p-2 text-white shadow-sm", accent.icon)}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">{module.name}</h1>
+          <Badge variant="outline" className="hidden shrink-0 gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 sm:inline-flex">
+            <CircleCheck className="h-3 w-3" />Works here
+          </Badge>
+        </div>
+        {children ? <div className="flex flex-wrap gap-2">{children}</div> : null}
+      </header>
+    );
+  }
   return (
-    <header className={compact ? "space-y-2" : "space-y-4"}>
+    <header className="space-y-4">
       <Link href="/office" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900">
         <ArrowLeft className="h-4 w-4" />Office & Admin
       </Link>
@@ -28,7 +47,7 @@ export function OfficeAppHeader({
           <div className={cn("rounded-2xl p-2.5 text-white shadow-sm sm:p-3", accent.icon)}><Icon className="h-5 w-5 sm:h-6 sm:w-6" /></div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className={cn("font-semibold tracking-tight text-slate-950", compact ? "text-xl sm:text-2xl" : "text-3xl")}>{module.name}</h1>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{module.name}</h1>
               <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"><CircleCheck className="h-3 w-3" />Works here</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">{module.description}</p>

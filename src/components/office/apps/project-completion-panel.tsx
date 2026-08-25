@@ -155,61 +155,58 @@ export function ProjectCompletionPanel({
     canSubmit && ["ACTIVE", "CHANGES_REQUESTED", "REJECTED"].includes(projectStatus);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+    <section className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
           <h3 className="text-sm font-semibold text-slate-900">Completion photos</h3>
+          <span className="truncate text-[11px] text-slate-400">{projectStatus.replaceAll("_", " ")}</span>
         </div>
-        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-          {projectStatus.replaceAll("_", " ")}
-        </span>
+        {canEditPhotos ? (
+          <div className="flex shrink-0 gap-1">
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => void uploadFiles(e.target.files)}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => void uploadFiles(e.target.files)}
+            />
+            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy} onClick={() => cameraRef.current?.click()}>
+              <Camera className="h-3.5 w-3.5" />
+              Photo
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <ImagePlus className="h-3.5 w-3.5" />
+              Upload
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {loading ? (
-        <p className="mt-4 text-sm text-slate-500">Loading…</p>
+        <p className="mt-1.5 text-xs text-slate-500">Loading…</p>
       ) : (
         <>
-          {canEditPhotos ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <input
-                ref={cameraRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => void uploadFiles(e.target.files)}
-              />
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => void uploadFiles(e.target.files)}
-              />
-              <Button type="button" variant="outline" disabled={busy} onClick={() => cameraRef.current?.click()}>
-                <Camera className="h-4 w-4" />
-                Take photo
-              </Button>
-              <Button type="button" variant="outline" disabled={busy} onClick={() => fileRef.current?.click()}>
-                <ImagePlus className="h-4 w-4" />
-                Upload
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-1.5 flex min-h-10 items-center gap-1.5 overflow-x-auto">
             {attachments.map((photo) => (
-              <figure key={photo.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <figure key={photo.id} className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.storageUrl} alt={photo.originalFilename} className="aspect-square w-full object-cover" />
+                <img src={photo.storageUrl} alt={photo.originalFilename} className="h-full w-full object-cover" />
                 {canEditPhotos && !photo.submissionId ? (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void removeAttachment(photo.id)}
-                    className="absolute right-2 top-2 rounded-lg bg-white/90 p-1.5 text-red-600 shadow"
+                    className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 hover:bg-black/40 hover:opacity-100"
                     aria-label="Remove photo"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -217,56 +214,35 @@ export function ProjectCompletionPanel({
                 ) : null}
               </figure>
             ))}
-            {!attachments.length ? (
-              <p className="col-span-full rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                Add completion photos before submitting.
-              </p>
-            ) : null}
+            {!attachments.length ? <p className="text-xs text-slate-400">No photos yet</p> : null}
           </div>
 
           {canEditPhotos ? (
-            <form onSubmit={submit} className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-              <label className="block text-sm font-medium">
-                Completion note
-                <Input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="mt-1"
-                  placeholder="Anything the reviewer should know"
-                />
-              </label>
-              <Button type="submit" disabled={busy || (pendingPhotos.length === 0 && attachments.length === 0)}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Submit for approval
+            <form onSubmit={submit} className="mt-1.5 flex items-center gap-2">
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="h-8 min-h-8"
+                placeholder="Note for reviewer"
+              />
+              <Button type="submit" size="sm" className="h-8 min-h-8 shrink-0 px-2 text-xs" disabled={busy || (pendingPhotos.length === 0 && attachments.length === 0)}>
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Submit
               </Button>
             </form>
           ) : null}
 
           {canReopen && ["COMPLETE", "APPROVED", "REJECTED"].includes(projectStatus) ? (
-            <div className="mt-4">
-              <Button type="button" variant="outline" disabled={busy} onClick={() => void reopen()}>
-                <RotateCcw className="h-4 w-4" />
-                Reopen project
-              </Button>
-            </div>
+            <Button type="button" variant="ghost" size="sm" className="mt-1 h-8 min-h-8 px-2 text-xs" disabled={busy} onClick={() => void reopen()}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reopen
+            </Button>
           ) : null}
 
           {submissions.length ? (
-            <div className="mt-6 space-y-2 border-t border-slate-100 pt-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Submission history</p>
-              {submissions.map((submission) => (
-                <div key={submission.id} className="rounded-xl bg-slate-50 p-3 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <span className="font-medium">{submission.status.replaceAll("_", " ")}</span>
-                    <span className="text-xs text-slate-500">{new Date(submission.submittedAt).toLocaleString()}</span>
-                  </div>
-                  {submission.completionNote ? <p className="mt-1 text-slate-600">{submission.completionNote}</p> : null}
-                  {submission.reviewComment ? (
-                    <p className="mt-1 text-slate-600">Review: {submission.reviewComment}</p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+            <p className="mt-1 truncate text-[11px] text-slate-400">
+              Last: {submissions[0].status.replaceAll("_", " ")} · {new Date(submissions[0].submittedAt).toLocaleDateString()}
+            </p>
           ) : null}
         </>
       )}
