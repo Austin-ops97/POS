@@ -55,7 +55,7 @@ npm run build
 node scripts/prisma-with-direct.mjs migrate deploy
 ```
 
-Vercel production builds already run `migrate deploy` via `npm run build`. Deploying the current `main` branch applies any pending additive migrations, including payroll correctness (`20260815090000_payroll_correctness`), inventory/customers/signatures (`20260815100000_inventory_customers_signatures`), and the PTO accrual job (`20260815180000_pto_accrual_job`).
+Vercel production builds already run `migrate deploy` via `npm run build`. Deploying the current `main` branch applies any pending additive migrations, including payroll correctness (`20260815090000_payroll_correctness`), inventory/customers/signatures (`20260815100000_inventory_customers_signatures`), the PTO accrual job (`20260815180000_pto_accrual_job`), and reminder alerts (`20260825120000_reminder_alerts_and_preferences`). That reminder migration is idempotent; `npm run build` will mark a failed apply rolled back and retry it once.
 
 The `20260714180000_remove_demo_subscription_onboarding` migration removes confirmed demo seed records and drops the Subscription / onboarding schema. Review it before applying to production.
 

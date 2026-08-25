@@ -70,9 +70,57 @@ const env = {
   DIRECT_URL: directUrl,
 };
 
-const result = spawnSync("npx", ["prisma", ...args], {
-  stdio: "inherit",
-  env,
-});
+/** Migrations whose SQL is written to be re-runnable after a failed apply. */
+const IDEMPOTENT_MIGRATIONS = new Set([
+  "20260825120000_reminder_alerts_and_preferences",
+]);
 
-process.exit(result.status ?? 1);
+function runPrisma(prismaArgs, { capture } = { capture: false }) {
+  return spawnSync("npx", ["prisma", ...prismaArgs], {
+    stdio: capture ? ["inherit", "pipe", "pipe"] : "inherit",
+    encoding: capture ? "utf8" : undefined,
+    env,
+  });
+}
+
+function printCaptured(result) {
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+}
+
+function failedMigrationName(output) {
+  const match = String(output).match(/The `([^`]+)` migration started at .* failed/);
+  return match?.[1] ?? null;
+}
+
+const isMigrateDeploy = args[0] === "migrate" && args[1] === "deploy";
+if (!isMigrateDeploy) {
+  const result = runPrisma(args);
+  process.exit(result.status ?? 1);
+}
+
+const first = runPrisma(args, { capture: true });
+printCaptured(first);
+if ((first.status ?? 1) === 0) {
+  process.exit(0);
+}
+
+const output = `${first.stdout ?? ""}${first.stderr ?? ""}`;
+const failedName = failedMigrationName(output);
+const canRetry =
+  /P3009/.test(output) && failedName && IDEMPOTENT_MIGRATIONS.has(failedName);
+
+if (!canRetry) {
+  process.exit(first.status ?? 1);
+}
+
+console.warn(
+  `Prisma recorded a failed apply of ${failedName}. Marking it rolled back and retrying because that migration is idempotent.`
+);
+const resolved = runPrisma(["migrate", "resolve", "--rolled-back", failedName]);
+if ((resolved.status ?? 1) !== 0) {
+  process.exit(resolved.status ?? 1);
+}
+
+const retry = runPrisma(args);
+process.exit(retry.status ?? 1);
