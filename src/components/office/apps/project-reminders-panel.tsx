@@ -1,11 +1,16 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Loader2, Pause, Play, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { EmployeeOption } from "./record-client";
+import {
+  captureSubmitForm,
+  reminderPayloadFromFormData,
+  resetFormSafely,
+} from "@/lib/office/reminder-form";
 
 type Reminder = {
   id: string;
@@ -50,6 +55,9 @@ export function ProjectRemindersPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,41 +78,36 @@ export function ProjectRemindersPanel({
 
   async function createReminder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const emails = String(form.get("emails") || "")
-      .split(/[,;\s]+/)
-      .map((e) => e.trim())
-      .filter(Boolean);
-    const employeeIds = form.getAll("employeeIds").map(String).filter(Boolean);
+    const form = captureSubmitForm(event);
+    if (submittingRef.current || busy) return;
+    const parsed = reminderPayloadFromFormData(new FormData(form));
+    if ("error" in parsed) {
+      setFormError(parsed.error);
+      setFormSuccess(null);
+      return;
+    }
+    submittingRef.current = true;
     setBusy(true);
+    setFormError(null);
+    setFormSuccess(null);
     try {
       const res = await fetch(`/api/office/projects/${projectId}/reminders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: String(form.get("title") || ""),
-          message: String(form.get("message") || "") || null,
-          scheduledAt: new Date(String(form.get("scheduledAt"))).toISOString(),
-          recurrence: String(form.get("recurrence") || "ONE_TIME"),
-          intervalCount: Number(form.get("intervalCount") || 1),
-          sendBeforeMinutes: Number(form.get("sendBeforeMinutes") || 0),
-          timezone: String(form.get("timezone") || "America/Chicago"),
-          recipients: {
-            includeOwner: form.get("includeOwner") === "on",
-            includeAdmins: form.get("includeAdmins") === "on",
-            employeeIds,
-            emails,
-          },
-        }),
+        body: JSON.stringify(parsed),
       });
       if (!res.ok) throw new Error(await apiError(res));
       toast.success("Reminder scheduled");
+      setFormSuccess("Reminder scheduled");
       setShowForm(false);
-      event.currentTarget.reset();
+      resetFormSafely(form);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create reminder");
+      const message = error instanceof Error ? error.message : "Could not create reminder";
+      setFormError(message);
+      toast.error(message);
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   }
@@ -242,9 +245,19 @@ export function ProjectRemindersPanel({
             Extra emails
             <Input name="emails" className="mt-1" placeholder="person@example.com" />
           </label>
+          {formError ? (
+            <p className="text-sm text-red-600" role="alert">
+              {formError}
+            </p>
+          ) : null}
+          {formSuccess ? (
+            <p className="text-sm text-emerald-700" role="status">
+              {formSuccess}
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Schedule reminder
+            {busy ? "Scheduling…" : "Schedule reminder"}
           </Button>
         </form>
       ) : null}

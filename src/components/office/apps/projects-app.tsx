@@ -1,15 +1,25 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Check, Circle, FolderKanban, Plus, Save, Trash2 } from "lucide-react";
+import { Archive, Check, Circle, FolderKanban, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
+import { PROJECT_ARCHIVE_HELPER } from "@/lib/office/workspace-archive";
 import { OfficeAppHeader } from "./app-header";
-import { createWorkspaceRecord, recordMetadata, updateWorkspaceRecord, type EmployeeOption, type OfficeAppPermissions } from "./record-client";
+import {
+  archiveWorkspaceRecord,
+  createWorkspaceRecord,
+  recordMetadata,
+  restoreWorkspaceRecord,
+  updateWorkspaceRecord,
+  type EmployeeOption,
+  type OfficeAppPermissions,
+} from "./record-client";
 import { ProjectRemindersPanel } from "./project-reminders-panel";
 import { ProjectCompletionPanel } from "./project-completion-panel";
 
@@ -30,11 +40,13 @@ export function ProjectsApp({
   permissions: OfficeAppPermissions;
 }) {
   const [records, setRecords] = useState(initialRecords);
+  const [view, setView] = useState<"active" | "archived">("active");
   const [activeId, setActiveId] = useState(initialRecords[0]?.id ?? "");
   const active = records.find((record) => record.id === activeId);
   const [data, setData] = useState<ProjectData>(recordMetadata(active, empty));
   const [adding, setAdding] = useState<TaskStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<OfficeWorkspaceRecordSummary | null>(null);
   const completion = data.tasks.length
     ? Math.round((data.tasks.filter((task) => task.complete).length / data.tasks.length) * 100)
     : 0;
@@ -108,6 +120,72 @@ export function ProjectsApp({
     );
   }
 
+  async function loadView(nextView: "active" | "archived") {
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/office/workspaces/${module.slug}/records?includeComplete=true${nextView === "archived" ? "&archived=true" : ""}`
+      );
+      if (!res.ok) throw new Error("Could not load projects");
+      const next = (await res.json()) as OfficeWorkspaceRecordSummary[];
+      setView(nextView);
+      setRecords(next);
+      if (next[0]) load(next[0]);
+      else {
+        setActiveId("");
+        setData(empty);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load projects");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmArchive() {
+    if (!archiveTarget) return;
+    setBusy(true);
+    try {
+      await archiveWorkspaceRecord(module.slug, archiveTarget.id);
+      const remaining = records.filter((record) => record.id !== archiveTarget.id);
+      setRecords(remaining);
+      if (activeId === archiveTarget.id) {
+        if (remaining[0]) load(remaining[0]);
+        else {
+          setActiveId("");
+          setData(empty);
+        }
+      }
+      setArchiveTarget(null);
+      toast.success("Project archived");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not archive project");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreProject(record: OfficeWorkspaceRecordSummary) {
+    setBusy(true);
+    try {
+      const restored = await restoreWorkspaceRecord(module.slug, record.id);
+      const remaining = records.filter((item) => item.id !== record.id);
+      setRecords(remaining);
+      if (activeId === record.id) {
+        if (remaining[0]) load(remaining[0]);
+        else {
+          setActiveId("");
+          setData(empty);
+        }
+      }
+      toast.success(`${restored.title} restored to the active board`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not restore project");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const columns = useMemo(
     () => [
       { id: "TODO" as const, name: "To do", tone: "bg-slate-100" },
@@ -145,7 +223,19 @@ export function ProjectsApp({
             <Plus className="h-4 w-4" />
             New project
           </Button>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</p>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {view === "archived" ? "Archived" : "Projects"}
+          </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{PROJECT_ARCHIVE_HELPER}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 w-full border-white/20 bg-transparent text-white hover:bg-white/10"
+            onClick={() => void loadView(view === "archived" ? "active" : "archived")}
+            disabled={busy}
+          >
+            {view === "archived" ? "Show active" : "View archived"}
+          </Button>
           <div className="mt-2 space-y-2">
             {records.map((record) => {
               const project = recordMetadata<ProjectData>(record, empty);
@@ -185,8 +275,30 @@ export function ProjectsApp({
                   <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Project board</p>
                   <h2 className="mt-1 text-2xl font-semibold">{active.title}</h2>
                   <p className="mt-1 text-sm text-slate-500">{active.summary}</p>
+                  {view === "active" ? (
+                    <p className="mt-2 text-xs text-slate-500">{PROJECT_ARCHIVE_HELPER}</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">This archived project keeps its tasks, reminders, and history.</p>
+                  )}
                 </div>
-                <div className="min-w-44">
+                <div className="flex flex-col items-stretch gap-3 sm:items-end">
+                  {permissions.canDelete && view === "active" && ["COMPLETE", "APPROVED"].includes(active.status) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setArchiveTarget(active)}
+                      disabled={busy}
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive project
+                    </Button>
+                  ) : null}
+                  {permissions.canDelete && view === "archived" ? (
+                    <Button type="button" variant="outline" onClick={() => void restoreProject(active)} disabled={busy}>
+                      <RotateCcw className="h-4 w-4" />
+                      Restore project
+                    </Button>
+                  ) : null}
                   <div className="flex justify-between text-xs">
                     <span>Progress</span>
                     <strong>{completion}%</strong>
@@ -277,11 +389,11 @@ export function ProjectsApp({
                 ))}
               </div>
 
-              {permissions.canManageReminders ? (
+              {view === "active" && permissions.canManageReminders ? (
                 <ProjectRemindersPanel projectId={active.id} employees={employees} />
               ) : null}
 
-              {permissions.canSubmitCompletion || permissions.canApproveCompletion || permissions.canReopenProject ? (
+              {view === "active" && (permissions.canSubmitCompletion || permissions.canApproveCompletion || permissions.canReopenProject) ? (
                 <ProjectCompletionPanel
                   projectId={active.id}
                   projectStatus={active.status}
@@ -396,6 +508,17 @@ export function ProjectsApp({
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!open) setArchiveTarget(null);
+        }}
+        title="Archive this project?"
+        description="The project is hidden from the active board. Tasks, reminders, attachments, and history stay in the record and can be restored later."
+        confirmLabel="Archive project"
+        onConfirm={confirmArchive}
+        loading={busy}
+      />
     </div>
   );
 }

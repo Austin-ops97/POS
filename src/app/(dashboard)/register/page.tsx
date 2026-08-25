@@ -31,6 +31,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
 import { formatCurrency } from "@/lib/utils";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
+import { buildCheckoutPayload as serializeCheckoutPayload } from "@/lib/register/checkout-payload";
 import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
 
 type Category = { id: string; name: string };
@@ -360,26 +361,14 @@ export default function RegisterPage() {
     setBarcode("");
   };
 
-  const buildCheckoutPayload = () => ({
-    locationId,
-    customerId: customerId || undefined,
-    items: items.map((i) => ({
-      productId: i.productId,
-      variantId: i.variantId,
-      name: i.name,
-      sku: i.sku,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      taxable: i.taxable,
-      modifiers: i.modifiers,
-    })),
-    discounts: discounts.map((d) => ({
-      name: d.name,
-      type: d.type,
-      value: d.value,
-    })),
-    notes: notes || undefined,
-  });
+  const buildCheckoutPayload = () =>
+    serializeCheckoutPayload({
+      locationId,
+      customerId,
+      items,
+      discounts,
+      notes,
+    });
 
   const resolveLocationId = async (): Promise<string> => {
     if (locationId) return locationId;
@@ -730,6 +719,11 @@ export default function RegisterPage() {
     onClear: clearCart,
     onAddCustom: handleAddCustom,
     onSelectCustomer: handleSelectCustomer,
+    onClearCustomer: () => {
+      setCustomer(null, null);
+      setCustomerEmail(undefined);
+      toast.success("Customer removed");
+    },
     onAddDiscount: handleAddDiscount,
     disabled: processing || paymentOpen || cashTenderOpen,
   };

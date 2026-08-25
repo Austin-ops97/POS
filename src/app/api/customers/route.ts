@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, hasPermission, requireAnyPermission } from "@/lib/auth";
+import { requireAuth, requireAnyPermission } from "@/lib/auth";
 import { customerSchema } from "@/lib/validations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -65,10 +65,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-
-    if (!hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS)) {
-      throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_CUSTOMERS}`);
-    }
+    await requireAnyPermission(ctx, [
+      PERMISSIONS.MANAGE_CUSTOMERS,
+      PERMISSIONS.PROCESS_SALE,
+      PERMISSIONS.OPEN_REGISTER,
+    ]);
 
     const body = await request.json();
     const data = customerSchema.parse(body);

@@ -23,6 +23,10 @@ import {
   clampOnHand,
   type InventoryAdjustType,
 } from "@/lib/inventory-quantity";
+import {
+  SERVICE_PRODUCTS_INVENTORY_NOTE,
+  SERVICE_PRODUCTS_INVENTORY_SEARCH_HINT,
+} from "@/lib/inventory-copy";
 
 export type InventoryRow = {
   id: string;
@@ -32,6 +36,7 @@ export type InventoryRow = {
   reorderPoint: number;
   locationId: string;
   locationName: string;
+  productType?: string;
 };
 
 const ADJUSTMENT_TYPES: { value: InventoryAdjustType; label: string }[] = [
@@ -460,7 +465,7 @@ export function InventoryTable({
       <EmptyState
         icon={Warehouse}
         title="No inventory tracked"
-        description="Products with inventory tracking will appear here."
+        description="Products with inventory tracking will appear here. Service products are always available and are not tracked as physical inventory."
         actionLabel="Add Product"
         actionHref="/products/new"
       />
@@ -469,24 +474,29 @@ export function InventoryTable({
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search
-          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          aria-hidden="true"
-        />
-        <Input
-          placeholder="Search products, SKU, or location..."
-          aria-label="Search inventory"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-          enterKeyHint="search"
-        />
+      <div className="space-y-2">
+        <div className="relative max-w-sm">
+          <Search
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <Input
+            placeholder="Search products, SKU, or location..."
+            aria-label="Search inventory"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            enterKeyHint="search"
+          />
+        </div>
+        <p className="max-w-2xl text-sm text-slate-500" data-testid="service-products-inventory-note">
+          {SERVICE_PRODUCTS_INVENTORY_NOTE} {SERVICE_PRODUCTS_INVENTORY_SEARCH_HINT}
+        </p>
       </div>
 
       {visibleRows.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-slate-500">
-          No inventory items match your search.
+          No inventory items match your search. {SERVICE_PRODUCTS_INVENTORY_NOTE}
         </p>
       ) : (
         <>
@@ -505,6 +515,11 @@ export function InventoryTable({
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">
                     {item.productName}
+                    {item.productType === "SERVICE" ? (
+                      <Badge variant="outline" className="ml-2 align-middle">
+                        Service
+                      </Badge>
+                    ) : null}
                   </p>
                   <p className="mt-0.5 truncate text-sm text-slate-500">
                     {item.sku || "No SKU"} · {item.locationName}
@@ -587,6 +602,11 @@ export function InventoryTable({
                   <tr className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="max-w-[14rem] truncate px-4 py-3 font-medium text-slate-900">
                       {item.productName}
+                      {item.productType === "SERVICE" ? (
+                        <Badge variant="outline" className="ml-2">
+                          Service
+                        </Badge>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{item.sku || "—"}</td>
                     <td className="max-w-[10rem] truncate px-4 py-3 text-slate-600">

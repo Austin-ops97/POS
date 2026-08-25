@@ -17,6 +17,16 @@ import {
   reminderUpdateSchema,
   type ReminderRecipientsInput,
 } from "@/lib/validations/reminders";
+import { createAuditLog } from "@/lib/audit";
+import {
+  APP_NOTIFICATION_TYPE_REMINDER,
+  normalizeRecipientEmail,
+  planRecipientChannels,
+  reminderRecipientDedupeKey,
+  shouldAdvanceSchedule,
+  shouldRetryEmail,
+  type AlertRecipient,
+} from "@/lib/office/reminder-alerts";
 
 export { computeNextSendAt };
 
@@ -47,16 +57,28 @@ async function assertRemindersEnabled(businessId: string) {
   }
 }
 
-async function getProjectOrThrow(businessId: string, projectId: string) {
+async function getProjectOrThrow(
+  businessId: string,
+  projectId: string,
+  options: { includeArchived?: boolean } = {}
+) {
   const project = await db.officeWorkspaceRecord.findFirst({
     where: {
       id: projectId,
       businessId,
       workspace: "projects",
-      archivedAt: null,
+      ...(options.includeArchived ? {} : { archivedAt: null }),
     },
     include: {
-      assignedTo: { select: { id: true, name: true, email: true } },
+      assignedTo: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          emailRemindersEnabled: true,
+          inAppRemindersEnabled: true,
+        },
+      },
     },
   });
   if (!project) throw new Error("Project not found");
@@ -67,30 +89,42 @@ function parseRecipients(value: Prisma.JsonValue): ReminderRecipientsInput {
   return reminderRecipientsSchema.parse(value ?? {});
 }
 
-export type ResolvedRecipient = {
-  email: string;
-  name: string | null;
-  employeeId: string | null;
-};
+export type ResolvedRecipient = AlertRecipient;
 
 export async function resolveReminderRecipients(
   businessId: string,
   projectId: string,
   recipientsInput: ReminderRecipientsInput
 ): Promise<ResolvedRecipient[]> {
-  const project = await getProjectOrThrow(businessId, projectId);
-  const byEmail = new Map<string, ResolvedRecipient>();
+  const project = await getProjectOrThrow(businessId, projectId, { includeArchived: true });
+  const byKey = new Map<string, ResolvedRecipient>();
 
-  const add = (email: string | null | undefined, name: string | null, employeeId: string | null) => {
-    const normalized = email?.trim().toLowerCase();
-    if (!normalized || !normalized.includes("@")) return;
-    if (!byEmail.has(normalized)) {
-      byEmail.set(normalized, { email: normalized, name, employeeId });
-    }
+  const add = (
+    email: string | null | undefined,
+    name: string | null,
+    employeeId: string | null,
+    prefs?: { emailRemindersEnabled?: boolean; inAppRemindersEnabled?: boolean }
+  ) => {
+    const normalized = normalizeRecipientEmail(email);
+    if (!employeeId && !normalized) return;
+    const recipient: ResolvedRecipient = {
+      email: normalized,
+      name,
+      employeeId,
+      emailRemindersEnabled: prefs?.emailRemindersEnabled ?? true,
+      inAppRemindersEnabled: prefs?.inAppRemindersEnabled ?? true,
+    };
+    const key = reminderRecipientDedupeKey(recipient);
+    if (!byKey.has(key)) byKey.set(key, recipient);
   };
 
   if (recipientsInput.includeOwner && project.assignedTo) {
-    add(project.assignedTo.email, project.assignedTo.name, project.assignedTo.id);
+    add(
+      project.assignedTo.email,
+      project.assignedTo.name,
+      project.assignedTo.id,
+      project.assignedTo
+    );
   }
 
   if (recipientsInput.includeAdmins) {
@@ -101,9 +135,17 @@ export async function resolveReminderRecipients(
         deletedAt: null,
         role: { name: { in: ["Owner", "Admin"] } },
       },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailRemindersEnabled: true,
+        inAppRemindersEnabled: true,
+      },
     });
-    for (const admin of admins) add(admin.email, admin.name, admin.id);
+    for (const admin of admins) {
+      add(admin.email, admin.name, admin.id, admin);
+    }
   }
 
   if (recipientsInput.employeeIds.length) {
@@ -114,16 +156,24 @@ export async function resolveReminderRecipients(
         status: "ACTIVE",
         deletedAt: null,
       },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailRemindersEnabled: true,
+        inAppRemindersEnabled: true,
+      },
     });
-    for (const employee of employees) add(employee.email, employee.name, employee.id);
+    for (const employee of employees) {
+      add(employee.email, employee.name, employee.id, employee);
+    }
   }
 
   for (const email of recipientsInput.emails) {
     add(email, null, null);
   }
 
-  return [...byEmail.values()];
+  return [...byKey.values()];
 }
 
 function serializeReminder(reminder: {
@@ -153,12 +203,16 @@ function serializeReminder(reminder: {
   deliveries?: Array<{
     id: string;
     status: string;
-    recipientEmail: string;
+    inAppStatus?: string | null;
+    recipientEmail: string | null;
     sentAt: Date | null;
     failedAt: Date | null;
     failureMessage: string | null;
+    emailSkipReason?: string | null;
+    inAppSkipReason?: string | null;
     occurrenceAt: Date;
     createdAt: Date;
+    attemptCount?: number;
   }>;
 }) {
   return {
@@ -188,12 +242,16 @@ function serializeReminder(reminder: {
     deliveries: reminder.deliveries?.map((d) => ({
       id: d.id,
       status: d.status,
+      inAppStatus: d.inAppStatus ?? null,
       recipientEmail: d.recipientEmail,
       sentAt: d.sentAt?.toISOString() ?? null,
       failedAt: d.failedAt?.toISOString() ?? null,
       failureMessage: d.failureMessage,
+      emailSkipReason: d.emailSkipReason ?? null,
+      inAppSkipReason: d.inAppSkipReason ?? null,
       occurrenceAt: d.occurrenceAt.toISOString(),
       createdAt: d.createdAt.toISOString(),
+      attemptCount: d.attemptCount ?? 0,
     })),
   };
 }
@@ -326,6 +384,22 @@ export async function createReminder(
       createdBy: { select: { id: true, name: true } },
     },
   });
+
+  await createAuditLog({
+    businessId: ctx.business.id,
+    employeeId: ctx.employee.id,
+    action: "PROJECT_REMINDER",
+    entity: "ProjectReminder",
+    entityId: reminder.id,
+    details: {
+      projectId,
+      title: reminder.title,
+      scheduledAt: reminder.scheduledAt.toISOString(),
+      timezone: reminder.timezone,
+      recurrence: reminder.recurrence,
+    },
+  });
+
   return serializeReminder(reminder);
 }
 
@@ -456,6 +530,7 @@ export async function processReminder(reminderId: string, claimToken: string) {
     include: {
       project: { select: { id: true, title: true, status: true, businessId: true } },
       business: { select: { id: true, name: true } },
+      deliveries: true,
     },
   });
   if (!reminder) return { ok: false as const, reason: "claim_mismatch" as const };
@@ -475,101 +550,221 @@ export async function processReminder(reminderId: string, claimToken: string) {
     `Business: ${reminder.business.name}`,
   ];
   const body = bodyLines.join("\n");
+  const href = `/office/apps/projects`;
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  let inApp = 0;
+  let retryableFailure = false;
+
+  const existingByKey = new Map(
+    reminder.deliveries
+      .filter((d) => d.occurrenceAt.getTime() === occurrenceAt.getTime())
+      .map((d) => [d.dedupeKey, d])
+  );
 
   for (const recipient of recipients) {
-    try {
-      await db.reminderDelivery.create({
-        data: {
-          businessId: reminder.businessId,
-          reminderId: reminder.id,
-          occurrenceAt,
-          recipientEmail: recipient.email,
-          recipientName: recipient.name,
-          employeeId: recipient.employeeId,
-          status: "PENDING",
-          attemptCount: 1,
-        },
-      });
-    } catch (error) {
-      // Unique (reminderId, occurrenceAt, recipientEmail) — already delivered
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        (error as { code?: string }).code === "P2002"
-      ) {
-        skipped += 1;
-        continue;
-      }
-      throw error;
+    const dedupeKey = reminderRecipientDedupeKey(recipient);
+    const plan = planRecipientChannels(recipient);
+    const existing = existingByKey.get(dedupeKey) ?? null;
+
+    if (
+      existing &&
+      (existing.status === "SENT" || existing.status === "SKIPPED") &&
+      (existing.inAppStatus === "SENT" || existing.inAppStatus === "SKIPPED" || existing.inAppStatus == null)
+    ) {
+      skipped += 1;
+      continue;
     }
 
-    try {
-      const { messageId } = await sendReminderEmail({
-        to: recipient.email,
-        subject,
-        body,
-        recipientName: recipient.name,
-      });
-      await db.reminderDelivery.updateMany({
-        where: {
-          reminderId: reminder.id,
-          occurrenceAt,
-          recipientEmail: recipient.email,
-        },
-        data: {
-          status: "SENT",
-          providerMessageId: messageId,
-          sentAt: new Date(),
-        },
-      });
-      sent += 1;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Send failed";
-      await db.reminderDelivery.updateMany({
-        where: {
-          reminderId: reminder.id,
-          occurrenceAt,
-          recipientEmail: recipient.email,
-        },
-        data: {
-          status: "FAILED",
-          failedAt: new Date(),
-          failureMessage: message.slice(0, 500),
-        },
-      });
-      failed += 1;
+    if (existing && !shouldRetryEmail(existing.status, existing.attemptCount) && existing.status === "FAILED") {
+      skipped += 1;
+      continue;
     }
+
+    let delivery = existing;
+    if (!delivery) {
+      try {
+        delivery = await db.reminderDelivery.create({
+          data: {
+            businessId: reminder.businessId,
+            reminderId: reminder.id,
+            occurrenceAt,
+            dedupeKey,
+            recipientEmail: recipient.email,
+            recipientName: recipient.name,
+            employeeId: recipient.employeeId,
+            status: plan.sendEmail ? "PENDING" : "SKIPPED",
+            emailSkipReason: plan.emailSkipReason,
+            inAppSkipReason: plan.inAppSkipReason,
+            inAppStatus: plan.sendInApp ? "PENDING" : "SKIPPED",
+            attemptCount: 0,
+          },
+        });
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002"
+        ) {
+          delivery =
+            (await db.reminderDelivery.findUnique({
+              where: {
+                reminderId_occurrenceAt_dedupeKey: {
+                  reminderId: reminder.id,
+                  occurrenceAt,
+                  dedupeKey,
+                },
+              },
+            })) ??
+            existing;
+        } else {
+          throw error;
+        }
+      }
+    }
+    if (!delivery) continue;
+
+    const now = new Date();
+    let emailStatus = delivery.status;
+    let emailSkipReason = plan.emailSkipReason;
+    let failureMessage = delivery.failureMessage;
+    let providerMessageId = delivery.providerMessageId;
+    let sentAt = delivery.sentAt;
+    let failedAt = delivery.failedAt;
+    let attemptCount = delivery.attemptCount;
+
+    if (plan.sendEmail && shouldRetryEmail(delivery.status, delivery.attemptCount)) {
+      attemptCount += 1;
+      try {
+        const result = await sendReminderEmail({
+          to: recipient.email!,
+          subject,
+          body,
+          recipientName: recipient.name,
+        });
+        emailStatus = "SENT";
+        providerMessageId = result.messageId;
+        sentAt = now;
+        failedAt = null;
+        failureMessage = null;
+        sent += 1;
+      } catch (error) {
+        emailStatus = "FAILED";
+        failedAt = now;
+        failureMessage = (error instanceof Error ? error.message : "Send failed").slice(0, 500);
+        failed += 1;
+        if (shouldRetryEmail("FAILED", attemptCount)) retryableFailure = true;
+      }
+    } else if (!plan.sendEmail) {
+      emailStatus = "SKIPPED";
+      emailSkipReason = plan.emailSkipReason;
+      skipped += 1;
+    } else if (delivery.status === "SENT" || delivery.status === "SKIPPED") {
+      emailStatus = delivery.status;
+    }
+
+    let inAppStatus = delivery.inAppStatus ?? (plan.sendInApp ? "PENDING" : "SKIPPED");
+    let inAppNotifiedAt = delivery.inAppNotifiedAt;
+    let inAppSkipReason = plan.inAppSkipReason;
+
+    if (plan.sendInApp && delivery.inAppStatus !== "SENT") {
+      try {
+        await db.appNotification.create({
+          data: {
+            businessId: reminder.businessId,
+            employeeId: recipient.employeeId!,
+            type: APP_NOTIFICATION_TYPE_REMINDER,
+            title: reminder.title,
+            body: reminder.message?.trim() || `Reminder for project "${reminder.project.title}".`,
+            href,
+            reminderId: reminder.id,
+            deliveryId: delivery.id,
+          },
+        });
+        inAppStatus = "SENT";
+        inAppNotifiedAt = now;
+        inApp += 1;
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002"
+        ) {
+          inAppStatus = "SENT";
+          inAppNotifiedAt = inAppNotifiedAt ?? now;
+        } else {
+          inAppStatus = "FAILED";
+          inAppSkipReason = (error instanceof Error ? error.message : "In-app notify failed").slice(0, 200);
+        }
+      }
+    } else if (!plan.sendInApp) {
+      inAppStatus = "SKIPPED";
+      inAppSkipReason = plan.inAppSkipReason;
+    }
+
+    await db.reminderDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: emailStatus,
+        inAppStatus,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        employeeId: recipient.employeeId,
+        providerMessageId,
+        attemptCount,
+        sentAt,
+        failedAt,
+        lastAttemptAt: now,
+        failureMessage,
+        emailSkipReason,
+        inAppSkipReason,
+        inAppNotifiedAt,
+      },
+    });
   }
 
-  const nextOccurrenceCount = reminder.occurrenceCount + 1;
-  const nextSendAt = advanceReminderSchedule({
-    recurrence: reminder.recurrence,
-    occurrenceAt,
-    intervalCount: reminder.intervalCount,
-    timezone: reminder.timezone,
-    occurrenceCount: reminder.occurrenceCount,
-    maxOccurrences: reminder.maxOccurrences,
-    stopAt: reminder.stopAt,
+  const nextSendAt = retryableFailure
+    ? occurrenceAt
+    : advanceReminderSchedule({
+        recurrence: reminder.recurrence,
+        occurrenceAt,
+        intervalCount: reminder.intervalCount,
+        timezone: reminder.timezone,
+        occurrenceCount: reminder.occurrenceCount,
+        maxOccurrences: reminder.maxOccurrences,
+        stopAt: reminder.stopAt,
+      });
+
+  const advance = shouldAdvanceSchedule({
+    failedEmail: failed > 0,
+    retryableFailure,
   });
 
   await db.projectReminder.update({
     where: { id: reminder.id },
     data: {
-      lastSentAt: new Date(),
-      occurrenceCount: nextOccurrenceCount,
-      nextSendAt: nextSendAt ?? occurrenceAt,
-      enabled: nextSendAt != null,
+      lastSentAt: advance ? new Date() : reminder.lastSentAt,
+      occurrenceCount: advance ? reminder.occurrenceCount + 1 : reminder.occurrenceCount,
+      nextSendAt: advance ? (nextSendAt ?? occurrenceAt) : occurrenceAt,
+      enabled: advance ? nextSendAt != null : true,
       claimToken: null,
       claimedAt: null,
     },
   });
 
-  return { ok: true as const, sent, failed, skipped, completed: nextSendAt == null };
+  return {
+    ok: true as const,
+    sent,
+    failed,
+    skipped,
+    inApp,
+    completed: advance && nextSendAt == null,
+    retrying: retryableFailure,
+  };
 }
 
 export async function testSendReminder(ctx: AuthContext, id: string, to?: string) {

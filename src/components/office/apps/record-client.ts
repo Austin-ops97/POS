@@ -59,6 +59,16 @@ export async function archiveWorkspaceRecord(workspace: string, id: string) {
   if (!response.ok) throw new Error(await apiError(response));
 }
 
+export async function restoreWorkspaceRecord(workspace: string, id: string) {
+  const response = await fetch(`/api/office/workspaces/${workspace}/records/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "restore" }),
+  });
+  if (!response.ok) throw new Error(await apiError(response));
+  return response.json() as Promise<OfficeWorkspaceRecordSummary>;
+}
+
 export function recordMetadata<T>(record: OfficeWorkspaceRecordSummary | undefined, fallback: T): T {
   return record?.metadata ? { ...fallback, ...record.metadata } as T : fallback;
 }

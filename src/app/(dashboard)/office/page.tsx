@@ -76,6 +76,7 @@ export default async function OfficePage() {
         dueAt: record.dueAt?.toISOString() ?? null,
         createdAt: record.createdAt.toISOString(),
         updatedAt: record.updatedAt.toISOString(),
+        archivedAt: record.archivedAt?.toISOString() ?? null,
       }))}
       canCreate={hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS)}
     />

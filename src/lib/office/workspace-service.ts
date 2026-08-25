@@ -8,6 +8,7 @@ import {
   officeWorkspaceRecordCreateSchema,
   officeWorkspaceRecordUpdateSchema,
 } from "@/lib/validations/office-workspace";
+import { workspaceRecordListFilter } from "@/lib/office/workspace-archive";
 
 export type OfficeWorkspaceRecordSummary = {
   id: string;
@@ -20,6 +21,7 @@ export type OfficeWorkspaceRecordSummary = {
   metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
   createdBy: { id: string; name: string };
   assignedTo: { id: string; name: string } | null;
 };
@@ -42,6 +44,7 @@ function serializeRecord(record: {
   metadata: Prisma.JsonValue | null;
   createdAt: Date;
   updatedAt: Date;
+  archivedAt: Date | null;
   createdBy: { id: string; name: string };
   assignedTo: { id: string; name: string } | null;
 }): OfficeWorkspaceRecordSummary {
@@ -53,6 +56,7 @@ function serializeRecord(record: {
     dueAt: record.dueAt?.toISOString() ?? null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    archivedAt: record.archivedAt?.toISOString() ?? null,
   };
 }
 
@@ -64,16 +68,17 @@ const recordPeople = {
 export async function listOfficeWorkspaceRecords(
   ctx: AuthContext,
   workspace: string,
-  options: { q?: string; limit?: number; includeComplete?: boolean } = {}
+  options: { q?: string; limit?: number; includeComplete?: boolean; archived?: boolean } = {}
 ) {
   requirePermission(ctx, PERMISSIONS.VIEW_DOCUMENTS);
   requireWorkspace(workspace);
   const q = options.q?.trim();
+  const listFilter = workspaceRecordListFilter(options);
   const where: Prisma.OfficeWorkspaceRecordWhereInput = {
     businessId: ctx.business.id,
     workspace,
-    archivedAt: null,
-    ...(options.includeComplete ? {} : { status: { not: "COMPLETE" } }),
+    archivedAt: listFilter.archivedAt,
+    ...("status" in listFilter ? { status: listFilter.status } : {}),
     ...(q
       ? {
           OR: [
@@ -193,9 +198,13 @@ export async function archiveOfficeWorkspaceRecord(
     select: { id: true, title: true },
   });
   if (!current) throw new Error("Workspace record not found");
-  await db.$transaction([
-    db.officeWorkspaceRecord.update({ where: { id }, data: { archivedAt: new Date() } }),
-    db.officeAuditEvent.create({
+  const archived = await db.$transaction(async (tx) => {
+    const updated = await tx.officeWorkspaceRecord.update({
+      where: { id },
+      data: { archivedAt: new Date() },
+      include: recordPeople,
+    });
+    await tx.officeAuditEvent.create({
       data: {
         businessId: ctx.business.id,
         actorId: ctx.employee.id,
@@ -203,6 +212,41 @@ export async function archiveOfficeWorkspaceRecord(
         details: { recordId: id, workspace, title: current.title },
         ipAddress,
       },
-    }),
-  ]);
+    });
+    return updated;
+  });
+  return serializeRecord(archived);
+}
+
+export async function restoreOfficeWorkspaceRecord(
+  ctx: AuthContext,
+  workspace: string,
+  id: string,
+  ipAddress?: string
+) {
+  requirePermission(ctx, PERMISSIONS.DELETE_DOCUMENTS);
+  requireWorkspace(workspace);
+  const current = await db.officeWorkspaceRecord.findFirst({
+    where: { id, workspace, businessId: ctx.business.id, archivedAt: { not: null } },
+    select: { id: true, title: true },
+  });
+  if (!current) throw new Error("Archived workspace record not found");
+  const restored = await db.$transaction(async (tx) => {
+    const updated = await tx.officeWorkspaceRecord.update({
+      where: { id },
+      data: { archivedAt: null },
+      include: recordPeople,
+    });
+    await tx.officeAuditEvent.create({
+      data: {
+        businessId: ctx.business.id,
+        actorId: ctx.employee.id,
+        action: "WORKSPACE_RECORD_RESTORE",
+        details: { recordId: id, workspace, title: current.title },
+        ipAddress,
+      },
+    });
+    return updated;
+  });
+  return serializeRecord(restored);
 }

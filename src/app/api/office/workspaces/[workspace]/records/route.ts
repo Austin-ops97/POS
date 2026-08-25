@@ -18,6 +18,7 @@ export async function GET(request: Request, { params }: Params) {
       await listOfficeWorkspaceRecords(ctx, workspace, {
         q: search.get("q") ?? undefined,
         includeComplete: search.get("includeComplete") === "true",
+        archived: search.get("archived") === "true",
       })
     );
   } catch (error) {

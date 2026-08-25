@@ -92,8 +92,10 @@ Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer $CRON_SECR
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
-| `/api/cron/reminders` | every 5 minutes (daily on Hobby) | Project reminder emails |
+| `/api/cron/reminders` | every 5 minutes (daily on Hobby) | Due project reminders: in-app notifications + Resend email |
 | `/api/cron/pto-accrual` | `15 8 * * *` (08:15 UTC daily) | Recurring / annual PTO grants |
+
+Project reminder alerts require `RESEND_API_KEY` and `OFFICE_FROM_EMAIL` (or `RECEIPTS_FROM_EMAIL`). Employees can disable email or in-app reminder alerts from the notification bell. Vercel Hobby only fires daily crons; use a paid Vercel plan or an external scheduler hitting `/api/cron/reminders` with `Authorization: Bearer $CRON_SECRET`.
 
 ## End-to-end tests
 

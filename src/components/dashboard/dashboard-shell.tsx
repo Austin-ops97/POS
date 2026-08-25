@@ -5,6 +5,7 @@ import { DesktopSidebar, MobileNav } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import type { NavVisibility } from "@/components/dashboard/nav-items";
 import { GlobalSearch } from "@/components/dashboard/global-search";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 
 type DashboardShellProps = {
   children: React.ReactNode;
@@ -42,6 +43,7 @@ export function DashboardShell({
           authEnabled={authEnabled}
           onMenuClick={() => setNavOpen(true)}
           searchSlot={<GlobalSearch />}
+          notificationSlot={<NotificationBell />}
           canOpenRegister={canOpenRegister}
           isPlatformAdmin={isPlatformAdmin}
         />

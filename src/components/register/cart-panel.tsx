@@ -25,6 +25,7 @@ type CartPanelProps = {
   onClear: () => void;
   onAddCustom: () => void;
   onSelectCustomer: () => void;
+  onClearCustomer?: () => void;
   onAddDiscount: () => void;
   disabled?: boolean;
   className?: string;
@@ -40,6 +41,7 @@ export function CartPanel({
   onClear,
   onAddCustom,
   onSelectCustomer,
+  onClearCustomer,
   onAddDiscount,
   disabled,
   className,
@@ -130,33 +132,64 @@ export function CartPanel({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onSelectCustomer}
+      <div
         className={cn(
-          "flex items-center gap-3 border-b px-5 py-4 text-left transition-colors",
-          dark
-            ? "border-slate-700 hover:bg-slate-800"
-            : "border-slate-200 hover:bg-slate-50"
+          "flex items-center gap-3 border-b px-5 py-4",
+          dark ? "border-slate-700" : "border-slate-200"
         )}
       >
-        <div
+        <button
+          type="button"
+          onClick={onSelectCustomer}
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-full",
-            dark ? "bg-slate-700" : "bg-slate-100"
+            "flex min-w-0 flex-1 items-center gap-3 text-left transition-colors",
+            dark ? "hover:text-white" : "hover:text-slate-950"
           )}
         >
-          <User className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-sm font-medium">
-            {customerName || "Walk-in Customer"}
-          </p>
-          <p className={cn("text-xs", dark ? "text-slate-400" : "text-slate-500")}>
-            Tap to select customer
-          </p>
-        </div>
-      </button>
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-full",
+              dark ? "bg-slate-700" : "bg-slate-100"
+            )}
+          >
+            <User className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {customerName || "Walk-in Customer"}
+            </p>
+            <p className={cn("text-xs", dark ? "text-slate-400" : "text-slate-500")}>
+              {customerName ? "Selected for this sale" : "Tap to add a customer"}
+            </p>
+          </div>
+        </button>
+        {customerName ? (
+          <div className="flex shrink-0 flex-col gap-1">
+            <Button
+              type="button"
+              variant={dark ? "secondary" : "outline"}
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={onSelectCustomer}
+              disabled={disabled}
+            >
+              Change
+            </Button>
+            {onClearCustomer ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn("h-8 px-2 text-xs", dark ? "text-slate-300" : "text-slate-600")}
+                onClick={onClearCustomer}
+                disabled={disabled}
+              >
+                Remove
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-3">
         {items.length === 0 ? (

@@ -11,6 +11,7 @@ type TopbarProps = {
   authEnabled?: boolean;
   onMenuClick?: () => void;
   searchSlot?: React.ReactNode;
+  notificationSlot?: React.ReactNode;
   canOpenRegister?: boolean;
   isPlatformAdmin?: boolean;
 };
@@ -21,6 +22,7 @@ export function Topbar({
   authEnabled = true,
   onMenuClick,
   searchSlot,
+  notificationSlot,
   canOpenRegister = true,
   isPlatformAdmin = false,
 }: TopbarProps) {
@@ -55,6 +57,7 @@ export function Topbar({
         <div className="mx-1 flex min-w-0 flex-1 justify-center sm:mx-3">{searchSlot}</div>
       ) : null}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        {notificationSlot}
         {isPlatformAdmin ? <Button asChild variant="outline" size="sm" className="hidden md:inline-flex"><Link href="/admin"><Shield className="h-4 w-4" />Platform</Link></Button> : null}
         {canOpenRegister ? <><Button asChild size="default" className="hidden sm:inline-flex">
           <Link href="/register">

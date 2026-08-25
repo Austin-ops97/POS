@@ -26,7 +26,7 @@ export default async function InventoryPage() {
     quantityOnHand: number;
     reorderPoint: number;
     locationId: string;
-    product: { name: string; sku?: string | null };
+    product: { name: string; sku?: string | null; type?: string };
     location?: { name: string };
   }) => ({
     id: item.id,
@@ -36,6 +36,7 @@ export default async function InventoryPage() {
     reorderPoint: item.reorderPoint,
     locationId: item.locationId,
     locationName: item.location?.name ?? "Main Store",
+    productType: item.product.type,
   }));
 
   const lowStockCount = rows.filter((r) => r.quantityOnHand <= r.reorderPoint).length;
@@ -77,7 +78,10 @@ export default async function InventoryPage() {
           )}
         </div>
       </div>
-      <InventoryTable items={rows} locations={locations} />
+      <InventoryTable
+        items={rows}
+        locations={locations}
+      />
     </div>
   );
 }

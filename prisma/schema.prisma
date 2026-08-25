@@ -391,6 +391,7 @@ model Business {
   expenses                  Expense[]
   expenseBudgets            ExpenseBudget[]
   expenseNotifications      ExpenseNotification[]
+  appNotifications          AppNotification[]
   expenseAuditEvents        ExpenseAuditEvent[]
   companyCardTransactions   CompanyCardTransaction[]
   expenseSavedFilters       ExpenseSavedFilter[]
@@ -505,6 +506,8 @@ model EmployeeProfile {
   name                String
   email               String
   phone               String?
+  emailRemindersEnabled Boolean           @default(true)
+  inAppRemindersEnabled Boolean           @default(true)
   pinHash             String?
   hourlyWage          Decimal?            @db.Decimal(10, 2)
   ptoBalanceHours     Decimal             @default(0) @db.Decimal(8, 2)
@@ -591,6 +594,7 @@ model EmployeeProfile {
   expenseComments                ExpenseComment[]
   expenseFlagsRaised             ExpenseFlag[]
   expenseNotifications           ExpenseNotification[]
+  appNotifications               AppNotification[]
   expenseAuditEvents             ExpenseAuditEvent[]
   expenseSavedFilters            ExpenseSavedFilter[]
   cardTransactions               CompanyCardTransaction[]
@@ -2409,14 +2413,20 @@ model ReminderDelivery {
   businessId       String
   reminderId       String
   occurrenceAt     DateTime
-  recipientEmail   String
+  dedupeKey        String
+  recipientEmail   String?
   recipientName    String?
   status           ReminderDeliveryStatus  @default(PENDING)
+  inAppStatus      ReminderDeliveryStatus?
   providerMessageId String?
   attemptCount     Int                     @default(0)
   sentAt           DateTime?
   failedAt         DateTime?
+  lastAttemptAt    DateTime?
   failureMessage   String?
+  emailSkipReason  String?
+  inAppSkipReason  String?
+  inAppNotifiedAt  DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
 
@@ -2424,10 +2434,33 @@ model ReminderDelivery {
   reminder ProjectReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
   employee EmployeeProfile? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   employeeId String?
+  appNotification AppNotification?
 
-  @@unique([reminderId, occurrenceAt, recipientEmail])
+  @@unique([reminderId, occurrenceAt, dedupeKey])
   @@index([businessId, status, createdAt])
   @@index([reminderId, occurrenceAt])
+}
+
+model AppNotification {
+  id         String   @id @default(cuid())
+  businessId String
+  employeeId String
+  type       String
+  title      String
+  body       String
+  href       String?
+  reminderId String?
+  deliveryId String?  @unique
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  delivery ReminderDelivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, readAt])
+  @@index([businessId, createdAt])
+  @@index([reminderId])
 }
 
 // ─── Project completion photos & approval ────────────────────────────────────
