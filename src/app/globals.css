@@ -80,6 +80,17 @@ body {
   max-width: none;
 }
 
+/* Fill the dashboard main pane, including page-container padding. */
+.page-flush-fill {
+  margin: calc(var(--page-py) * -1) calc(var(--page-px) * -1);
+  width: calc(100% + (var(--page-px) * 2));
+  max-width: none;
+  height: calc(100% + (var(--page-py) * 2));
+  max-height: calc(100% + (var(--page-py) * 2));
+  min-height: 0;
+  overflow: hidden;
+}
+
 .safe-pb {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
@@ -424,6 +435,7 @@ body {
 .sidebar-rail-panel {
   display: flex;
   height: 100%;
+  min-height: 0;
   width: 14rem;
   flex-direction: column;
   border-right: 1px solid var(--border);

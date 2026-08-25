@@ -37,7 +37,7 @@ export function SidebarNav({
 
   return (
     <nav
-      className={cn("flex-1 space-y-4 overflow-y-auto p-3 sm:p-4", className)}
+      className={cn("min-h-0 flex-1 space-y-4 overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-8", className)}
       aria-label="Main"
     >
       {sections.map((section) => (
@@ -127,7 +127,7 @@ export function DesktopSidebar({ visibility }: { visibility?: NavVisibility }) {
           inert={!open ? true : undefined}
         >
           <BrandHeader />
-          <SidebarNav visibility={visibility} />
+          <SidebarNav visibility={visibility} className="min-h-0" />
         </aside>
       </div>
       <button

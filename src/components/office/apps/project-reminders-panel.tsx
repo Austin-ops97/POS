@@ -162,7 +162,7 @@ export function ProjectRemindersPanel({
   }
 
   return (
-    <section className="mt-8 rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+    <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-amber-600" />

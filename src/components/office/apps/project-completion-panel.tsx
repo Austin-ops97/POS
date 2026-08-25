@@ -155,7 +155,7 @@ export function ProjectCompletionPanel({
     canSubmit && ["ACTIVE", "CHANGES_REQUESTED", "REJECTED"].includes(projectStatus);
 
   return (
-    <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />

@@ -196,123 +196,167 @@ export function ProjectsApp({
   );
 
   return (
-    <div className="space-y-5 pb-8">
-      <OfficeAppHeader module={module}>
-        <Button variant="outline" onClick={() => setAdding("TODO")} disabled={!active || !permissions.canEdit}>
-          <Plus className="h-4 w-4" />
-          Add task
-        </Button>
-        <Button
-          onClick={() => (active ? save() : setAdding("DONE"))}
-          disabled={busy || (active ? !permissions.canEdit : !permissions.canCreate)}
-        >
-          <Save className="h-4 w-4" />
-          {active ? "Save project" : "New project"}
-        </Button>
-      </OfficeAppHeader>
-
-      <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
-        <aside className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
-          <Button
-            className="w-full bg-amber-400 text-amber-950 hover:bg-amber-300"
-            onClick={() => {
-              setActiveId("");
-              setAdding("DONE");
-            }}
-          >
+    <div className="page-flush-fill flex min-h-0 flex-col bg-slate-50">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+        <OfficeAppHeader module={module} compact>
+          <Button variant="outline" onClick={() => setAdding("TODO")} disabled={!active || !permissions.canEdit || view === "archived"}>
             <Plus className="h-4 w-4" />
-            New project
+            Add task
           </Button>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            {view === "archived" ? "Archived" : "Projects"}
-          </p>
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{PROJECT_ARCHIVE_HELPER}</p>
           <Button
-            type="button"
-            variant="outline"
-            className="mt-3 w-full border-white/20 bg-transparent text-white hover:bg-white/10"
-            onClick={() => void loadView(view === "archived" ? "active" : "archived")}
-            disabled={busy}
+            onClick={() => (active ? save() : setAdding("DONE"))}
+            disabled={busy || (active ? !permissions.canEdit : !permissions.canCreate) || view === "archived"}
           >
-            {view === "archived" ? "Show active" : "View archived"}
+            <Save className="h-4 w-4" />
+            {active ? "Save project" : "New project"}
           </Button>
-          <div className="mt-2 space-y-2">
-            {records.map((record) => {
-              const project = recordMetadata<ProjectData>(record, empty);
-              const percent = project.tasks.length
-                ? Math.round((project.tasks.filter((t) => t.complete).length / project.tasks.length) * 100)
-                : 0;
-              return (
-                <button
-                  key={record.id}
-                  onClick={() => load(record)}
-                  className={`w-full rounded-xl p-3 text-left ${
-                    record.id === activeId ? "bg-white text-slate-950" : "bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  <span className="block truncate text-sm font-semibold">{record.title}</span>
-                  <span
-                    className={`mt-2 block h-1.5 overflow-hidden rounded-full ${
-                      record.id === activeId ? "bg-slate-200" : "bg-white/10"
+        </OfficeAppHeader>
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="hidden min-h-0 w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex lg:w-64">
+          <div className="shrink-0 space-y-2 p-3 pb-2">
+            {view === "active" ? (
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setActiveId("");
+                  setAdding("DONE");
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                New project
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => void loadView(view === "archived" ? "active" : "archived")}
+              disabled={busy}
+            >
+              {view === "archived" ? "Show active" : "View archived"}
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {view === "archived" ? "Archived" : "Projects"}
+            </p>
+            <p className="px-1 pb-3 text-[11px] leading-relaxed text-slate-400">{PROJECT_ARCHIVE_HELPER}</p>
+            <div className="space-y-1.5">
+              {records.map((record) => {
+                const project = recordMetadata<ProjectData>(record, empty);
+                const percent = project.tasks.length
+                  ? Math.round((project.tasks.filter((t) => t.complete).length / project.tasks.length) * 100)
+                  : 0;
+                const selected = record.id === activeId;
+                return (
+                  <button
+                    key={record.id}
+                    onClick={() => load(record)}
+                    className={`w-full rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                      selected
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-transparent bg-slate-50 text-slate-800 hover:bg-slate-100"
                     }`}
                   >
-                    <span className="block h-full bg-amber-400" style={{ width: `${percent}%` }} />
-                  </span>
-                  <span className="mt-1 block text-[11px] opacity-60">
-                    {percent}% · {record.status.replaceAll("_", " ").toLowerCase()}
-                  </span>
-                </button>
-              );
-            })}
+                    <span className="block truncate text-sm font-semibold">{record.title}</span>
+                    <span className={`mt-2 block h-1.5 overflow-hidden rounded-full ${selected ? "bg-white/20" : "bg-slate-200"}`}>
+                      <span className={`block h-full rounded-full ${selected ? "bg-white" : "bg-slate-900"}`} style={{ width: `${percent}%` }} />
+                    </span>
+                    <span className="mt-1 block text-[11px] opacity-70">
+                      {percent}% · {record.status.replaceAll("_", " ").toLowerCase()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </aside>
 
-        <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4">
           {active ? (
             <>
-              <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Project board</p>
-                  <h2 className="mt-1 text-2xl font-semibold">{active.title}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{active.summary}</p>
+              <header className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
+                <div className="mb-3 flex gap-2 md:hidden">
+                  <select
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium"
+                    value={activeId}
+                    onChange={(event) => {
+                      const record = records.find((item) => item.id === event.target.value);
+                      if (record) load(record);
+                    }}
+                    aria-label="Select project"
+                  >
+                    {records.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.title}
+                      </option>
+                    ))}
+                  </select>
                   {view === "active" ? (
-                    <p className="mt-2 text-xs text-slate-500">{PROJECT_ARCHIVE_HELPER}</p>
-                  ) : (
-                    <p className="mt-2 text-xs text-slate-500">This archived project keeps its tasks, reminders, and history.</p>
-                  )}
-                </div>
-                <div className="flex flex-col items-stretch gap-3 sm:items-end">
-                  {permissions.canDelete && view === "active" && ["COMPLETE", "APPROVED"].includes(active.status) ? (
                     <Button
                       type="button"
-                      variant="outline"
-                      onClick={() => setArchiveTarget(active)}
-                      disabled={busy}
+                      size="icon"
+                      onClick={() => {
+                        setActiveId("");
+                        setAdding("DONE");
+                      }}
+                      aria-label="New project"
                     >
-                      <Archive className="h-4 w-4" />
-                      Archive project
+                      <Plus className="h-4 w-4" />
                     </Button>
                   ) : null}
-                  {permissions.canDelete && view === "archived" ? (
-                    <Button type="button" variant="outline" onClick={() => void restoreProject(active)} disabled={busy}>
-                      <RotateCcw className="h-4 w-4" />
-                      Restore project
-                    </Button>
-                  ) : null}
-                  <div className="flex justify-between text-xs">
-                    <span>Progress</span>
-                    <strong>{completion}%</strong>
+                </div>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Project board</p>
+                    <h2 className="mt-0.5 truncate text-xl font-semibold text-slate-900 sm:text-2xl">{active.title}</h2>
+                    {active.summary ? <p className="mt-1 text-sm leading-relaxed text-slate-500">{active.summary}</p> : null}
+                    {view === "active" ? (
+                      <p className="mt-2 text-xs text-slate-500">{PROJECT_ARCHIVE_HELPER}</p>
+                    ) : (
+                      <p className="mt-2 text-xs text-slate-500">This archived project keeps its tasks, reminders, and history.</p>
+                    )}
                   </div>
-                  <div className="mt-2 h-2 rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${completion}%` }} />
+                  <div className="flex w-full shrink-0 flex-col gap-3 lg:w-52">
+                    {permissions.canDelete && view === "active" && ["COMPLETE", "APPROVED"].includes(active.status) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setArchiveTarget(active)}
+                        disabled={busy}
+                      >
+                        <Archive className="h-4 w-4" />
+                        Archive project
+                      </Button>
+                    ) : null}
+                    {permissions.canDelete && view === "archived" ? (
+                      <Button type="button" variant="outline" onClick={() => void restoreProject(active)} disabled={busy}>
+                        <RotateCcw className="h-4 w-4" />
+                        Restore project
+                      </Button>
+                    ) : null}
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
+                        <span>Progress</span>
+                        <span>{completion}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-slate-900" style={{ width: `${completion}%` }} />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </header>
 
-              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="mt-3 flex min-h-0 flex-1 gap-3 overflow-x-auto overflow-y-hidden pb-1 lg:grid lg:grid-cols-3 lg:overflow-x-hidden">
                 {columns.map((column) => (
-                  <section key={column.id} className={`min-h-96 rounded-xl p-3 ${column.tone}`}>
-                    <div className="flex items-center justify-between">
+                  <section
+                    key={column.id}
+                    className={`flex min-h-0 w-[min(18.5rem,82vw)] shrink-0 flex-col overflow-hidden rounded-2xl p-3 lg:w-auto ${column.tone}`}
+                  >
+                    <div className="flex shrink-0 items-center justify-between">
                       <h3 className="text-sm font-semibold">
                         {column.name}{" "}
                         <span className="ml-1 text-slate-400">
@@ -327,7 +371,12 @@ export function ProjectsApp({
                         <Plus className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
+                      {data.tasks.filter((task) => task.status === column.id).length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-slate-200/80 bg-white/60 px-3 py-6 text-center text-sm text-slate-400">
+                          Nothing here yet
+                        </p>
+                      ) : null}
                       {data.tasks
                         .filter((task) => task.status === column.id)
                         .map((task) => (
@@ -345,7 +394,7 @@ export function ProjectsApp({
                                 {task.complete ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-0" />}
                               </button>
                               <span
-                                className={`flex-1 text-sm ${
+                                className={`flex-1 text-sm leading-relaxed ${
                                   task.complete ? "text-slate-400 line-through" : "text-slate-800"
                                 }`}
                               >
@@ -366,22 +415,26 @@ export function ProjectsApp({
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
-                            {column.id !== "TODO" ? (
-                              <button
-                                onClick={() => moveTask(task.id, column.id === "DONE" ? "DOING" : "TODO")}
-                                className="mt-3 text-[11px] font-medium text-slate-500"
-                              >
-                                ← Move back
-                              </button>
-                            ) : null}
-                            {column.id !== "DONE" ? (
-                              <button
-                                onClick={() => moveTask(task.id, column.id === "TODO" ? "DOING" : "DONE")}
-                                className="mt-3 float-right text-[11px] font-medium text-blue-600"
-                              >
-                                Move forward →
-                              </button>
-                            ) : null}
+                            <div className="mt-3 flex items-center justify-between">
+                              {column.id !== "TODO" ? (
+                                <button
+                                  onClick={() => moveTask(task.id, column.id === "DONE" ? "DOING" : "TODO")}
+                                  className="text-[11px] font-medium text-slate-500"
+                                >
+                                  ← Move back
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+                              {column.id !== "DONE" ? (
+                                <button
+                                  onClick={() => moveTask(task.id, column.id === "TODO" ? "DOING" : "DONE")}
+                                  className="text-[11px] font-medium text-blue-600"
+                                >
+                                  Move forward →
+                                </button>
+                              ) : null}
+                            </div>
                           </article>
                         ))}
                     </div>
@@ -389,27 +442,29 @@ export function ProjectsApp({
                 ))}
               </div>
 
-              {view === "active" && permissions.canManageReminders ? (
-                <ProjectRemindersPanel projectId={active.id} employees={employees} />
-              ) : null}
+              <div className="mt-3 min-h-0 max-h-[min(38vh,22rem)] shrink-0 space-y-3 overflow-y-auto pb-2">
+                {view === "active" && permissions.canManageReminders ? (
+                  <ProjectRemindersPanel projectId={active.id} employees={employees} />
+                ) : null}
 
-              {view === "active" && (permissions.canSubmitCompletion || permissions.canApproveCompletion || permissions.canReopenProject) ? (
-                <ProjectCompletionPanel
-                  projectId={active.id}
-                  projectStatus={active.status}
-                  canSubmit={Boolean(permissions.canSubmitCompletion)}
-                  canReopen={Boolean(permissions.canReopenProject)}
-                  onStatusChange={updateActiveStatus}
-                />
-              ) : null}
+                {view === "active" && (permissions.canSubmitCompletion || permissions.canApproveCompletion || permissions.canReopenProject) ? (
+                  <ProjectCompletionPanel
+                    projectId={active.id}
+                    projectStatus={active.status}
+                    canSubmit={Boolean(permissions.canSubmitCompletion)}
+                    canReopen={Boolean(permissions.canReopenProject)}
+                    onStatusChange={updateActiveStatus}
+                  />
+                ) : null}
+              </div>
             </>
           ) : (
-            <div className="flex min-h-[500px] flex-col items-center justify-center text-center">
-              <div className="rounded-2xl bg-amber-100 p-4 text-amber-700">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 text-center">
+              <div className="rounded-2xl bg-slate-100 p-4 text-slate-700">
                 <FolderKanban className="h-8 w-8" />
               </div>
               <h2 className="mt-4 text-xl font-semibold">Create a focused project</h2>
-              <p className="mt-1 max-w-sm text-sm text-slate-500">
+              <p className="mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
                 Give it an owner and deadline, then move tasks across the board.
               </p>
               <Button className="mt-5" onClick={() => setAdding("DONE")}>
@@ -417,7 +472,7 @@ export function ProjectsApp({
               </Button>
             </div>
           )}
-        </main>
+        </section>
       </div>
 
       <Dialog
