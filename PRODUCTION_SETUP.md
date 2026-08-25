@@ -55,7 +55,7 @@ npm run build
 node scripts/prisma-with-direct.mjs migrate deploy
 ```
 
-Vercel production builds already run `migrate deploy` via `npm run build`. Deploying the current `main` branch applies any pending additive migrations, including payroll correctness (`20260815090000_payroll_correctness`), inventory/customers/signatures (`20260815100000_inventory_customers_signatures`), the PTO accrual job (`20260815180000_pto_accrual_job`), and reminder alerts (`20260825120000_reminder_alerts_and_preferences`). That reminder migration is idempotent; `npm run build` will mark a failed apply rolled back and retry it once.
+Vercel production builds already run `migrate deploy` via `npm run build`. Vercel preview builds skip migrate so an unmerged schema cannot block the required GitHub check or mutate a shared production database. Deploying `main` applies any pending additive migrations, including payroll correctness (`20260815090000_payroll_correctness`), inventory/customers/signatures (`20260815100000_inventory_customers_signatures`), the PTO accrual job (`20260815180000_pto_accrual_job`), and reminder alerts (`20260825120000_reminder_alerts_and_preferences`). That reminder migration is idempotent; a production `migrate deploy` will mark a failed apply rolled back and retry it once.
 
 The `20260714180000_remove_demo_subscription_onboarding` migration removes confirmed demo seed records and drops the Subscription / onboarding schema. Review it before applying to production.
 
@@ -92,10 +92,10 @@ Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer $CRON_SECR
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
-| `/api/cron/reminders` | every 5 minutes (daily on Hobby) | Due project reminders: in-app notifications + Resend email |
+| `/api/cron/reminders` | `0 8 * * *` (08:00 UTC daily) | Due project reminders: in-app notifications + Resend email |
 | `/api/cron/pto-accrual` | `15 8 * * *` (08:15 UTC daily) | Recurring / annual PTO grants |
 
-Project reminder alerts require `RESEND_API_KEY` and `OFFICE_FROM_EMAIL` (or `RECEIPTS_FROM_EMAIL`). Employees can disable email or in-app reminder alerts from the notification bell. Vercel Hobby only fires daily crons; use a paid Vercel plan or an external scheduler hitting `/api/cron/reminders` with `Authorization: Bearer $CRON_SECRET`.
+Project reminder alerts require `RESEND_API_KEY` and `OFFICE_FROM_EMAIL` (or `RECEIPTS_FROM_EMAIL`). Employees can disable email or in-app reminder alerts from the notification bell. `vercel.json` uses daily crons so Hobby deploys are not rejected. On a paid Vercel plan you can change the reminders schedule to `*/5 * * * *`, or keep the daily cron and hit `/api/cron/reminders` every few minutes from an external scheduler with `Authorization: Bearer $CRON_SECRET`.
 
 ## End-to-end tests
 
