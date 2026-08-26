@@ -1,21 +1,22 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { ClipboardList, Eye, GripVertical, Inbox, Plus, Save, Trash2 } from "lucide-react";
+import { Check, ClipboardList, Copy, Eye, Globe, GripVertical, Inbox, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
+import {
+  finalizedFormOptions,
+  publicFormPath,
+  type FormField,
+  type FormMetadata,
+  type FormResponseMetadata,
+} from "@/lib/office/form-types";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
 import { OfficeAppHeader } from "./app-header";
 import { createWorkspaceRecord, recordMetadata, updateWorkspaceRecord, type OfficeAppPermissions } from "./record-client";
-
-type FieldType = "text" | "email" | "number" | "textarea" | "select" | "checkbox";
-type FormField = { id: string; label: string; type: FieldType; required: boolean; options: string[] };
-type FormData = { kind: "form"; description: string; fields: FormField[] };
-type ResponseData = { kind: "response"; formId: string; formTitle: string; answers: Record<string, string | boolean> };
-const emptyForm: FormData = { kind: "form", description: "", fields: [{ id: crypto.randomUUID(), label: "Name", type: "text", required: true, options: [] }] };
 
 /** Keep trailing commas/empty segments while typing so "a," does not collapse back to "a". */
 function parseOptionsInput(value: string): string[] {
@@ -26,11 +27,16 @@ function formatOptionsInput(options: string[]): string {
   return options.join(", ");
 }
 
-function finalizedOptions(options: string[]): string[] {
-  return options.map((option) => option.trim()).filter(Boolean);
+function createEmptyForm(): FormMetadata {
+  return {
+    kind: "form",
+    description: "",
+    published: false,
+    fields: [{ id: crypto.randomUUID(), label: "Name", type: "text", required: true, options: [] }],
+  };
 }
 
-const FIELD_TYPES: { value: FieldType; label: string }[] = [
+const FIELD_TYPES: { value: FormField["type"]; label: string }[] = [
   { value: "text", label: "Short text" },
   { value: "email", label: "Email" },
   { value: "number", label: "Number" },
@@ -39,22 +45,35 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "checkbox", label: "Checkbox" },
 ];
 
+function canSaveForm(params: { activeId: string; permissions: OfficeAppPermissions }) {
+  return params.activeId ? params.permissions.canEdit : params.permissions.canCreate;
+}
+
 export function FormsApp({ module, initialRecords, permissions }: { module: OfficeSuiteModule; initialRecords: OfficeWorkspaceRecordSummary[]; permissions: OfficeAppPermissions }) {
-  const forms = initialRecords.filter((record) => record.metadata?.kind !== "response");
   const [records, setRecords] = useState(initialRecords);
-  const [activeId, setActiveId] = useState(forms[0]?.id ?? "");
+  const savedForms = useMemo(() => records.filter((record) => record.metadata?.kind !== "response"), [records]);
+  const [activeId, setActiveId] = useState(savedForms[0]?.id ?? "");
   const active = records.find((record) => record.id === activeId);
-  const [title, setTitle] = useState(active?.title ?? "Untitled form");
-  const [form, setForm] = useState<FormData>(recordMetadata(active, emptyForm));
+  const [title, setTitle] = useState(active?.title ?? "");
+  const [form, setForm] = useState<FormMetadata>(() => recordMetadata(active, createEmptyForm()));
   const [mode, setMode] = useState<"build" | "preview" | "responses">("build");
   const [busy, setBusy] = useState(false);
-  const responses = useMemo(() => records.filter((record) => record.metadata?.kind === "response" && record.metadata?.formId === activeId), [records, activeId]);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const responses = useMemo(
+    () => records.filter((record) => record.metadata?.kind === "response" && record.metadata?.formId === activeId),
+    [records, activeId]
+  );
+  const saveAllowed = canSaveForm({ activeId, permissions });
+  const savedPublished = active ? Boolean(recordMetadata<FormMetadata>(active, createEmptyForm()).published) : false;
+  const publishPendingSave = form.published !== savedPublished;
+  const publicLink = activeId && form.published && !publishPendingSave ? `${typeof window !== "undefined" ? window.location.origin : ""}${publicFormPath(activeId)}` : "";
 
   function load(record?: OfficeWorkspaceRecordSummary) {
     setActiveId(record?.id ?? "");
-    setTitle(record?.title ?? "Untitled form");
-    setForm(recordMetadata(record, emptyForm));
+    setTitle(record?.title ?? "");
+    setForm(recordMetadata(record, createEmptyForm()));
     setMode("build");
+    setCopiedLink(false);
   }
 
   function patchField(id: string, patch: Partial<FormField>) {
@@ -66,27 +85,43 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
 
   async function save() {
     if (!title.trim()) {
-      toast.error("Add a form title");
+      toast.error("Give your form a name before saving");
+      return undefined;
+    }
+    if (!saveAllowed) {
+      toast.error(activeId ? "You do not have permission to edit forms" : "You do not have permission to create forms");
       return undefined;
     }
     setBusy(true);
-    const metadata: FormData = {
+    const metadata: FormMetadata = {
       ...form,
-      fields: form.fields.map((field) => ({ ...field, options: finalizedOptions(field.options) })),
+      fields: form.fields.map((field) => ({ ...field, options: finalizedFormOptions(field.options) })),
     };
     try {
       const saved = active
-        ? await updateWorkspaceRecord(module.slug, active.id, { title, summary: form.description, metadata })
-        : await createWorkspaceRecord(module.slug, { title, summary: form.description, metadata });
+        ? await updateWorkspaceRecord(module.slug, active.id, { title: title.trim(), summary: form.description, metadata })
+        : await createWorkspaceRecord(module.slug, { title: title.trim(), summary: form.description, metadata });
       setForm(metadata);
       setRecords((items) => (active ? items.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...items]));
       setActiveId(saved.id);
-      toast.success("Form saved");
+      toast.success(`"${saved.title}" saved — find it in Your forms on the left`);
       return saved;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save form");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyPublicLink() {
+    if (!publicLink) return;
+    try {
+      await navigator.clipboard.writeText(publicLink);
+      setCopiedLink(true);
+      toast.success("Client link copied");
+      window.setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      toast.error("Could not copy link");
     }
   }
 
@@ -98,15 +133,22 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
     if (!formRecord) return;
     const raw = new FormData(formElement);
     const answers: Record<string, string | boolean> = {};
-    form.fields.forEach((field) => {
+    const fieldSnapshot = form.fields.map((field) => ({ ...field, options: finalizedFormOptions(field.options) }));
+    fieldSnapshot.forEach((field) => {
       answers[field.id] = field.type === "checkbox" ? raw.get(field.id) === "on" : String(raw.get(field.id) ?? "");
     });
     try {
       const response = await createWorkspaceRecord(module.slug, {
-        title: `Response · ${title}`,
+        title: `Response · ${title.trim() || formRecord.title}`,
         summary: `Submitted ${new Date().toLocaleString()}`,
         status: "NEEDS_REVIEW",
-        metadata: { kind: "response", formId: formRecord.id, formTitle: title, answers } satisfies ResponseData,
+        metadata: {
+          kind: "response",
+          formId: formRecord.id,
+          formTitle: title.trim() || formRecord.title,
+          answers,
+          fields: fieldSnapshot,
+        } satisfies FormResponseMetadata,
       });
       setRecords((items) => [response, ...items]);
       formElement.reset();
@@ -124,19 +166,21 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
           <Plus className="h-4 w-4" />
           New form
         </Button>
-        <Button onClick={save} disabled={busy}>
+        <Button onClick={save} disabled={busy || !saveAllowed}>
           <Save className="h-4 w-4" />
-          Save form
+          {busy ? "Saving…" : "Save form"}
         </Button>
       </OfficeAppHeader>
 
       <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[250px_1fr]">
         <aside className="border-b border-fuchsia-100 bg-fuchsia-50 p-4 xl:border-b-0 xl:border-r">
           <p className="text-xs font-semibold uppercase tracking-wider text-fuchsia-700">Your forms</p>
+          <p className="mt-1 text-xs leading-relaxed text-fuchsia-900/70">Saved forms appear here. Select one to edit or review responses.</p>
           <div className="mt-3 space-y-1">
-            {records
-              .filter((r) => r.metadata?.kind !== "response")
-              .map((record) => (
+            {savedForms.map((record) => {
+              const responseCount = records.filter((r) => r.metadata?.formId === record.id).length;
+              const isPublished = Boolean(record.metadata && typeof record.metadata === "object" && "published" in record.metadata && record.metadata.published);
+              return (
                 <button
                   key={record.id}
                   onClick={() => load(record)}
@@ -144,22 +188,32 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                 >
                   <span className="block break-words font-semibold">{record.title}</span>
                   <span className={`mt-1 block text-xs ${record.id === activeId ? "text-fuchsia-100" : "text-slate-500"}`}>
-                    {records.filter((r) => r.metadata?.formId === record.id).length} responses
+                    {responseCount} response{responseCount === 1 ? "" : "s"}
+                    {isPublished ? " · Online" : ""}
                   </span>
                 </button>
-              ))}
-            {!forms.length ? <p className="p-3 text-sm text-fuchsia-900/60">Create your first form.</p> : null}
+              );
+            })}
+            {!savedForms.length ? (
+              <p className="rounded-xl border border-dashed border-fuchsia-200 p-3 text-sm text-fuchsia-900/60">
+                No saved forms yet. Name your form, add questions, then click Save form.
+              </p>
+            ) : null}
           </div>
         </aside>
 
         <main className="min-w-0">
-          <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:p-4">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full min-w-0 border-0 text-lg font-semibold shadow-none sm:max-w-md"
-              aria-label="Form title"
-            />
+          <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-end sm:p-4">
+            <label className="min-w-0 flex-1 sm:max-w-md">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Form name</span>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 border-slate-200 text-lg font-semibold shadow-none focus-visible:ring-fuchsia-300"
+                placeholder="e.g. Online order inquiry"
+                aria-label="Form name"
+              />
+            </label>
             <div className="flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:ml-auto sm:w-auto">
               {(
                 [
@@ -182,7 +236,48 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
 
           {mode === "build" ? (
             <div className="mx-auto max-w-3xl p-4 sm:p-8">
-              <label className="block text-sm font-medium">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <Globe className="h-4 w-4 text-fuchsia-600" />
+                      Share with clients online
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {activeId
+                        ? "Publish this form to get a link you can send to clients."
+                        : "Save your form first, then publish it to get a client link."}
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.published)}
+                      disabled={!activeId}
+                      onChange={(e) => setForm((current) => ({ ...current, published: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    Published online
+                  </label>
+                </div>
+                {activeId && form.published && publishPendingSave ? (
+                  <p className="mt-3 text-sm text-amber-700">Save the form to publish this link for clients.</p>
+                ) : null}
+                {activeId && form.published && !publishPendingSave ? (
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Input readOnly value={publicLink} className="font-mono text-xs sm:text-sm" aria-label="Public form link" />
+                    <Button type="button" variant="outline" onClick={copyPublicLink} className="shrink-0">
+                      {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {copiedLink ? "Copied" : "Copy link"}
+                    </Button>
+                  </div>
+                ) : null}
+                {form.published && !activeId ? (
+                  <p className="mt-3 text-sm text-amber-700">Save the form to activate the client link.</p>
+                ) : null}
+              </div>
+
+              <label className="mt-6 block text-sm font-medium">
                 Description
                 <Textarea
                   value={form.description}
@@ -232,7 +327,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                         Answer type
                         <select
                           value={field.type}
-                          onChange={(e) => patchField(field.id, { type: e.target.value as FieldType })}
+                          onChange={(e) => patchField(field.id, { type: e.target.value as FormField["type"] })}
                           className="mt-1 h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
                           aria-label={`Answer type for question ${index + 1}`}
                         >
@@ -289,7 +384,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
           {mode === "preview" ? (
             <form onSubmit={submitResponse} className="mx-auto max-w-2xl p-4 sm:p-10">
               <div className="rounded-2xl border-t-8 border-fuchsia-600 bg-white p-5 shadow-lg sm:p-6">
-                <h2 className="text-2xl font-semibold break-words">{title}</h2>
+                <h2 className="text-2xl font-semibold break-words">{title.trim() || "Untitled form"}</h2>
                 <p className="mt-2 text-sm break-words text-slate-600">{form.description}</p>
                 <div className="mt-7 space-y-5">
                   {form.fields.map((field) => (
@@ -301,7 +396,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                       ) : field.type === "select" ? (
                         <select name={field.id} required={field.required} className="mt-1.5 h-11 w-full rounded-md border px-3">
                           <option value="">Choose…</option>
-                          {finalizedOptions(field.options).map((option) => (
+                          {finalizedFormOptions(field.options).map((option) => (
                             <option key={option} value={option}>
                               {option}
                             </option>
@@ -327,7 +422,8 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
               <h2 className="text-xl font-semibold">Submitted responses</h2>
               <div className="mt-4 space-y-3">
                 {responses.map((response, index) => {
-                  const data = recordMetadata<ResponseData>(response, { kind: "response", formId: "", formTitle: "", answers: {} });
+                  const data = recordMetadata<FormResponseMetadata>(response, { kind: "response", formId: "", formTitle: "", answers: {} });
+                  const responseFields = data.fields?.length ? data.fields : form.fields;
                   return (
                     <details key={response.id} className="rounded-xl border border-slate-200 bg-white p-4">
                       <summary className="cursor-pointer font-medium">
@@ -335,7 +431,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                         <span className="ml-2 text-xs font-normal text-slate-500">{new Date(response.createdAt).toLocaleString()}</span>
                       </summary>
                       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {form.fields.map((field) => (
+                        {responseFields.map((field) => (
                           <div key={field.id} className="rounded-lg bg-slate-50 p-3">
                             <dt className="text-xs font-medium break-words text-slate-500">{field.label}</dt>
                             <dd className="mt-1 text-sm break-words text-slate-900">{String(data.answers[field.id] ?? "—")}</dd>
@@ -347,7 +443,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                 })}
                 {!responses.length ? (
                   <div className="rounded-xl border border-dashed p-10 text-center text-sm text-slate-500">
-                    No responses yet. Use Preview to submit a test response.
+                    No responses yet. Share your published link with clients, or use Preview to submit a test response.
                   </div>
                 ) : null}
               </div>
