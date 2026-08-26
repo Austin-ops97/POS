@@ -102,6 +102,7 @@ export async function resolveReminderRecipients(
 ): Promise<ResolvedRecipient[]> {
   const project = await getProjectOrThrow(businessId, projectId, { includeArchived: true });
   const byKey = new Map<string, ResolvedRecipient>();
+  const emailsSeen = new Set<string>();
 
   const add = (
     email: string | null | undefined,
@@ -111,6 +112,7 @@ export async function resolveReminderRecipients(
   ) => {
     const normalized = normalizeRecipientEmail(email);
     if (!employeeId && !normalized) return;
+    if (normalized && emailsSeen.has(normalized)) return;
     const recipient: ResolvedRecipient = {
       email: normalized,
       name,
@@ -119,57 +121,85 @@ export async function resolveReminderRecipients(
       inAppRemindersEnabled: prefs?.inAppRemindersEnabled ?? true,
     };
     const key = reminderRecipientDedupeKey(recipient);
-    if (!byKey.has(key)) byKey.set(key, recipient);
+    if (byKey.has(key)) return;
+    if (normalized) emailsSeen.add(normalized);
+    byKey.set(key, recipient);
   };
 
-  if (recipientsInput.includeOwner && project.assignedTo) {
-    add(
-      project.assignedTo.email,
-      project.assignedTo.name,
-      project.assignedTo.id,
-      project.assignedTo
-    );
-  }
+  const employeeSelect = {
+    id: true,
+    name: true,
+    email: true,
+    emailRemindersEnabled: true,
+    inAppRemindersEnabled: true,
+  } as const;
 
-  if (recipientsInput.includeAdmins) {
-    const admins = await db.employeeProfile.findMany({
-      where: {
-        businessId,
-        status: "ACTIVE",
-        deletedAt: null,
-        role: { name: { in: ["Owner", "Admin"] } },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        emailRemindersEnabled: true,
-        inAppRemindersEnabled: true,
-      },
-    });
-    for (const admin of admins) {
-      add(admin.email, admin.name, admin.id, admin);
-    }
-  }
-
-  if (recipientsInput.employeeIds.length) {
+  if (recipientsInput.includeAllEmployees) {
     const employees = await db.employeeProfile.findMany({
       where: {
         businessId,
-        id: { in: recipientsInput.employeeIds },
         status: "ACTIVE",
         deletedAt: null,
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        emailRemindersEnabled: true,
-        inAppRemindersEnabled: true,
-      },
+      select: employeeSelect,
     });
     for (const employee of employees) {
       add(employee.email, employee.name, employee.id, employee);
+    }
+  } else {
+    if (recipientsInput.includeOwner && project.assignedTo) {
+      add(
+        project.assignedTo.email,
+        project.assignedTo.name,
+        project.assignedTo.id,
+        project.assignedTo
+      );
+    }
+
+    if (recipientsInput.includeAdmins) {
+      const admins = await db.employeeProfile.findMany({
+        where: {
+          businessId,
+          status: "ACTIVE",
+          deletedAt: null,
+          role: { name: { in: ["Owner", "Admin"] } },
+        },
+        select: employeeSelect,
+      });
+      for (const admin of admins) {
+        add(admin.email, admin.name, admin.id, admin);
+      }
+    }
+
+    if (recipientsInput.employeeIds.length) {
+      const employees = await db.employeeProfile.findMany({
+        where: {
+          businessId,
+          id: { in: recipientsInput.employeeIds },
+          status: "ACTIVE",
+          deletedAt: null,
+        },
+        select: employeeSelect,
+      });
+      for (const employee of employees) {
+        add(employee.email, employee.name, employee.id, employee);
+      }
+    }
+  }
+
+  if (recipientsInput.includeAllCustomers) {
+    const customers = await db.customer.findMany({
+      where: {
+        businessId,
+        deletedAt: null,
+        email: { not: null },
+      },
+      select: { firstName: true, lastName: true, email: true },
+      take: 1_000,
+    });
+    for (const customer of customers) {
+      const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim();
+      add(customer.email, name || null, null);
     }
   }
 
@@ -476,6 +506,9 @@ export async function sendReminderEmail(input: {
   message: string;
   projectTitle: string;
   businessName: string;
+  occurredAt?: Date;
+  timezone?: string;
+  referenceId?: string | null;
   isTest?: boolean;
 }): Promise<{ messageId: string | null }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -492,6 +525,9 @@ export async function sendReminderEmail(input: {
     projectTitle: input.projectTitle,
     businessName: input.businessName,
     projectUrl: projectReminderUrl(),
+    occurredAt: input.occurredAt,
+    timezone: input.timezone,
+    referenceId: input.referenceId,
     isTest: input.isTest,
   });
   const resend = new Resend(apiKey);
@@ -499,7 +535,6 @@ export async function sendReminderEmail(input: {
   const templateId = reminderTemplateAlias();
   const attempts = [
     { template: { id: templateId, variables: email.variables } },
-    { template: { id: templateId } },
     { text: email.text, html: email.html },
   ] as const;
 
@@ -668,6 +703,9 @@ export async function processReminder(reminderId: string, claimToken: string) {
           message,
           projectTitle: reminder.project.title,
           businessName: reminder.business.name,
+          occurredAt: occurrenceAt,
+          timezone: reminder.timezone,
+          referenceId: reminder.id,
         });
         emailStatus = "SENT";
         providerMessageId = result.messageId;
@@ -816,6 +854,9 @@ export async function testSendReminder(ctx: AuthContext, id: string, to?: string
     message: reminder.message?.trim() || `You have a reminder for ${reminder.project.title}.`,
     projectTitle: reminder.project.title,
     businessName: reminder.business.name,
+    occurredAt: reminder.nextSendAt,
+    timezone: reminder.timezone,
+    referenceId: reminder.id,
     isTest: true,
   });
 

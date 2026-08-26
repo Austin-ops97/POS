@@ -9,7 +9,7 @@ export default async function OfficeRemindersPage() {
     redirect("/office");
   }
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-6 pb-10 sm:px-6">
       <RemindersManager />
     </div>
   );

@@ -3,13 +3,33 @@ import { z } from "zod";
 export const REMINDER_RECURRENCES = ["ONE_TIME", "DAILY", "WEEKLY", "MONTHLY"] as const;
 
 export const reminderRecipientsSchema = z.object({
-  includeOwner: z.boolean().default(true),
+  includeOwner: z.boolean().default(false),
   includeAdmins: z.boolean().default(false),
+  includeAllEmployees: z.boolean().default(false),
+  includeAllCustomers: z.boolean().default(false),
   employeeIds: z.array(z.string().cuid()).max(50).default([]),
-  emails: z.array(z.string().email()).max(20).default([]),
+  emails: z.array(z.string().email()).max(50).default([]),
 });
 
 export type ReminderRecipientsInput = z.infer<typeof reminderRecipientsSchema>;
+
+export function reminderHasRecipients(recipients: {
+  includeOwner?: boolean;
+  includeAdmins?: boolean;
+  includeAllEmployees?: boolean;
+  includeAllCustomers?: boolean;
+  employeeIds?: string[];
+  emails?: string[];
+}) {
+  return Boolean(
+    recipients.includeOwner ||
+      recipients.includeAdmins ||
+      recipients.includeAllEmployees ||
+      recipients.includeAllCustomers ||
+      recipients.employeeIds?.length ||
+      recipients.emails?.length
+  );
+}
 
 const reminderBaseFields = {
   title: z.string().trim().min(1, "Title is required").max(160),
@@ -24,21 +44,17 @@ const reminderBaseFields = {
   stopAt: z.coerce.date().optional().nullable(),
   maxOccurrences: z.coerce.number().int().min(1).max(10_000).optional().nullable(),
   recipients: reminderRecipientsSchema.default({
-    includeOwner: true,
+    includeOwner: false,
     includeAdmins: false,
+    includeAllEmployees: false,
+    includeAllCustomers: false,
     employeeIds: [],
     emails: [],
   }),
 };
 
 export const reminderCreateSchema = z.object(reminderBaseFields).superRefine((value, ctx) => {
-  const recipients = value.recipients;
-  if (
-    !recipients.includeOwner &&
-    !recipients.includeAdmins &&
-    recipients.employeeIds.length === 0 &&
-    recipients.emails.length === 0
-  ) {
+  if (!reminderHasRecipients(value.recipients)) {
     ctx.addIssue({
       code: "custom",
       message: "Choose at least one recipient",

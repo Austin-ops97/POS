@@ -1,4 +1,7 @@
+import { reminderHasRecipients } from "@/lib/validations/reminders";
+
 export type ReminderFormPayload = {
+  projectId?: string;
   title: string;
   message: string | null;
   scheduledAt: string;
@@ -9,6 +12,8 @@ export type ReminderFormPayload = {
   recipients: {
     includeOwner: boolean;
     includeAdmins: boolean;
+    includeAllEmployees: boolean;
+    includeAllCustomers: boolean;
     employeeIds: string[];
     emails: string[];
   };
@@ -31,6 +36,28 @@ export function resetFormSafely(form: { reset: () => void } | null | undefined) 
   form?.reset();
 }
 
+export function describeReminderRecipients(recipients: {
+  includeOwner?: boolean;
+  includeAdmins?: boolean;
+  includeAllEmployees?: boolean;
+  includeAllCustomers?: boolean;
+  employeeIds?: string[];
+  emails?: string[];
+}) {
+  const parts: string[] = [];
+  if (recipients.includeAllEmployees) parts.push("All employees");
+  if (recipients.includeAllCustomers) parts.push("All customers");
+  if (recipients.includeOwner) parts.push("Project owner");
+  if (recipients.includeAdmins) parts.push("Admins");
+  if (recipients.employeeIds?.length) {
+    parts.push(`${recipients.employeeIds.length} employee${recipients.employeeIds.length === 1 ? "" : "s"}`);
+  }
+  if (recipients.emails?.length) {
+    parts.push(`${recipients.emails.length} email${recipients.emails.length === 1 ? "" : "s"}`);
+  }
+  return parts.join(" · ") || "No recipients";
+}
+
 export function reminderPayloadFromFormData(form: FormData): ReminderFormPayload | { error: string } {
   const title = String(form.get("title") || "").trim();
   if (!title) return { error: "Title is required" };
@@ -45,15 +72,27 @@ export function reminderPayloadFromFormData(form: FormData): ReminderFormPayload
     .split(/[,;\s]+/)
     .map((email) => email.trim())
     .filter(Boolean);
+  if (emails.some((email) => !email.includes("@"))) {
+    return { error: "Enter valid email addresses" };
+  }
   const employeeIds = form.getAll("employeeIds").map(String).filter(Boolean);
-  const includeOwner = form.get("includeOwner") === "on";
-  const includeAdmins = form.get("includeAdmins") === "on";
+  const recipients = {
+    includeOwner: form.get("includeOwner") === "on",
+    includeAdmins: form.get("includeAdmins") === "on",
+    includeAllEmployees: form.get("includeAllEmployees") === "on",
+    includeAllCustomers: form.get("includeAllCustomers") === "on",
+    employeeIds,
+    emails,
+  };
 
-  if (!includeOwner && !includeAdmins && employeeIds.length === 0 && emails.length === 0) {
+  if (!reminderHasRecipients(recipients)) {
     return { error: "Choose at least one recipient" };
   }
 
+  const projectId = String(form.get("projectId") || "").trim();
+
   return {
+    ...(projectId ? { projectId } : {}),
     title,
     message: String(form.get("message") || "").trim() || null,
     scheduledAt: scheduledAt.toISOString(),
@@ -61,12 +100,7 @@ export function reminderPayloadFromFormData(form: FormData): ReminderFormPayload
     intervalCount: Number(form.get("intervalCount") || 1),
     sendBeforeMinutes: Number(form.get("sendBeforeMinutes") || 0),
     timezone: String(form.get("timezone") || "America/Chicago").trim() || "America/Chicago",
-    recipients: {
-      includeOwner,
-      includeAdmins,
-      employeeIds,
-      emails,
-    },
+    recipients,
   };
 }
 

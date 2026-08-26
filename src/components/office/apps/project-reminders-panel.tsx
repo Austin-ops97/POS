@@ -1,16 +1,11 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell, Loader2, Pause, Play, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import type { EmployeeOption } from "./record-client";
-import {
-  captureSubmitForm,
-  reminderPayloadFromFormData,
-  resetFormSafely,
-} from "@/lib/office/reminder-form";
+import { ReminderComposer } from "./reminder-composer";
+import { describeReminderRecipients } from "@/lib/office/reminder-form";
 
 type Reminder = {
   id: string;
@@ -28,6 +23,8 @@ type Reminder = {
   recipients: {
     includeOwner: boolean;
     includeAdmins: boolean;
+    includeAllEmployees: boolean;
+    includeAllCustomers: boolean;
     employeeIds: string[];
     emails: string[];
   };
@@ -38,24 +35,16 @@ async function apiError(response: Response) {
   return body?.error ?? "Request failed";
 }
 
-function localInputValue(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export function ProjectRemindersPanel({
   projectId,
 }: {
   projectId: string;
-  employees: EmployeeOption[];
+  employees?: Array<{ id: string; name: string }>;
 }) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const submittingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,39 +62,6 @@ export function ProjectRemindersPanel({
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function createReminder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = captureSubmitForm(event);
-    if (submittingRef.current || busy) return;
-    const parsed = reminderPayloadFromFormData(new FormData(form));
-    if ("error" in parsed) {
-      setFormError(parsed.error);
-      return;
-    }
-    submittingRef.current = true;
-    setBusy(true);
-    setFormError(null);
-    try {
-      const res = await fetch(`/api/office/projects/${projectId}/reminders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed),
-      });
-      if (!res.ok) throw new Error(await apiError(res));
-      toast.success("Reminder scheduled");
-      setShowForm(false);
-      resetFormSafely(form);
-      await load();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not create reminder";
-      setFormError(message);
-      toast.error(message);
-    } finally {
-      submittingRef.current = false;
-      setBusy(false);
-    }
-  }
 
   async function togglePause(reminder: Reminder) {
     setBusy(true);
@@ -164,41 +120,19 @@ export function ProjectRemindersPanel({
           <h3 className="text-sm font-semibold text-slate-900">Reminders</h3>
           {reminders.length ? <span className="text-xs text-slate-400">{reminders.length}</span> : null}
         </div>
-        <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Add"}
+        <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" onClick={() => setShowForm(true)}>
+          Add
         </Button>
       </div>
 
-      {showForm ? (
-        <form onSubmit={createReminder} className="mt-2 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <Input name="title" required className="h-9" placeholder="Follow up" />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input
-              name="scheduledAt"
-              type="datetime-local"
-              required
-              className="h-9"
-              defaultValue={localInputValue(new Date(Date.now() + 3600_000).toISOString())}
-            />
-            <Input name="timezone" className="h-9" defaultValue="America/Chicago" />
-          </div>
-          <input type="hidden" name="recurrence" value="ONE_TIME" />
-          <input type="hidden" name="intervalCount" value="1" />
-          <input type="hidden" name="sendBeforeMinutes" value="0" />
-          <input type="hidden" name="includeOwner" value="on" />
-          {formError ? (
-            <p className="text-xs text-red-600" role="alert">
-              {formError}
-            </p>
-          ) : null}
-          <Button type="submit" size="sm" className="h-8 min-h-8" disabled={busy}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? "Scheduling…" : "Schedule"}
-          </Button>
-        </form>
-      ) : null}
+      <ReminderComposer
+        open={showForm}
+        onOpenChange={setShowForm}
+        projectId={projectId}
+        onCreated={load}
+      />
 
-      <div className="mt-1.5 max-h-16 space-y-1 overflow-y-auto">
+      <div className="mt-1.5 max-h-28 space-y-1 overflow-y-auto">
         {loading ? (
           <p className="text-xs text-slate-500">Loading…</p>
         ) : reminders.length === 0 ? (
@@ -206,7 +140,12 @@ export function ProjectRemindersPanel({
         ) : (
           reminders.map((reminder) => (
             <article key={reminder.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1">
-              <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800">{reminder.title}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-slate-800">{reminder.title}</p>
+                <p className="truncate text-[11px] text-slate-400">
+                  {describeReminderRecipients(reminder.recipients)}
+                </p>
+              </div>
               <p className="hidden shrink-0 text-[11px] text-slate-400 sm:block">
                 {new Date(reminder.nextSendAt).toLocaleDateString()}
               </p>

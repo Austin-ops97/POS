@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   captureSubmitForm,
+  describeReminderRecipients,
   reminderPayloadFromFormData,
   resetFormSafely,
   resetUsingEventCurrentTarget,
@@ -97,6 +98,57 @@ describe("project reminder form currentTarget handling", () => {
     assert.equal(parsed.timezone, "America/Chicago");
     assert.equal(parsed.recurrence, "WEEKLY");
     assert.equal(parsed.recipients.includeOwner, true);
+    assert.equal(parsed.recipients.includeAllEmployees, false);
     assert.ok(parsed.scheduledAt.endsWith("Z") || parsed.scheduledAt.includes("T"));
+  });
+
+  it("accepts all employees, all customers, or specific emails", () => {
+    const employees = new FormData();
+    employees.set("title", "Staff check-in");
+    employees.set("scheduledAt", "2026-08-25T10:30");
+    employees.set("includeAllEmployees", "on");
+    const employeePayload = reminderPayloadFromFormData(employees);
+    assert.ok(!("error" in employeePayload));
+    if ("error" in employeePayload) return;
+    assert.equal(employeePayload.recipients.includeAllEmployees, true);
+
+    const customers = new FormData();
+    customers.set("title", "Client update");
+    customers.set("scheduledAt", "2026-08-25T10:30");
+    customers.set("includeAllCustomers", "on");
+    const customerPayload = reminderPayloadFromFormData(customers);
+    assert.ok(!("error" in customerPayload));
+    if ("error" in customerPayload) return;
+    assert.equal(customerPayload.recipients.includeAllCustomers, true);
+
+    const emails = new FormData();
+    emails.set("title", "Vendor ping");
+    emails.set("scheduledAt", "2026-08-25T10:30");
+    emails.set("emails", "ops@example.com, owner@example.com");
+    emails.set("projectId", "proj_1");
+    const emailPayload = reminderPayloadFromFormData(emails);
+    assert.ok(!("error" in emailPayload));
+    if ("error" in emailPayload) return;
+    assert.deepEqual(emailPayload.recipients.emails, ["ops@example.com", "owner@example.com"]);
+    assert.equal(emailPayload.projectId, "proj_1");
+    assert.equal(
+      describeReminderRecipients(emailPayload.recipients),
+      "2 emails"
+    );
+  });
+
+  it("accepts audience flags on the create schema", () => {
+    const allStaff = reminderCreateSchema.safeParse({
+      title: "Check in",
+      scheduledAt: "2026-08-25T16:00:00.000Z",
+      recipients: { includeAllEmployees: true },
+    });
+    assert.equal(allStaff.success, true);
+    const allCustomers = reminderCreateSchema.safeParse({
+      title: "Check in",
+      scheduledAt: "2026-08-25T16:00:00.000Z",
+      recipients: { includeAllCustomers: true },
+    });
+    assert.equal(allCustomers.success, true);
   });
 });

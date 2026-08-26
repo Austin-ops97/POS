@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Loader2 } from "lucide-react";
+import { Bell, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ReminderComposer } from "./reminder-composer";
+import { describeReminderRecipients } from "@/lib/office/reminder-form";
 
 type View = "upcoming" | "sent" | "failed";
 
@@ -14,6 +16,14 @@ type UpcomingReminder = {
   recurrence: string;
   paused: boolean;
   enabled: boolean;
+  recipients?: {
+    includeOwner: boolean;
+    includeAdmins: boolean;
+    includeAllEmployees: boolean;
+    includeAllCustomers: boolean;
+    employeeIds: string[];
+    emails: string[];
+  };
   project?: { id: string; title: string; status: string };
 };
 
@@ -39,6 +49,7 @@ export function RemindersManager() {
   const [reminders, setReminders] = useState<UpcomingReminder[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,7 +76,7 @@ export function RemindersManager() {
   }, [load]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="rounded-xl bg-amber-100 p-2 text-amber-700">
@@ -73,10 +84,10 @@ export function RemindersManager() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Project reminders</h1>
-            <p className="text-sm text-slate-500">Upcoming schedules and delivery history across projects.</p>
+            <p className="text-sm text-slate-500">Create schedules and review delivery history across projects.</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(["upcoming", "sent", "failed"] as View[]).map((key) => (
             <Button
               key={key}
@@ -88,8 +99,14 @@ export function RemindersManager() {
               {key[0].toUpperCase() + key.slice(1)}
             </Button>
           ))}
+          <Button type="button" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            New reminder
+          </Button>
         </div>
       </div>
+
+      <ReminderComposer open={showForm} onOpenChange={setShowForm} onCreated={load} />
 
       {loading ? (
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
@@ -99,9 +116,15 @@ export function RemindersManager() {
       ) : view === "upcoming" ? (
         <div className="space-y-3">
           {!reminders.length ? (
-            <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
-              No upcoming reminders.
-            </p>
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
+              <p className="text-sm text-slate-500">
+                No upcoming reminders. Create one to email employees, customers, or specific addresses.
+              </p>
+              <Button type="button" className="mt-4" onClick={() => setShowForm(true)}>
+                <Plus className="h-4 w-4" />
+                New reminder
+              </Button>
+            </div>
           ) : (
             reminders.map((reminder) => (
               <article key={reminder.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -111,6 +134,9 @@ export function RemindersManager() {
                     <p className="mt-1 text-sm text-slate-500">
                       {reminder.project?.title ?? "Project"} · next {new Date(reminder.nextSendAt).toLocaleString()}
                     </p>
+                    {reminder.recipients ? (
+                      <p className="mt-1 text-xs text-slate-400">{describeReminderRecipients(reminder.recipients)}</p>
+                    ) : null}
                   </div>
                   <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
                     {reminder.recurrence.replace("_", " ")}
