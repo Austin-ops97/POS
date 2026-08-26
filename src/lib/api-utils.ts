@@ -195,6 +195,13 @@ export function handleApiError(error: unknown, context: string) {
     if ("type" in error && typeof error.type === "string" && error.type.startsWith("Stripe")) {
       return apiError(error.message, 502, { code: "STRIPE_ERROR", requestId });
     }
+    if (
+      error.message.includes("domain is not verified") ||
+      error.message.includes("resend.com/domains") ||
+      error.message.startsWith("Invalid `from`")
+    ) {
+      return apiError(error.message, 502, { code: "EMAIL_PROVIDER_ERROR", requestId });
+    }
   }
 
   console.error(`${context} [${requestId}]:`, error);

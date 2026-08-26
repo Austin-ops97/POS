@@ -5,8 +5,8 @@ import { authorizeCron } from "@/lib/cron-auth";
 /**
  * Processes due project reminders.
  * Vercel Hobby only allows daily crons — vercel.json schedules this at 08:00 UTC.
- * On a paid plan you can switch the schedule to every five minutes, or hit this
- * route with CRON_SECRET from an external scheduler.
+ * `.github/workflows/reminder-cron.yml` also hits this route every five minutes
+ * with Authorization: Bearer $CRON_SECRET so due reminders are not stuck until 08:00 UTC.
  */
 export async function GET(request: Request) {
   const denied = authorizeCron(request);

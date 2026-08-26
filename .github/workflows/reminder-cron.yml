@@ -1,0 +1,27 @@
+name: Reminder cron
+
+# Vercel Hobby only runs /api/cron/reminders once a day. This keeps due
+# project reminders moving every five minutes on the live app.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process due reminders
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET GitHub secret is not set"
+            exit 1
+          fi
+          url="${APP_URL:-https://www.emeraldvalestudios.online}/api/cron/reminders"
+          curl -fsS -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json"

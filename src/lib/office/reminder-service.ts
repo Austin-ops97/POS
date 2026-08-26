@@ -27,12 +27,16 @@ import {
   shouldRetryEmail,
   type AlertRecipient,
 } from "@/lib/office/reminder-alerts";
+import { renderReminderEmail } from "@/lib/office/reminder-email";
 
 export { computeNextSendAt };
 
 const CLAIM_STALE_MS = 15 * 60_000;
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]!);
+
+function projectReminderUrl() {
+  const base = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.emeraldvalestudios.online").replace(/\/$/, "");
+  return `${base}/office/apps/projects`;
+}
 
 function requireRemindersPermission(ctx: AuthContext) {
   if (!hasPermission(ctx, PERMISSIONS.MANAGE_PROJECT_REMINDERS)) {
@@ -467,9 +471,12 @@ export async function deleteReminder(ctx: AuthContext, id: string) {
 
 export async function sendReminderEmail(input: {
   to: string;
-  subject: string;
-  body: string;
   recipientName?: string | null;
+  title: string;
+  message: string;
+  projectTitle: string;
+  businessName: string;
+  isTest?: boolean;
 }): Promise<{ messageId: string | null }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.OFFICE_FROM_EMAIL?.trim() || process.env.RECEIPTS_FROM_EMAIL?.trim();
@@ -477,14 +484,23 @@ export async function sendReminderEmail(input: {
     throw new Error("Email sending is not configured. Set RESEND_API_KEY and OFFICE_FROM_EMAIL.");
   }
 
-  const greeting = input.recipientName ? `Hi ${input.recipientName},\n\n` : "";
-  const text = `${greeting}${input.body}`;
+  const email = renderReminderEmail({
+    recipientName: input.recipientName,
+    recipientEmail: input.to,
+    title: input.title,
+    message: input.message,
+    projectTitle: input.projectTitle,
+    businessName: input.businessName,
+    projectUrl: projectReminderUrl(),
+    isTest: input.isTest,
+  });
   const result = await new Resend(apiKey).emails.send({
     from,
     to: input.to,
-    subject: input.subject,
-    text,
-    html: `<div style="font-family:system-ui,sans-serif;white-space:pre-wrap;line-height:1.6">${escapeHtml(text)}</div>`,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+    headers: { "X-Entity-Ref-ID": randomUUID() },
   });
   if (result.error) throw new Error(result.error.message);
   return { messageId: result.data?.id ?? null };
@@ -542,15 +558,8 @@ export async function processReminder(reminderId: string, claimToken: string) {
     parseRecipients(reminder.recipients)
   );
 
-  const subject = `[Reminder] ${reminder.title}`;
-  const bodyLines = [
-    reminder.message?.trim() || `This is a reminder for project "${reminder.project.title}".`,
-    "",
-    `Project: ${reminder.project.title}`,
-    `Business: ${reminder.business.name}`,
-  ];
-  const body = bodyLines.join("\n");
   const href = `/office/apps/projects`;
+  const message = reminder.message?.trim() || `You have a reminder for ${reminder.project.title}.`;
 
   let sent = 0;
   let failed = 0;
@@ -641,9 +650,11 @@ export async function processReminder(reminderId: string, claimToken: string) {
       try {
         const result = await sendReminderEmail({
           to: recipient.email!,
-          subject,
-          body,
           recipientName: recipient.name,
+          title: reminder.title,
+          message,
+          projectTitle: reminder.project.title,
+          businessName: reminder.business.name,
         });
         emailStatus = "SENT";
         providerMessageId = result.messageId;
@@ -787,16 +798,12 @@ export async function testSendReminder(ctx: AuthContext, id: string, to?: string
 
   await sendReminderEmail({
     to: target,
-    subject: `[Test] ${reminder.title}`,
-    body: [
-      reminder.message?.trim() || `Test reminder for project "${reminder.project.title}".`,
-      "",
-      `Project: ${reminder.project.title}`,
-      `Business: ${reminder.business.name}`,
-      "",
-      "(This is a test send — it was not recorded as a delivery.)",
-    ].join("\n"),
     recipientName: ctx.employee.name,
+    title: reminder.title,
+    message: reminder.message?.trim() || `You have a reminder for ${reminder.project.title}.`,
+    projectTitle: reminder.project.title,
+    businessName: reminder.business.name,
+    isTest: true,
   });
 
   return { success: true, to: target };
