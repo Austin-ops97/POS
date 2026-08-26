@@ -27,7 +27,7 @@ import {
   shouldRetryEmail,
   type AlertRecipient,
 } from "@/lib/office/reminder-alerts";
-import { renderReminderEmail } from "@/lib/office/reminder-email";
+import { reminderTemplateAlias, renderReminderEmail } from "@/lib/office/reminder-email";
 
 export { computeNextSendAt };
 
@@ -494,16 +494,29 @@ export async function sendReminderEmail(input: {
     projectUrl: projectReminderUrl(),
     isTest: input.isTest,
   });
-  const result = await new Resend(apiKey).emails.send({
-    from,
-    to: input.to,
-    subject: email.subject,
-    text: email.text,
-    html: email.html,
-    headers: { "X-Entity-Ref-ID": randomUUID() },
-  });
-  if (result.error) throw new Error(result.error.message);
-  return { messageId: result.data?.id ?? null };
+  const resend = new Resend(apiKey);
+  const headers = { "X-Entity-Ref-ID": randomUUID() };
+  const templateId = reminderTemplateAlias();
+  const attempts = [
+    { template: { id: templateId, variables: email.variables } },
+    { template: { id: templateId } },
+    { text: email.text, html: email.html },
+  ] as const;
+
+  let lastError = "Email send failed";
+  for (const attempt of attempts) {
+    const result = await resend.emails.send({
+      from,
+      to: input.to,
+      subject: email.subject,
+      headers,
+      ...attempt,
+    });
+    if (!result.error) return { messageId: result.data?.id ?? null };
+    lastError = result.error.message;
+    if (/from|domain is not verified/i.test(lastError)) break;
+  }
+  throw new Error(lastError);
 }
 
 export async function claimDueReminders(now = new Date(), limit = 20) {

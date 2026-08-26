@@ -198,7 +198,8 @@ export function handleApiError(error: unknown, context: string) {
     if (
       error.message.includes("domain is not verified") ||
       error.message.includes("resend.com/domains") ||
-      error.message.startsWith("Invalid `from`")
+      error.message.startsWith("Invalid `from`") ||
+      error.message.toLowerCase().includes("template")
     ) {
       return apiError(error.message, 502, { code: "EMAIL_PROVIDER_ERROR", requestId });
     }

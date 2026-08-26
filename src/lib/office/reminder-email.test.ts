@@ -38,6 +38,8 @@ describe("renderReminderEmail", () => {
     assert.match(email.text, /^Hi Austin,/);
     assert.match(email.html, /Open this project/);
     assert.doesNotMatch(email.subject, /\[Test\]|\[Reminder\]/);
+    assert.equal(email.variables.PROJECT, "POS System");
+    assert.equal(email.variables.GREETING, "Hi Austin,");
     assert.doesNotMatch(email.html, /unsubscribe|PROMOTION|newsletter/i);
   });
 });

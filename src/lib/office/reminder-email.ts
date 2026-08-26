@@ -30,7 +30,7 @@ export function renderReminderEmail(input: {
   businessName: string;
   projectUrl: string;
   isTest?: boolean;
-}): { subject: string; text: string; html: string } {
+}): { subject: string; text: string; html: string; variables: Record<string, string> } {
   const greeting = reminderGreetingName(input.recipientName, input.recipientEmail);
   const hi = greeting ? `Hi ${greeting},` : "Hi,";
   const message = input.message.trim() || `You have a reminder for ${input.projectTitle}.`;
@@ -39,6 +39,9 @@ export function renderReminderEmail(input: {
     projectTitle: input.projectTitle,
     isTest: input.isTest,
   });
+  const footer = input.isTest
+    ? "This was a test send and was not recorded as a delivery."
+    : `Sent by ${input.businessName} through Sqyid.`;
 
   const text = [
     hi,
@@ -48,11 +51,8 @@ export function renderReminderEmail(input: {
     `Project: ${input.projectTitle}`,
     `Open: ${input.projectUrl}`,
     "",
-    `Sent by ${input.businessName} through Sqyid.`,
-    input.isTest ? "This was a test send and was not recorded as a delivery." : null,
-  ]
-    .filter((line) => line != null)
-    .join("\n");
+    footer,
+  ].join("\n");
 
   const html = `<!DOCTYPE html>
 <html>
@@ -62,12 +62,27 @@ export function renderReminderEmail(input: {
     <p style="margin:0 0 16px;white-space:pre-wrap;">${escapeHtml(message)}</p>
     <p style="margin:0 0 20px;">Project: <strong>${escapeHtml(input.projectTitle)}</strong></p>
     <p style="margin:0 0 24px;"><a href="${escapeHtml(input.projectUrl)}" style="color:#1e3a5f;">Open this project</a></p>
-    <p style="margin:0;font-size:13px;color:#64748b;">Sent by ${escapeHtml(input.businessName)} through Sqyid.${
-      input.isTest ? " This was a test send." : ""
-    }</p>
+    <p style="margin:0;font-size:13px;color:#64748b;">${escapeHtml(footer)}</p>
   </div>
 </body>
 </html>`;
 
-  return { subject, text, html };
+  return {
+    subject,
+    text,
+    html,
+    variables: {
+      GREETING: hi,
+      TITLE: input.title.trim() || "Reminder",
+      MESSAGE: message,
+      PROJECT: input.projectTitle,
+      BUSINESS: input.businessName,
+      PROJECT_URL: input.projectUrl,
+      FOOTER: footer,
+    },
+  };
+}
+
+export function reminderTemplateAlias() {
+  return process.env.RESEND_REMINDER_TEMPLATE?.trim() || "system-alert";
 }
