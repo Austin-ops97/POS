@@ -54,17 +54,18 @@ describe("renderReminderEmail", () => {
     assert.equal(email.variables.alert_type, "Reminder");
     assert.equal(email.variables.status_label, "Scheduled reminder");
     assert.equal(email.variables.system_name, "Project reminders");
-    assert.equal(email.variables.reference_id, "rem_123");
-    assert.equal(email.variables.action_label, "Open project");
-    assert.equal(email.variables.action_url, "https://www.emeraldvalestudios.online/office/apps/projects");
+    assert.equal(email.variables.reference_id, "");
+    assert.equal(email.variables.action_label, "Emerald Vale Studios");
+    assert.equal(email.variables.action_url, "https://www.emeraldvalestudios.com/");
     assert.match(email.variables.intro, /Hi Austin/);
     assert.equal(email.variables.severity_class, "");
     for (const key of REMINDER_TEMPLATE_VARIABLE_KEYS) {
       assert.equal(typeof email.variables[key], "string");
     }
-    assert.match(email.html, /Open project/);
-    assert.match(email.html, /Emerald Vale/);
+    assert.match(email.html, /Emerald Vale Studios/);
+    assert.match(email.html, /https:\/\/www\.emeraldvalestudios\.com\//);
     assert.match(email.html, /Check the board\./);
+    assert.doesNotMatch(email.html, />Reference</);
     assert.doesNotMatch(email.subject, /\[Test\]|\[Reminder\]/);
     assert.doesNotMatch(email.html, /unsubscribe|PROMOTION|newsletter/i);
   });

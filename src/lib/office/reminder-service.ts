@@ -534,8 +534,8 @@ export async function sendReminderEmail(input: {
   const headers = { "X-Entity-Ref-ID": randomUUID() };
   const templateId = reminderTemplateAlias();
   const attempts = [
-    { template: { id: templateId, variables: email.variables } },
     { text: email.text, html: email.html },
+    { template: { id: templateId, variables: email.variables } },
   ] as const;
 
   let lastError = "Email send failed";

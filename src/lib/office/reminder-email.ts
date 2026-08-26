@@ -1,6 +1,9 @@
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]!);
 
+export const REMINDER_ACTION_LABEL = "Emerald Vale Studios";
+export const REMINDER_ACTION_URL = "https://www.emeraldvalestudios.com/";
+
 export const REMINDER_TEMPLATE_VARIABLE_KEYS = [
   "subject",
   "alert_type",
@@ -93,9 +96,9 @@ export function reminderTemplateVariables(input: {
     alert_summary: message,
     system_name: "Project reminders",
     occurred_at: occurredAt,
-    reference_id: input.referenceId?.trim() || project,
-    action_url: input.projectUrl,
-    action_label: "Open project",
+    reference_id: "",
+    action_url: REMINDER_ACTION_URL,
+    action_label: REMINDER_ACTION_LABEL,
   };
 }
 
@@ -112,7 +115,6 @@ function renderReminderEmailHtml(vars: ReminderTemplateVariables): string {
     alert_summary: escapeHtml(vars.alert_summary).replace(/\n/g, "<br />"),
     system_name: escapeHtml(vars.system_name),
     occurred_at: escapeHtml(vars.occurred_at),
-    reference_id: escapeHtml(vars.reference_id),
     action_url: escapeHtml(vars.action_url),
     action_label: escapeHtml(vars.action_label),
   };
@@ -208,10 +210,6 @@ function renderReminderEmailHtml(vars: ReminderTemplateVariables): string {
                     <td class="details-label">Occurred</td>
                     <td class="details-value">${v.occurred_at}</td>
                   </tr>
-                  <tr>
-                    <td class="details-label">Reference</td>
-                    <td class="details-value">${v.reference_id}</td>
-                  </tr>
                 </table>
                 <div class="button-wrap">
                   <a class="button" href="${v.action_url}" target="_blank">${v.action_label}</a>
@@ -260,7 +258,7 @@ export function renderReminderEmail(input: {
     variables.alert_summary,
     "",
     `Project: ${input.projectTitle}`,
-    `Open: ${variables.action_url}`,
+    `${variables.action_label}: ${variables.action_url}`,
     "",
     input.isTest
       ? "This was a test send and was not recorded as a delivery."
