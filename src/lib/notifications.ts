@@ -62,27 +62,44 @@ export async function listInboxNotifications(ctx: AuthContext, unreadOnly = fals
 }
 
 export async function markInboxNotificationsRead(ctx: AuthContext, ids?: string[]) {
+  const idFilter = ids?.length ? { id: { in: ids } } : {};
   await Promise.all([
     db.appNotification.updateMany({
       where: {
         businessId: ctx.business.id,
         employeeId: ctx.employee.id,
         readAt: null,
-        ...(ids?.length ? { id: { in: ids } } : {}),
+        ...idFilter,
       },
       data: { readAt: new Date() },
     }),
-    ids?.length
-      ? db.expenseNotification.updateMany({
-          where: {
-            businessId: ctx.business.id,
-            employeeId: ctx.employee.id,
-            readAt: null,
-            id: { in: ids },
-          },
-          data: { readAt: new Date() },
-        })
-      : Promise.resolve(),
+    db.expenseNotification.updateMany({
+      where: {
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+        readAt: null,
+        ...idFilter,
+      },
+      data: { readAt: new Date() },
+    }),
+  ]);
+  return { ok: true as const };
+}
+
+export async function clearInboxNotifications(ctx: AuthContext) {
+  await Promise.all([
+    db.appNotification.deleteMany({
+      where: {
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+      },
+    }),
+    db.expenseNotification.deleteMany({
+      where: {
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+      },
+    }),
   ]);
   return { ok: true as const };
 }

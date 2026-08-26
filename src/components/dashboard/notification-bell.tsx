@@ -22,6 +22,7 @@ type Preferences = {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [preferences, setPreferences] = useState<Preferences>({
     emailRemindersEnabled: true,
@@ -48,13 +49,42 @@ export function NotificationBell() {
 
   const unread = items.filter((item) => !item.readAt).length;
 
-  async function markRead() {
-    await fetch("/api/notifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markRead: true }),
-    }).catch(() => null);
-    setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
+  async function markAllRead() {
+    if (busy || unread === 0) return;
+    setBusy(true);
+    const readAt = new Date().toISOString();
+    setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
+    try {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markRead: true }),
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearAll() {
+    if (busy || items.length === 0) return;
+    if (!window.confirm("Clear all notifications?")) return;
+    setBusy(true);
+    const previous = items;
+    setItems([]);
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearAll: true }),
+      });
+      if (!res.ok) setItems(previous);
+    } catch {
+      setItems(previous);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function updatePreference(next: Partial<Preferences>) {
@@ -74,10 +104,7 @@ export function NotificationBell() {
         variant="ghost"
         size="icon"
         aria-label={unread ? `${unread} unread notifications` : "Notifications"}
-        onClick={() => {
-          setOpen((value) => !value);
-          if (!open && unread) void markRead();
-        }}
+        onClick={() => setOpen((value) => !value)}
       >
         <Bell className="h-5 w-5" />
         {unread > 0 ? (
@@ -87,6 +114,28 @@ export function NotificationBell() {
       {open ? (
         <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
           <p className="text-sm font-semibold text-slate-900">Notifications</p>
+          <div className="mt-2 flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 min-h-7 flex-1 px-2 text-xs"
+              disabled={busy || unread === 0}
+              onClick={() => void markAllRead()}
+            >
+              Mark all as read
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 min-h-7 flex-1 px-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+              disabled={busy || items.length === 0}
+              onClick={() => void clearAll()}
+            >
+              Clear all
+            </Button>
+          </div>
           <div className="mt-3 space-y-2 border-b border-slate-100 pb-3">
             <label className="flex items-center justify-between gap-3 text-xs text-slate-600">
               <span>Email project reminders</span>
@@ -110,7 +159,14 @@ export function NotificationBell() {
               <p className="px-1 py-6 text-center text-sm text-slate-500">No notifications yet</p>
             ) : (
               items.map((item) => (
-                <div key={item.id} className="rounded-lg bg-slate-50 p-2">
+                <div
+                  key={item.id}
+                  className={
+                    item.readAt
+                      ? "rounded-lg bg-slate-50 p-2"
+                      : "rounded-lg bg-amber-50 p-2 ring-1 ring-amber-100"
+                  }
+                >
                   {item.href ? (
                     <Link href={item.href} className="text-sm font-medium text-slate-900 hover:underline" onClick={() => setOpen(false)}>
                       {item.title}
@@ -128,5 +184,3 @@ export function NotificationBell() {
     </div>
   );
 }
-
-

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { handleApiError, jsonError } from "@/lib/api-utils";
 import {
+  clearInboxNotifications,
   getNotificationPreferences,
   listInboxNotifications,
   markInboxNotificationsRead,
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
 const patchSchema = z.object({
   ids: z.array(z.string()).optional(),
   markRead: z.boolean().optional(),
+  clearAll: z.boolean().optional(),
   emailRemindersEnabled: z.boolean().optional(),
   inAppRemindersEnabled: z.boolean().optional(),
 });
@@ -34,7 +36,9 @@ export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
     const body = patchSchema.parse(await request.json().catch(() => ({})));
-    if (body.markRead !== false) {
+    if (body.clearAll) {
+      await clearInboxNotifications(ctx);
+    } else if (body.markRead || body.ids?.length) {
       await markInboxNotificationsRead(ctx, body.ids);
     }
     const preferences =
