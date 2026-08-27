@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
+import { buildResponseCountMap, getFormRecords, isFormRecord, type FormRecordSummary } from "@/lib/office/form-library";
 import {
   finalizedFormOptions,
   publicFormPath,
@@ -15,6 +16,7 @@ import {
   type FormResponseMetadata,
 } from "@/lib/office/form-types";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
+import { FormLibrary } from "./form-library";
 import { OfficeAppHeader } from "./app-header";
 import { createWorkspaceRecord, recordMetadata, updateWorkspaceRecord, type OfficeAppPermissions } from "./record-client";
 
@@ -51,9 +53,10 @@ function canSaveForm(params: { activeId: string; permissions: OfficeAppPermissio
 
 export function FormsApp({ module, initialRecords, permissions }: { module: OfficeSuiteModule; initialRecords: OfficeWorkspaceRecordSummary[]; permissions: OfficeAppPermissions }) {
   const [records, setRecords] = useState(initialRecords);
-  const savedForms = useMemo(() => records.filter((record) => record.metadata?.kind !== "response"), [records]);
-  const [activeId, setActiveId] = useState(savedForms[0]?.id ?? "");
-  const active = records.find((record) => record.id === activeId);
+  const forms = useMemo(() => getFormRecords(records), [records]);
+  const responseCounts = useMemo(() => buildResponseCountMap(records), [records]);
+  const [activeId, setActiveId] = useState(forms[0]?.id ?? "");
+  const active = forms.find((record) => record.id === activeId);
   const [title, setTitle] = useState(active?.title ?? "");
   const [form, setForm] = useState<FormMetadata>(() => recordMetadata(active, createEmptyForm()));
   const [mode, setMode] = useState<"build" | "preview" | "responses">("build");
@@ -68,7 +71,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   const publishPendingSave = form.published !== savedPublished;
   const publicLink = activeId && form.published && !publishPendingSave ? `${typeof window !== "undefined" ? window.location.origin : ""}${publicFormPath(activeId)}` : "";
 
-  function load(record?: OfficeWorkspaceRecordSummary) {
+  function load(record?: FormRecordSummary) {
     setActiveId(record?.id ?? "");
     setTitle(record?.title ?? "");
     setForm(recordMetadata(record, createEmptyForm()));
@@ -104,7 +107,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
       setForm(metadata);
       setRecords((items) => (active ? items.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...items]));
       setActiveId(saved.id);
-      toast.success(`"${saved.title}" saved — find it in Your forms on the left`);
+      toast.success(`"${saved.title}" saved`);
       return saved;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save form");
@@ -128,8 +131,11 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   async function submitResponse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    let formRecord = active;
-    if (!formRecord) formRecord = await save();
+    let formRecord: FormRecordSummary | undefined = active;
+    if (!formRecord) {
+      const saved = await save();
+      formRecord = saved && isFormRecord(saved) ? saved : undefined;
+    }
     if (!formRecord) return;
     const raw = new FormData(formElement);
     const answers: Record<string, string | boolean> = {};
@@ -172,35 +178,15 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
         </Button>
       </OfficeAppHeader>
 
-      <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[250px_1fr]">
-        <aside className="border-b border-fuchsia-100 bg-fuchsia-50 p-4 xl:border-b-0 xl:border-r">
-          <p className="text-xs font-semibold uppercase tracking-wider text-fuchsia-700">Your forms</p>
-          <p className="mt-1 text-xs leading-relaxed text-fuchsia-900/70">Saved forms appear here. Select one to edit or review responses.</p>
-          <div className="mt-3 space-y-1">
-            {savedForms.map((record) => {
-              const responseCount = records.filter((r) => r.metadata?.formId === record.id).length;
-              const isPublished = Boolean(record.metadata && typeof record.metadata === "object" && "published" in record.metadata && record.metadata.published);
-              return (
-                <button
-                  key={record.id}
-                  onClick={() => load(record)}
-                  className={`w-full rounded-xl p-3 text-left text-sm ${record.id === activeId ? "bg-fuchsia-600 text-white" : "hover:bg-fuchsia-100"}`}
-                >
-                  <span className="block break-words font-semibold">{record.title}</span>
-                  <span className={`mt-1 block text-xs ${record.id === activeId ? "text-fuchsia-100" : "text-slate-500"}`}>
-                    {responseCount} response{responseCount === 1 ? "" : "s"}
-                    {isPublished ? " · Online" : ""}
-                  </span>
-                </button>
-              );
-            })}
-            {!savedForms.length ? (
-              <p className="rounded-xl border border-dashed border-fuchsia-200 p-3 text-sm text-fuchsia-900/60">
-                No saved forms yet. Name your form, add questions, then click Save form.
-              </p>
-            ) : null}
-          </div>
-        </aside>
+      <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[300px_1fr]">
+        <FormLibrary
+          forms={forms}
+          activeId={activeId}
+          permissions={permissions}
+          responseCounts={responseCounts}
+          onSelectForm={load}
+          onNewForm={() => load()}
+        />
 
         <main className="min-w-0">
           <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-end sm:p-4">
