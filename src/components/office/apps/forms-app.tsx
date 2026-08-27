@@ -55,10 +55,11 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   const [records, setRecords] = useState(initialRecords);
   const forms = useMemo(() => getFormRecords(records), [records]);
   const responseCounts = useMemo(() => buildResponseCountMap(records), [records]);
-  const [activeId, setActiveId] = useState(forms[0]?.id ?? "");
+  const [activeId, setActiveId] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
   const active = forms.find((record) => record.id === activeId);
-  const [title, setTitle] = useState(active?.title ?? "");
-  const [form, setForm] = useState<FormMetadata>(() => recordMetadata(active, createEmptyForm()));
+  const [title, setTitle] = useState("");
+  const [form, setForm] = useState<FormMetadata>(() => createEmptyForm());
   const [mode, setMode] = useState<"build" | "preview" | "responses">("build");
   const [busy, setBusy] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -71,12 +72,25 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   const publishPendingSave = form.published !== savedPublished;
   const publicLink = activeId && form.published && !publishPendingSave ? `${typeof window !== "undefined" ? window.location.origin : ""}${publicFormPath(activeId)}` : "";
 
-  function load(record?: FormRecordSummary) {
+  function load(record?: FormRecordSummary, nextMode: "build" | "preview" | "responses" = "build") {
     setActiveId(record?.id ?? "");
     setTitle(record?.title ?? "");
     setForm(recordMetadata(record, createEmptyForm()));
-    setMode("build");
+    setMode(nextMode);
     setCopiedLink(false);
+    setEditorOpen(true);
+  }
+
+  function startNewForm() {
+    load(undefined, "build");
+  }
+
+  function viewForm(record: FormRecordSummary) {
+    load(record, "preview");
+  }
+
+  function editForm(record: FormRecordSummary) {
+    load(record, "build");
   }
 
   function patchField(id: string, patch: Partial<FormField>) {
@@ -168,14 +182,16 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   return (
     <div className="space-y-5 pb-8">
       <OfficeAppHeader module={module}>
-        <Button variant="outline" onClick={() => load()} disabled={!permissions.canCreate}>
+        <Button variant="outline" onClick={startNewForm} disabled={!permissions.canCreate}>
           <Plus className="h-4 w-4" />
           New form
         </Button>
-        <Button onClick={save} disabled={busy || !saveAllowed}>
-          <Save className="h-4 w-4" />
-          {busy ? "Saving…" : "Save form"}
-        </Button>
+        {editorOpen ? (
+          <Button onClick={save} disabled={busy || !saveAllowed}>
+            <Save className="h-4 w-4" />
+            {busy ? "Saving…" : "Save form"}
+          </Button>
+        ) : null}
       </OfficeAppHeader>
 
       <div className="grid min-h-[650px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:grid-cols-[300px_1fr]">
@@ -184,11 +200,28 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
           activeId={activeId}
           permissions={permissions}
           responseCounts={responseCounts}
-          onSelectForm={load}
-          onNewForm={() => load()}
+          onViewForm={viewForm}
+          onEditForm={editForm}
+          onNewForm={startNewForm}
         />
 
         <main className="min-w-0">
+          {!editorOpen ? (
+            <div className="flex h-full min-h-[520px] flex-col items-center justify-center gap-3 p-8 text-center">
+              <ClipboardList className="h-10 w-10 text-fuchsia-300" />
+              <h2 className="text-lg font-semibold text-slate-900">Choose a form</h2>
+              <p className="max-w-sm text-sm text-slate-500">
+                Tap a form in the library, then use View or Edit. Or create a new form to get started.
+              </p>
+              {permissions.canCreate ? (
+                <Button className="mt-2" onClick={startNewForm}>
+                  <Plus className="h-4 w-4" />
+                  New form
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <>
           <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-end sm:p-4">
             <label className="min-w-0 flex-1 sm:max-w-md">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Form name</span>
@@ -198,6 +231,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                 className="mt-1 border-slate-200 text-lg font-semibold shadow-none focus-visible:ring-fuchsia-300"
                 placeholder="e.g. Online order inquiry"
                 aria-label="Form name"
+                readOnly={mode === "preview" && !permissions.canEdit}
               />
             </label>
             <div className="flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 sm:ml-auto sm:w-auto">
@@ -435,6 +469,8 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
               </div>
             </div>
           ) : null}
+            </>
+          )}
         </main>
       </div>
     </div>

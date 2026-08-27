@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { Globe, Plus, Search } from "lucide-react";
+import { Eye, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,8 @@ type Props = {
   activeId: string;
   permissions: OfficeAppPermissions;
   responseCounts: Map<string, number>;
-  onSelectForm: (form: FormRecordSummary) => void;
+  onViewForm: (form: FormRecordSummary) => void;
+  onEditForm: (form: FormRecordSummary) => void;
   onNewForm: () => void;
 };
 
@@ -40,27 +40,41 @@ export function FormLibrary({
   activeId,
   permissions,
   responseCounts,
-  onSelectForm,
+  onViewForm,
+  onEditForm,
   onNewForm,
 }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FormFilter>("all");
   const [sort, setSort] = useState<FormSort>("updated");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const visibleForms = useMemo(
     () => browseForms({ forms, query, filter, sort, responseCounts }),
     [filter, forms, query, responseCounts, sort]
   );
 
+  function toggleExpanded(formId: string) {
+    setExpandedId((current) => (current === formId ? null : formId));
+  }
+
   return (
     <aside className="flex min-h-0 flex-col border-b border-fuchsia-100 bg-fuchsia-50 p-4 xl:border-b-0 xl:border-r">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-fuchsia-700">Your forms</p>
-          <p className="mt-1 text-xs leading-relaxed text-fuchsia-900/70">Search, filter, and open any saved form.</p>
+          <p className="mt-1 text-xs leading-relaxed text-fuchsia-900/70">Tap a form to View or Edit it.</p>
         </div>
         {permissions.canCreate ? (
-          <Button size="sm" variant="outline" className="shrink-0 border-fuchsia-200 bg-white" onClick={onNewForm}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-fuchsia-200 bg-white"
+            onClick={() => {
+              setExpandedId(null);
+              onNewForm();
+            }}
+          >
             <Plus className="h-4 w-4" />
             New
           </Button>
@@ -112,45 +126,57 @@ export function FormLibrary({
 
       <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
         {visibleForms.map((record) => {
-          const responseCount = responseCounts.get(record.id) ?? 0;
-          const isPublished = Boolean(record.metadata.published);
-          const isActive = record.id === activeId;
+          const isExpanded = expandedId === record.id;
+          const isOpen = record.id === activeId;
           return (
-            <button
+            <div
               key={record.id}
-              type="button"
-              onClick={() => onSelectForm(record)}
               className={cn(
-                "w-full rounded-xl border p-3 text-left transition",
-                isActive
-                  ? "border-fuchsia-600 bg-fuchsia-600 text-white shadow-sm"
-                  : "border-fuchsia-100 bg-white hover:border-fuchsia-200 hover:bg-fuchsia-50"
+                "rounded-xl border bg-white transition",
+                isExpanded || isOpen ? "border-fuchsia-300 shadow-sm" : "border-fuchsia-100 hover:border-fuchsia-200"
               )}
             >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold break-words">{record.title}</span>
-                {isPublished ? (
-                  <span
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                      isActive ? "bg-fuchsia-500 text-white" : "bg-emerald-50 text-emerald-700"
-                    )}
+              <button
+                type="button"
+                onClick={() => toggleExpanded(record.id)}
+                className="flex w-full items-center gap-2 p-3 text-left"
+                aria-expanded={isExpanded}
+                aria-controls={`form-actions-${record.id}`}
+              >
+                <span className="min-w-0 flex-1 truncate font-semibold text-slate-900">{record.title}</span>
+              </button>
+
+              {isExpanded ? (
+                <div id={`form-actions-${record.id}`} className="flex gap-2 border-t border-fuchsia-100 px-3 pb-3 pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      onViewForm(record);
+                      setExpandedId(null);
+                    }}
                   >
-                    <Globe className="h-3 w-3" />
-                    Online
-                  </span>
-                ) : null}
-              </div>
-              {record.metadata.description || record.summary ? (
-                <p className={cn("mt-1 line-clamp-2 text-xs", isActive ? "text-fuchsia-100" : "text-slate-500")}>
-                  {record.metadata.description || record.summary}
-                </p>
+                    <Eye className="h-4 w-4" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700"
+                    disabled={!permissions.canEdit}
+                    onClick={() => {
+                      onEditForm(record);
+                      setExpandedId(null);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                </div>
               ) : null}
-              <p className={cn("mt-2 text-xs", isActive ? "text-fuchsia-100" : "text-slate-400")}>
-                {responseCount} response{responseCount === 1 ? "" : "s"} · Updated{" "}
-                {formatDistanceToNow(new Date(record.updatedAt), { addSuffix: true })}
-              </p>
-            </button>
+            </div>
           );
         })}
 
