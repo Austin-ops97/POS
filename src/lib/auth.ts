@@ -232,6 +232,12 @@ export function hasAnyPermission(
   return permissions.some((permission) => hasPermission(ctx, permission));
 }
 
+/** Owner and Admin roles can edit business profile settings. */
+export function canManageBusinessProfile(ctx: AuthContext): boolean {
+  const role = ctx.employee.role.name;
+  return role === "Owner" || role === "Admin";
+}
+
 export async function requireAnyPermission(
   ctx: AuthContext,
   permissions: string[]
