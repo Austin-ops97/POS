@@ -55,6 +55,10 @@ export const receiptSettingsSchema = z.object({
   showSignatureOnReceipt: z.boolean(),
 });
 
+export const regionalSettingsSchema = z.object({
+  displayTimezone: z.string().trim().min(1).max(80),
+});
+
 export const MODULE_SETTING_KEYS = [
   "POS",
   "PAYMENTS",

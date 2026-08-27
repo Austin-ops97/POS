@@ -5,13 +5,14 @@ import {
   formatReceiptMoney,
 } from "./receipt-data";
 
-function formatReceiptDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatReceiptDate(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
   });
 }
 
@@ -41,7 +42,7 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
     doc.moveDown(0.5);
     doc.text(`Order ${data.orderNumber}`, { align: "center" });
     doc.text(`Receipt ${data.receiptNumber}`, { align: "center" });
-    doc.text(formatReceiptDate(data.paidAt ?? data.createdAt), { align: "center" });
+    doc.text(formatReceiptDate(data.paidAt ?? data.createdAt, data.displayTimezone), { align: "center" });
     doc.text(`Location: ${data.location.name}`, { align: "center" });
 
     if (data.settings.showCashier && data.employee) {
@@ -105,7 +106,7 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
       doc.font("Helvetica");
       for (const refund of data.refunds) {
         doc.text(
-          `${formatReceiptDate(refund.createdAt)}: -${formatReceiptMoney(refund.amount)}`
+          `${formatReceiptDate(refund.createdAt, data.displayTimezone)}: -${formatReceiptMoney(refund.amount)}`
         );
       }
       totalLine("Net paid", formatReceiptMoney(data.netPaid));

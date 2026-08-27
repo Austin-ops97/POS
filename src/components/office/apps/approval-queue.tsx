@@ -5,6 +5,7 @@ import { Check, Loader2, MessageSquareWarning, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 
 type QueueItem = {
   id: string;
@@ -23,6 +24,7 @@ async function apiError(response: Response) {
 }
 
 export function ApprovalQueue() {
+  const formatDate = useFormatDate();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export function ApprovalQueue() {
             <div>
               <h2 className="text-lg font-semibold text-slate-950">{item.project.title}</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Submitted by {item.submittedBy.name} · {new Date(item.submittedAt).toLocaleString()}
+                Submitted by {item.submittedBy.name} · {formatDate(item.submittedAt)}
               </p>
               {item.completionNote ? <p className="mt-2 text-sm text-slate-700">{item.completionNote}</p> : null}
             </div>

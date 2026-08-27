@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ReminderComposer } from "./reminder-composer";
 import { describeReminderRecipients } from "@/lib/office/reminder-form";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 
 type View = "upcoming" | "sent" | "failed";
 
@@ -45,6 +46,7 @@ async function apiError(response: Response) {
 }
 
 export function RemindersManager() {
+  const formatDate = useFormatDate();
   const [view, setView] = useState<View>("upcoming");
   const [reminders, setReminders] = useState<UpcomingReminder[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
@@ -132,7 +134,7 @@ export function RemindersManager() {
                   <div>
                     <p className="font-semibold text-slate-950">{reminder.title}</p>
                     <p className="mt-1 text-sm text-slate-500">
-                      {reminder.project?.title ?? "Project"} · next {new Date(reminder.nextSendAt).toLocaleString()}
+                      {reminder.project?.title ?? "Project"} · next {formatDate(reminder.nextSendAt)}
                     </p>
                     {reminder.recipients ? (
                       <p className="mt-1 text-xs text-slate-400">{describeReminderRecipients(reminder.recipients)}</p>
@@ -165,7 +167,7 @@ export function RemindersManager() {
                     {row.failureMessage ? <p className="mt-1 text-sm text-red-600">{row.failureMessage}</p> : null}
                   </div>
                   <span className="text-xs text-slate-400">
-                    {new Date(row.sentAt ?? row.failedAt ?? row.createdAt).toLocaleString()}
+                    {formatDate(row.sentAt ?? row.failedAt ?? row.createdAt)}
                   </span>
                 </div>
               </article>

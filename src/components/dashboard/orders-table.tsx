@@ -18,7 +18,8 @@ import {
   TerminateOrderDialog,
   type TerminateOrderDialogOrder,
 } from "@/components/dashboard/terminate-order-dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import {
   formatOrderStatus,
   getOrderStatusVariant,
@@ -78,6 +79,7 @@ export function OrdersTable({
   orders: initialOrders,
   canTerminateOrders = false,
 }: OrdersTableProps) {
+  const formatDate = useFormatDate();
   const [orders, setOrders] = useState(initialOrders);
   const [status, setStatus] = useState<StatusFilter>("active_pending");
   const [dateFrom, setDateFrom] = useState("");

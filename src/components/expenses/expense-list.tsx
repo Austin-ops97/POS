@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import { ExpenseStatusBadge } from "./status-badge";
 import { toast } from "sonner";
 
@@ -47,6 +48,7 @@ export function ExpenseList({
   items: ExpenseRow[];
   categories: Array<{ id: string; name: string }>;
 }) {
+  const formatDate = useFormatDate();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();

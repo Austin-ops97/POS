@@ -5,7 +5,8 @@ import { requireAuth, hasPermission } from "@/lib/auth";
 import { getEmployeeModuleAccess } from "@/lib/access-control";
 import { db } from "@/lib/db";
 import { getOrderById } from "@/lib/queries";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,7 +111,7 @@ export default async function OrderDetailPage({
               </Badge>
             </div>
             <p className="text-sm text-slate-500">
-              {formatDate(order.createdAt)}
+              {formatDisplayDate(order.createdAt, ctx)}
               {(() => {
                 const loc = (order as unknown as { location?: { name: string } }).location;
                 return loc ? ` · ${loc.name}` : "";
@@ -162,7 +163,7 @@ export default async function OrderDetailPage({
           </CardHeader>
           <CardContent className="space-y-1 text-sm text-slate-600">
             <p>
-              Terminated {formatDate(order.terminatedAt)}
+              Terminated {formatDisplayDate(order.terminatedAt, ctx)}
               {order.terminatedByName ? ` by ${order.terminatedByName}` : ""}
             </p>
             {order.terminationReason && (
@@ -257,7 +258,7 @@ export default async function OrderDetailPage({
                           {formatCurrency(Number(refund.amount))}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {refund.reason.replace(/_/g, " ")} · {formatDate(refund.createdAt)}
+                          {refund.reason.replace(/_/g, " ")} · {formatDisplayDate(refund.createdAt, ctx)}
                         </p>
                       </div>
                     </li>
@@ -318,7 +319,7 @@ export default async function OrderDetailPage({
                             ` · ${payment.cardBrand ?? ""} ${payment.cardLast4}`}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {payment.createdAt ? formatDate(payment.createdAt) : ""}
+                          {payment.createdAt ? formatDisplayDate(payment.createdAt, ctx) : ""}
                         </p>
                       </div>
                       <div className="text-right">
@@ -375,7 +376,7 @@ export default async function OrderDetailPage({
                           : " · Not emailed"}
                         {receipt.lastEmailedAt && (
                           <span className="block text-xs text-slate-500">
-                            Last emailed {formatDate(receipt.lastEmailedAt)}
+                            Last emailed {formatDisplayDate(receipt.lastEmailedAt, ctx)}
                           </span>
                         )}
                       </li>

@@ -12,13 +12,14 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function formatReceiptDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatReceiptDate(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
   });
 }
 
@@ -37,7 +38,7 @@ export function renderReceiptPlainText(data: ReceiptData): string {
   lines.push("");
   lines.push(`Order ${data.orderNumber}`);
   lines.push(`Receipt ${data.receiptNumber}`);
-  lines.push(formatReceiptDate(data.paidAt ?? data.createdAt));
+  lines.push(formatReceiptDate(data.paidAt ?? data.createdAt, data.displayTimezone));
   lines.push(`Location: ${data.location.name}`);
 
   if (data.settings.showCashier && data.employee) {
@@ -85,7 +86,7 @@ export function renderReceiptPlainText(data: ReceiptData): string {
     lines.push("--- Refunds ---");
     for (const refund of data.refunds) {
       lines.push(
-        `${formatReceiptDate(refund.createdAt)}: -${formatReceiptMoney(refund.amount)} (${refund.reason.replace(/_/g, " ")})`
+        `${formatReceiptDate(refund.createdAt, data.displayTimezone)}: -${formatReceiptMoney(refund.amount)} (${refund.reason.replace(/_/g, " ")})`
       );
     }
     lines.push(`Total refunded: ${formatReceiptMoney(data.totalRefunded)}`);
@@ -111,7 +112,7 @@ export function renderReceiptPlainText(data: ReceiptData): string {
 export function renderReceiptHtml(data: ReceiptData): string {
   const businessName = escapeHtml(data.business.legalName || data.business.name);
   const locationLines = data.location.addressLines.map(escapeHtml).join("<br />");
-  const dateStr = escapeHtml(formatReceiptDate(data.paidAt ?? data.createdAt));
+  const dateStr = escapeHtml(formatReceiptDate(data.paidAt ?? data.createdAt, data.displayTimezone));
   const signatureMarkup = data.settings.showSignature && data.signature?.dataFormat === "PNG" && data.signature.signatureData.startsWith("data:image/png;base64,")
     ? `<div class="footer"><div class="muted">Signature: ${escapeHtml(data.signature.signerName)}</div><img alt="Customer signature" src="${data.signature.signatureData}" style="max-width:280px;max-height:90px" /></div>`
     : "";
@@ -167,7 +168,7 @@ export function renderReceiptHtml(data: ReceiptData): string {
             .map(
               (refund) => `
             <div class="refund-row">
-              <span>${escapeHtml(formatReceiptDate(refund.createdAt))}</span>
+              <span>${escapeHtml(formatReceiptDate(refund.createdAt, data.displayTimezone))}</span>
               <span>-${escapeHtml(formatReceiptMoney(refund.amount))}</span>
             </div>
             <div class="refund-reason">${escapeHtml(refund.reason.replace(/_/g, " "))}${refund.reasonNote ? ` — ${escapeHtml(refund.reasonNote)}` : ""}</div>`

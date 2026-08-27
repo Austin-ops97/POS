@@ -1480,6 +1480,7 @@ model BusinessSetting {
   enableGroupCalling          Boolean  @default(true)
   enableScreenSharing         Boolean  @default(true)
   enableMissedCallEmails      Boolean  @default(false)
+  displayTimezone             String   @default("America/New_York")
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 

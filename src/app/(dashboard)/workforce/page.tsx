@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PERMISSIONS } from "@/lib/permissions";
-import { formatDate } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { getClockState } from "@/lib/workforce/time-clock-service";
 import {
   isLongShift,
@@ -98,7 +98,7 @@ export default async function WorkforcePage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium text-slate-900">{entry.employee.name}</p>
                     <p className="text-xs text-slate-500">
-                      Since {formatDate(entry.clockIn)} ·{" "}
+                      Since {formatDisplayDate(entry.clockIn, ctx)} ·{" "}
                       {getShiftElapsedHours(entry).toFixed(1)}h open
                     </p>
                   </div>
@@ -159,7 +159,7 @@ export default async function WorkforcePage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900">{entry.employee.name}</p>
                       <p className="text-xs text-slate-500">
-                        Since {formatDate(entry.clockIn)}
+                        Since {formatDisplayDate(entry.clockIn, ctx)}
                         {isLongShift(entry)
                           ? ` · ${getShiftElapsedHours(entry).toFixed(1)}h open`
                           : ""}
@@ -207,7 +207,7 @@ export default async function WorkforcePage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900">{shift.employee.name}</p>
                       <p className="text-xs text-slate-500">
-                        {formatDate(shift.startAt)} – {formatDate(shift.endAt)}
+                        {formatDisplayDate(shift.startAt, ctx)} – {formatDisplayDate(shift.endAt, ctx)}
                       </p>
                     </div>
                     {shift.location && (

@@ -66,6 +66,7 @@ function makeReceiptData(overrides: Partial<ReceiptData> = {}): ReceiptData {
     isRefunded: false,
     isPartiallyRefunded: false,
     printed: false,
+    displayTimezone: "America/New_York",
     ...overrides,
   };
 }

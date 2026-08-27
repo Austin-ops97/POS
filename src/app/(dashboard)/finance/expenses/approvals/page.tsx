@@ -3,7 +3,8 @@ import { requireAuth, hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { listExpenses } from "@/lib/expenses/expense-service";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { ExpenseStatusBadge } from "@/components/expenses/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -44,7 +45,7 @@ export default async function ExpenseApprovalsPage() {
                 <div>
                   <p className="font-medium text-slate-900">{item.merchant}</p>
                   <p className="text-xs text-slate-500">
-                    {item.employee.name} · {formatDate(item.purchaseDate)}
+                    {item.employee.name} · {formatDisplayDate(item.purchaseDate, ctx)}
                     {item.missingReceipt ? " · Missing receipt" : ""}
                   </p>
                 </div>

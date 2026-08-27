@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { formatDate } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import { LONG_SHIFT_HOURS } from "@/lib/workforce/timesheet-flags";
 
 type TimeEntryRow = {
@@ -70,6 +70,7 @@ function formatPunch(iso: string | null | undefined): string {
 }
 
 export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPanelProps) {
+  const formatDate = useFormatDate();
   const router = useRouter();
   const [entries, setEntries] = useState<TimeEntryRow[]>([]);
   const [editRequests, setEditRequests] = useState<EditRequest[]>([]);

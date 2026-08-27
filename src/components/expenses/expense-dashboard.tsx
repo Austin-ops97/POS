@@ -14,7 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import { ExpenseStatusBadge } from "./status-badge";
 import dynamic from "next/dynamic";
 import { Progress } from "@/components/ui/progress";
@@ -84,6 +85,7 @@ type DashboardData = {
 };
 
 export function ExpenseDashboard({ data }: { data: DashboardData }) {
+  const formatDate = useFormatDate();
   const { cards, charts, recentActivity, cardUtilization } = data;
 
   return (

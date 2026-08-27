@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Building2,
   MapPin,
+  Globe,
   UserCog,
   Percent,
   Package,
@@ -33,6 +34,12 @@ const settingsSections = [
         title: "Locations",
         description: "Store addresses, timezones, and tax regions",
         icon: MapPin,
+      },
+      {
+        href: "/settings/regional",
+        title: "Regional",
+        description: "Display timezone for dates and times across the app",
+        icon: Globe,
       },
       {
         href: "/settings/modules",

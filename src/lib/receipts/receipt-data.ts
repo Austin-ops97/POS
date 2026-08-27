@@ -100,6 +100,7 @@ export type ReceiptData = {
   lastEmailedAt?: string;
   printed: boolean;
   printedAt?: string;
+  displayTimezone: string;
   signature?: { dataFormat: "PNG" | "SVG"; signatureData: string; signerName: string };
 };
 
@@ -249,6 +250,8 @@ export async function getReceiptData(
     lastEmailedAt: receipt.lastEmailedAt?.toISOString(),
     printed: receipt.printed,
     printedAt: receipt.printedAt?.toISOString(),
+    displayTimezone:
+      settings?.displayTimezone ?? order.location.timezone ?? "America/New_York",
     signature: settings?.showSignatureOnReceipt && order.signatures[0]
       ? { dataFormat: order.signatures[0].dataFormat, signatureData: order.signatures[0].signatureData, signerName: order.signatures[0].signerName }
       : undefined,

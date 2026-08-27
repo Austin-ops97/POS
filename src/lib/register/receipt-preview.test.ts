@@ -52,6 +52,7 @@ const sampleReceipt: ReceiptData = {
   isRefunded: false,
   isPartiallyRefunded: false,
   printed: false,
+  displayTimezone: "America/New_York",
 };
 
 describe("receipt preview rendering", () => {

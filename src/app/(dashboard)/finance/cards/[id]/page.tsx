@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireAuth, hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -68,7 +69,7 @@ export default async function CompanyCardDetailPage({
                   <span>
                     {expense.merchant}
                     <span className="block text-xs text-slate-500">
-                      {expense.employee.name} · {formatDate(expense.purchaseDate)}
+                      {expense.employee.name} · {formatDisplayDate(expense.purchaseDate, ctx)}
                     </span>
                   </span>
                   <span className="font-medium">{formatCurrency(Number(expense.total))}</span>
@@ -96,7 +97,7 @@ export default async function CompanyCardDetailPage({
                   <span>
                     {tx.merchantName}
                     <span className="block text-xs text-slate-500">
-                      {tx.source} · {formatDate(tx.purchasedAt)}
+                      {tx.source} · {formatDisplayDate(tx.purchasedAt, ctx)}
                     </span>
                   </span>
                   <span className="font-medium">{formatCurrency(Number(tx.amount))}</span>
