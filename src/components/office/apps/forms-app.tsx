@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
-import { buildResponseCountMap, getFormRecords, type FormRecordSummary } from "@/lib/office/form-library";
+import { buildResponseCountMap, getFormRecords, isFormRecord, type FormRecordSummary } from "@/lib/office/form-library";
 import {
   finalizedFormOptions,
   publicFormPath,
@@ -131,8 +131,11 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   async function submitResponse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    let formRecord = active;
-    if (!formRecord) formRecord = await save();
+    let formRecord: FormRecordSummary | undefined = active;
+    if (!formRecord) {
+      const saved = await save();
+      formRecord = saved && isFormRecord(saved) ? saved : undefined;
+    }
     if (!formRecord) return;
     const raw = new FormData(formElement);
     const answers: Record<string, string | boolean> = {};
