@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import { checkRateLimitAsync } from "@/lib/rate-limit";
 import {
+  archiveCompletedWorkspaceRecords,
   createOfficeWorkspaceRecord,
   listOfficeWorkspaceRecords,
 } from "@/lib/office/workspace-service";
@@ -33,10 +34,16 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Too many requests", code: "RATE_LIMITED" }, { status: 429 });
     }
     const { workspace } = await params;
+    const body = await request.json();
+    if (body?.action === "clear-complete") {
+      return NextResponse.json(
+        await archiveCompletedWorkspaceRecords(ctx, workspace, getClientIp(request))
+      );
+    }
     const record = await createOfficeWorkspaceRecord(
       ctx,
       workspace,
-      await request.json(),
+      body,
       getClientIp(request)
     );
     return NextResponse.json(record, { status: 201 });

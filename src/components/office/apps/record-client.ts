@@ -59,6 +59,16 @@ export async function archiveWorkspaceRecord(workspace: string, id: string) {
   if (!response.ok) throw new Error(await apiError(response));
 }
 
+export async function clearCompletedWorkspaceRecords(workspace: string) {
+  const response = await fetch(`/api/office/workspaces/${workspace}/records`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "clear-complete" }),
+  });
+  if (!response.ok) throw new Error(await apiError(response));
+  return response.json() as Promise<{ count: number }>;
+}
+
 export async function restoreWorkspaceRecord(workspace: string, id: string) {
   const response = await fetch(`/api/office/workspaces/${workspace}/records/${id}`, {
     method: "POST",

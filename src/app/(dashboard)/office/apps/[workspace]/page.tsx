@@ -46,7 +46,7 @@ export default async function OfficeModulePage({ params }: Props) {
     case "presentations": return <PresentationApp module={tool} initialRecords={records} permissions={permissions} />;
     case "communication": return <CommunicationApp module={tool} initialRecords={records} permissions={permissions} />;
     case "calendar": return <CalendarApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
-    case "task-assignments": return <TaskAssignmentsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
+    case "task-assignments": return <TaskAssignmentsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} currentEmployeeId={ctx.employee.id} currentEmployeeName={ctx.employee.name} />;
     case "forms-approvals": return <FormsApp module={tool} initialRecords={records} permissions={permissions} />;
     case "projects": return <ProjectsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
     case "automations-ai": return <WorkflowsApp module={tool} initialRecords={records} permissions={permissions} />;

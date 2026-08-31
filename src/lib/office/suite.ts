@@ -74,8 +74,8 @@ export const OFFICE_SUITE_MODULES: OfficeSuiteModule[] = [
   },
   {
     slug: "task-assignments", name: "Task assignments", eyebrow: "Assign work to people", icon: "tasks", group: "Communicate & serve", accent: "teal", delivery: "built-in",
-    description: "Assign a saved task to a worker, set when it is due, and see assignments grouped by person.",
-    features: ["Assign to a worker", "Due date and notes", "Open and done lists"],
+    description: "Assign a saved task to a worker, notify them, collect completion photos, and keep finished work on its own tab.",
+    features: ["Assign to a worker", "In-app and email notice", "Complete with photo and checklist", "Finished tab and cleanup"],
     quickActions: [{ label: "Assign a task" }, { label: "By worker" }],
   },
   {

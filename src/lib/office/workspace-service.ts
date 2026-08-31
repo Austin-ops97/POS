@@ -9,6 +9,8 @@ import {
   officeWorkspaceRecordUpdateSchema,
 } from "@/lib/validations/office-workspace";
 import { workspaceRecordListFilter } from "@/lib/office/workspace-archive";
+import { notifyTaskAssignee } from "@/lib/office/task-assignment-notify";
+import { TASK_ASSIGNMENTS_WORKSPACE } from "@/lib/office/task-assignments";
 
 export type OfficeWorkspaceRecordSummary = {
   id: string;
@@ -33,6 +35,17 @@ function requireCreateOrEdit(ctx: AuthContext, createdById: string) {
   if (hasPermission(ctx, PERMISSIONS.EDIT_DOCUMENTS)) return;
   if (hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS) && createdById === ctx.employee.id) return;
   throw new Error(`Missing permission: ${PERMISSIONS.EDIT_DOCUMENTS}`);
+}
+function requireDeleteOrOwner(ctx: AuthContext, createdById: string, workspace: string) {
+  if (hasPermission(ctx, PERMISSIONS.DELETE_DOCUMENTS)) return;
+  if (
+    workspace === TASK_ASSIGNMENTS_WORKSPACE &&
+    hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS) &&
+    createdById === ctx.employee.id
+  ) {
+    return;
+  }
+  throw new Error(`Missing permission: ${PERMISSIONS.DELETE_DOCUMENTS}`);
 }
 function requireWorkspace(workspace: string) {
   if (!getOfficeSuiteModule(workspace)) throw new Error("Office workspace not found");
@@ -148,6 +161,27 @@ export async function createOfficeWorkspaceRecord(
     });
     return created;
   });
+  if (input.assignedToId) {
+    try {
+      await notifyTaskAssignee({
+        workspace,
+        businessId: ctx.business.id,
+        businessName: ctx.business.name,
+        actorId: ctx.employee.id,
+        actorName: ctx.employee.name,
+        assigneeId: input.assignedToId,
+        isCreate: true,
+        title: record.title,
+        notes:
+          record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+            ? String((record.metadata as Record<string, unknown>).notes ?? record.summary ?? "")
+            : record.summary,
+        dueAt: record.dueAt ? new Date(record.dueAt) : null,
+      });
+    } catch (error) {
+      console.error("Task assignment notify failed", error);
+    }
+  }
   return serializeRecord(record);
 }
 
@@ -163,7 +197,7 @@ export async function updateOfficeWorkspaceRecord(
   await validateAssignee(ctx, input.assignedToId);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id, archivedAt: null },
-    select: { id: true, createdById: true },
+    select: { id: true, createdById: true, assignedToId: true },
   });
   if (!current) throw new Error("Workspace record not found");
   requireCreateOrEdit(ctx, current.createdById);
@@ -187,6 +221,27 @@ export async function updateOfficeWorkspaceRecord(
     });
     return updated;
   });
+  const nextAssignee = input.assignedToId !== undefined ? input.assignedToId : current.assignedToId;
+  try {
+    await notifyTaskAssignee({
+      workspace,
+      businessId: ctx.business.id,
+      businessName: ctx.business.name,
+      actorId: ctx.employee.id,
+      actorName: ctx.employee.name,
+      assigneeId: nextAssignee,
+      previousAssigneeId: current.assignedToId,
+      isCreate: false,
+      title: record.title,
+      notes:
+        record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+          ? String((record.metadata as Record<string, unknown>).notes ?? record.summary ?? "")
+          : record.summary,
+      dueAt: record.dueAt ? new Date(record.dueAt) : null,
+    });
+  } catch (error) {
+    console.error("Task assignment notify failed", error);
+  }
   return serializeRecord(record);
 }
 
@@ -196,13 +251,13 @@ export async function archiveOfficeWorkspaceRecord(
   id: string,
   ipAddress?: string
 ) {
-  requirePermission(ctx, PERMISSIONS.DELETE_DOCUMENTS);
   requireWorkspace(workspace);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id, archivedAt: null },
-    select: { id: true, title: true },
+    select: { id: true, title: true, createdById: true },
   });
   if (!current) throw new Error("Workspace record not found");
+  requireDeleteOrOwner(ctx, current.createdById, workspace);
   const archived = await db.$transaction(async (tx) => {
     const updated = await tx.officeWorkspaceRecord.update({
       where: { id },
@@ -254,4 +309,47 @@ export async function restoreOfficeWorkspaceRecord(
     return updated;
   });
   return serializeRecord(restored);
+}
+
+export async function archiveCompletedWorkspaceRecords(
+  ctx: AuthContext,
+  workspace: string,
+  ipAddress?: string
+) {
+  requireWorkspace(workspace);
+  const canDeleteAll = hasPermission(ctx, PERMISSIONS.DELETE_DOCUMENTS);
+  const canDeleteOwn = hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  if (!canDeleteAll && !canDeleteOwn) {
+    throw new Error(`Missing permission: ${PERMISSIONS.DELETE_DOCUMENTS}`);
+  }
+
+  const matches = await db.officeWorkspaceRecord.findMany({
+    where: {
+      businessId: ctx.business.id,
+      workspace,
+      archivedAt: null,
+      OR: [{ status: "COMPLETE" }, { metadata: { path: ["done"], equals: true } }],
+      ...(canDeleteAll ? {} : { createdById: ctx.employee.id }),
+    },
+    select: { id: true },
+  });
+  if (!matches.length) return { count: 0 };
+
+  const ids = matches.map((row) => row.id);
+  await db.$transaction(async (tx) => {
+    await tx.officeWorkspaceRecord.updateMany({
+      where: { id: { in: ids }, businessId: ctx.business.id },
+      data: { archivedAt: new Date() },
+    });
+    await tx.officeAuditEvent.create({
+      data: {
+        businessId: ctx.business.id,
+        actorId: ctx.employee.id,
+        action: "WORKSPACE_RECORD_ARCHIVE",
+        details: { workspace, count: ids.length, recordIds: ids, reason: "clear-complete" },
+        ipAddress,
+      },
+    });
+  });
+  return { count: ids.length };
 }
