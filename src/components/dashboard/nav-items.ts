@@ -14,6 +14,7 @@ import {
   Receipt,
   PiggyBank,
   LineChart,
+  Landmark,
   Files,
   FileText,
   FolderKanban,
@@ -22,6 +23,7 @@ import {
   MessageCircle,
   Bell,
   ClipboardCheck,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 
@@ -61,6 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/office", label: "Office hub", icon: Files },
       { href: "/office/documents", label: "Documents", icon: FileText },
       { href: "/office/apps/projects", label: "Projects", icon: FolderKanban },
+      { href: "/office/apps/task-assignments", label: "Task assignments", icon: ListTodo },
       { href: "/office/reminders", label: "Reminders", icon: Bell },
       { href: "/office/apps/forms-approvals", label: "Forms & approvals", icon: FileSignature },
       { href: "/office/approvals", label: "Project approvals", icon: ClipboardCheck },
@@ -72,6 +75,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Finance",
     items: [
       { href: "/finance/expenses", label: "Expenses", icon: Wallet },
+      { href: "/finance/statements", label: "Bank statements", icon: Landmark },
       { href: "/finance/cards", label: "Company Cards", icon: CreditCard },
       { href: "/finance/reimbursements", label: "Reimbursements", icon: Receipt },
       { href: "/finance/reports", label: "Expense Reports", icon: LineChart },
@@ -96,6 +100,9 @@ export function isNavItemActive(pathname: string, href: string): boolean {
       pathname === "/finance/expenses" ||
       pathname.startsWith("/finance/expenses/")
     );
+  }
+  if (href === "/finance/statements") {
+    return pathname === "/finance/statements" || pathname.startsWith("/finance/statements/");
   }
   if (href === "/finance/reports") {
     return pathname === "/finance/reports" || pathname.startsWith("/finance/reports/");

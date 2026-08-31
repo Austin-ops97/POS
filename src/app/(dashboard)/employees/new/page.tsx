@@ -34,9 +34,9 @@ export default async function NewEmployeePage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Add Employee</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Invite employee</h1>
           <p className="text-sm text-slate-500">
-            Create a new team member profile
+            Add their name, email, and role. You will get a link they can use after they create a login.
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 {
-  "name": "NexaPOS",
-  "short_name": "NexaPOS",
+  "name": "POS",
+  "short_name": "POS",
   "description": "Point of sale, inventory, payments, and workforce for your business.",
   "start_url": "/dashboard",
   "display": "standalone",

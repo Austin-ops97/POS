@@ -1,7 +1,7 @@
 export type OfficeSuiteIcon =
   | "files" | "document" | "sheet" | "presentation" | "pdf" | "message"
   | "calendar" | "customers" | "forms" | "finance" | "projects" | "people"
-  | "knowledge" | "security" | "automation" | "utilities";
+  | "knowledge" | "security" | "automation" | "utilities" | "tasks";
 
 export type OfficeSuiteGroup = "Create & organize" | "Communicate & serve" | "Run the business" | "Manage & protect";
 export type OfficeDelivery = "built-in" | "connected";
@@ -26,7 +26,7 @@ export const OFFICE_SUITE_GROUPS: OfficeSuiteGroup[] = [
 
 export const CUSTOM_OFFICE_WORKSPACES = [
   "spreadsheets", "presentations", "communication", "calendar", "forms-approvals",
-  "projects", "automations-ai", "utilities",
+  "task-assignments", "projects", "automations-ai", "utilities",
 ] as const;
 
 export const OFFICE_SUITE_MODULES: OfficeSuiteModule[] = [
@@ -71,6 +71,12 @@ export const OFFICE_SUITE_MODULES: OfficeSuiteModule[] = [
     description: "Schedule saved customer appointments, assign a team member, track status, and catch time conflicts.",
     features: ["Appointment scheduling", "Team assignment", "Conflict warnings"],
     quickActions: [{ label: "Book appointment" }, { label: "View schedule" }],
+  },
+  {
+    slug: "task-assignments", name: "Task assignments", eyebrow: "Assign work to people", icon: "tasks", group: "Communicate & serve", accent: "teal", delivery: "built-in",
+    description: "Assign a saved task to a worker, set when it is due, and see assignments grouped by person.",
+    features: ["Assign to a worker", "Due date and notes", "Open and done lists"],
+    quickActions: [{ label: "Assign a task" }, { label: "By worker" }],
   },
   {
     slug: "crm-sales", name: "Customers", eyebrow: "Know the customer", icon: "customers", group: "Communicate & serve", accent: "cyan", delivery: "connected",

@@ -96,8 +96,8 @@ describe("Office validation", () => {
 
 describe("Office & Admin suite", () => {
   it("publishes an accurate, uniquely-addressable tool directory", () => {
-    assert.equal(OFFICE_SUITE_MODULES.length, 16);
-    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 16);
+    assert.equal(OFFICE_SUITE_MODULES.length, 17);
+    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 17);
     assert.deepEqual(
       new Set(OFFICE_SUITE_MODULES.map((module) => module.group)),
       new Set(OFFICE_SUITE_GROUPS)
@@ -123,6 +123,16 @@ describe("Office & Admin suite", () => {
       officeWorkspaceRecordCreateSchema.safeParse({ title: "Review", priority: "CRITICAL" }).success,
       false
     );
+    const form = officeWorkspaceRecordCreateSchema.parse({
+      title: "New hire form",
+      metadata: {
+        kind: "form",
+        description: "Collect details",
+        fields: [{ id: "q1", label: "Name", type: "text", required: true, options: [] }],
+      },
+    });
+    assert.equal((form.metadata as { kind: string }).kind, "form");
+    assert.equal(((form.metadata as { fields: Array<{ label: string }> }).fields)[0].label, "Name");
   });
 });
 

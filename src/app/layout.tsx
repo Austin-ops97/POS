@@ -17,16 +17,16 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "NexaPOS",
-    template: "%s · NexaPOS",
+    default: "Point of sale",
+    template: "%s",
   },
   description:
     "Point of sale, inventory, payments, customers, employees, and reports.",
-  applicationName: "NexaPOS",
+  applicationName: "POS",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "NexaPOS",
+    title: "POS",
   },
   formatDetection: {
     telephone: false,

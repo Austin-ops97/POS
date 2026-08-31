@@ -21,7 +21,7 @@ const officeWorkspaceRecordFields = {
   priority: z.enum(OFFICE_WORKSPACE_PRIORITIES),
   dueAt: z.coerce.date().optional().nullable(),
   assignedToId: z.string().cuid().optional().nullable(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 };
 
 export const officeWorkspaceRecordCreateSchema = z.object({

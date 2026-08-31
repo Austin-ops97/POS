@@ -9,6 +9,7 @@ import { PresentationApp } from "@/components/office/apps/presentation-app";
 import { CommunicationApp } from "@/components/office/apps/communication-app";
 import { CalendarApp } from "@/components/office/apps/calendar-app";
 import { FormsApp } from "@/components/office/apps/forms-app";
+import { TaskAssignmentsApp } from "@/components/office/apps/task-assignments-app";
 import { ProjectsApp } from "@/components/office/apps/projects-app";
 import { WorkflowsApp } from "@/components/office/apps/workflows-app";
 import { UtilitiesApp } from "@/components/office/apps/utilities-app";
@@ -45,6 +46,7 @@ export default async function OfficeModulePage({ params }: Props) {
     case "presentations": return <PresentationApp module={tool} initialRecords={records} permissions={permissions} />;
     case "communication": return <CommunicationApp module={tool} initialRecords={records} permissions={permissions} />;
     case "calendar": return <CalendarApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
+    case "task-assignments": return <TaskAssignmentsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
     case "forms-approvals": return <FormsApp module={tool} initialRecords={records} permissions={permissions} />;
     case "projects": return <ProjectsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
     case "automations-ai": return <WorkflowsApp module={tool} initialRecords={records} permissions={permissions} />;

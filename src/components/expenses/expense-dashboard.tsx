@@ -6,6 +6,7 @@ import {
   Camera,
   ClipboardCheck,
   Download,
+  Landmark,
   Plus,
   Receipt,
   Upload,
@@ -123,6 +124,12 @@ export function ExpenseDashboard({ data }: { data: DashboardData }) {
             <Link href="/finance/expenses/approvals">
               <ClipboardCheck className="h-4 w-4" />
               Review Pending
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="min-h-11 rounded-xl">
+            <Link href="/finance/statements">
+              <Landmark className="h-4 w-4" />
+              Bank statements
             </Link>
           </Button>
           <Button asChild variant="outline" className="min-h-11 rounded-xl">

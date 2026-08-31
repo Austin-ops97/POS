@@ -5,8 +5,13 @@ import { TimesheetsPanel } from "@/components/workforce/timesheets-panel";
 import { Button } from "@/components/ui/button";
 import { PERMISSIONS } from "@/lib/permissions";
 
-export default async function TimesheetsPage() {
+export default async function TimesheetsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ entry?: string }>;
+}) {
   const ctx = await requireAuth();
+  const params = await searchParams;
   const canApprove =
     hasPermission(ctx, PERMISSIONS.MANAGE_TIME_ENTRIES) ||
     hasPermission(ctx, PERMISSIONS.MANAGE_WORKFORCE);
@@ -22,11 +27,15 @@ export default async function TimesheetsPage() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Timesheets</h1>
           <p className="text-sm text-slate-500">
-            Review hours, flags, and approve edits
+            Review hours, flags, and correct missed clock-outs
           </p>
         </div>
       </div>
-      <TimesheetsPanel canApprove={canApprove} currentEmployeeId={ctx.employee.id} />
+      <TimesheetsPanel
+        canApprove={canApprove}
+        currentEmployeeId={ctx.employee.id}
+        initialEntryId={params.entry}
+      />
     </div>
   );
 }

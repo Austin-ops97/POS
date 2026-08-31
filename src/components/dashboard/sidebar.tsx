@@ -18,6 +18,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { EmeraldMark } from "@/components/brand/emerald-mark";
 
 const SIDEBAR_STORAGE_KEY = "nexapos.sidebar.open";
 
@@ -75,14 +76,10 @@ export function SidebarNav({
 
 function BrandHeader() {
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2 whitespace-nowrap border-b border-slate-200 px-4 sm:px-6">
-      <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white"
-        aria-hidden="true"
-      >
-        N
-      </div>
-      <span className="text-lg font-semibold text-slate-900">NexaPOS</span>
+    <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-4 sm:px-6">
+      <Link href="/dashboard" className="inline-flex items-center" aria-label="Home">
+        <EmeraldMark className="h-9 w-9" />
+      </Link>
     </div>
   );
 }

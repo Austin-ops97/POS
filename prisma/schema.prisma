@@ -397,6 +397,7 @@ model Business {
   expenseSavedFilters       ExpenseSavedFilter[]
   expenseSettings           ExpenseSettings?
   expenseTags               ExpenseTag[]
+  bankStatements            BankStatement[]
   officeFolders             OfficeFolder[]
   officeDocuments           OfficeDocument[]
   officeTags                OfficeTag[]
@@ -619,6 +620,7 @@ model EmployeeProfile {
   projectApprovalEvents          ProjectApprovalEvent[]         @relation("ProjectApprovalActor")
   communicationCallsStarted      CommunicationCall[]            @relation("CommunicationCallStartedBy")
   callParticipations             CallParticipant[]
+  bankStatementsUploaded         BankStatement[]                @relation("BankStatementUploadedBy")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -2177,6 +2179,32 @@ model ExpenseSavedFilter {
 
   @@unique([employeeId, name])
   @@index([businessId])
+}
+
+model BankStatement {
+  id           String    @id @default(cuid())
+  businessId   String
+  uploadedById String
+  title        String
+  accountName  String?
+  periodStart  DateTime? @db.Date
+  periodEnd    DateTime? @db.Date
+  notes        String?
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageUrl   String
+  data         Bytes?
+  contentHash  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploadedBy EmployeeProfile @relation("BankStatementUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, deletedAt, createdAt])
+  @@index([uploadedById])
 }
 
 // ─── Office / Document Workspace ────────────────────────────────────────────

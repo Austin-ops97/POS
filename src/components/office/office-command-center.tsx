@@ -31,6 +31,7 @@ export function OfficeCommandCenter({ businessName, firstName, metrics, recentRe
     { label: "Write a document", href: "/office/new", detail: "Editor and templates", icon: "document" as const, tone: "bg-blue-600" },
     { label: "Build a spreadsheet", href: "/office/apps/spreadsheets", detail: "Formulas and CSV", icon: "sheet" as const, tone: "bg-emerald-600" },
     { label: "Book an appointment", href: "/office/apps/calendar", detail: "Conflict-checked", icon: "calendar" as const, tone: "bg-indigo-600" },
+    { label: "Assign a task", href: "/office/apps/task-assignments", detail: "By worker", icon: "tasks" as const, tone: "bg-teal-600" },
     { label: "Scan paperwork", href: "/office/scan", detail: "Capture and organize", icon: "pdf" as const, tone: "bg-rose-600" },
   ];
   return <div className="space-y-7 pb-8">

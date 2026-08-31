@@ -170,7 +170,7 @@ export function reportToPdfText(
   report: ReportExport & { groupBy: string }
 ): string {
   const lines = [
-    "NexaPOS Expense Report",
+    "Expense Report",
     `Grouped by: ${report.groupBy}`,
     `Expenses: ${report.expenseCount}`,
     `Grand total: $${report.grandTotal.toFixed(2)}`,

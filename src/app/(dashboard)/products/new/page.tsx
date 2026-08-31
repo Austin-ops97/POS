@@ -31,7 +31,7 @@ export default async function NewProductPage({
 
   const imageSource = pick("imageSource");
   const imageAttribution = imageSource
-    ? `Image from ${imageSource} (external catalog — not owned by NexaPOS)`
+    ? `Image from ${imageSource} (external catalog)`
     : null;
 
   return (

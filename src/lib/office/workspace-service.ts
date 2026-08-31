@@ -29,6 +29,11 @@ export type OfficeWorkspaceRecordSummary = {
 function requirePermission(ctx: AuthContext, permission: string) {
   if (!hasPermission(ctx, permission)) throw new Error(`Missing permission: ${permission}`);
 }
+function requireCreateOrEdit(ctx: AuthContext, createdById: string) {
+  if (hasPermission(ctx, PERMISSIONS.EDIT_DOCUMENTS)) return;
+  if (hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS) && createdById === ctx.employee.id) return;
+  throw new Error(`Missing permission: ${PERMISSIONS.EDIT_DOCUMENTS}`);
+}
 function requireWorkspace(workspace: string) {
   if (!getOfficeSuiteModule(workspace)) throw new Error("Office workspace not found");
 }
@@ -153,15 +158,15 @@ export async function updateOfficeWorkspaceRecord(
   payload: unknown,
   ipAddress?: string
 ) {
-  requirePermission(ctx, PERMISSIONS.EDIT_DOCUMENTS);
   requireWorkspace(workspace);
   const input = officeWorkspaceRecordUpdateSchema.parse(payload);
   await validateAssignee(ctx, input.assignedToId);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id, archivedAt: null },
-    select: { id: true },
+    select: { id: true, createdById: true },
   });
   if (!current) throw new Error("Workspace record not found");
+  requireCreateOrEdit(ctx, current.createdById);
   const record = await db.$transaction(async (tx) => {
     const updated = await tx.officeWorkspaceRecord.update({
       where: { id },

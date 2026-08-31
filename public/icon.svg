@@ -1,4 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="NexaPOS">
-  <rect width="512" height="512" rx="96" fill="#0f172a"/>
-  <text x="256" y="320" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="280" font-weight="700" fill="#ffffff">N</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Emerald">
+  <rect width="512" height="512" rx="96" fill="#042f24"/>
+  <path d="M131 198 193 112h126l62 86-125 210z" fill="#059669"/>
+  <path d="M256 408 131 198h250z" fill="#047857"/>
+  <path d="M193 112h126L256 198z" fill="#6ee7b7"/>
+  <path d="M193 112 131 198h125z" fill="#34d399"/>
+  <path d="M319 112 256 198h125z" fill="#10b981"/>
+  <path d="M131 198 256 408 256 198z" fill="#065f46"/>
+  <path d="M381 198 256 408 256 198z" fill="#064e3b"/>
+  <path d="M131 198h250" stroke="#a7f3d0" stroke-width="7" opacity="0.7"/>
+  <path d="M256 112v296" stroke="#ecfdf5" stroke-width="5" opacity="0.35"/>
 </svg>

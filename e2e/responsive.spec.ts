@@ -42,7 +42,7 @@ test.describe("responsive public smoke", () => {
 
   test("landing page shows brand", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText(/NexaPOS/i).first()).toBeVisible();
+    await expect(page.getByRole("img", { name: /emerald/i }).first()).toBeVisible();
     await assertNoDocumentOverflow(page);
   });
 

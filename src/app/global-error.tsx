@@ -27,7 +27,7 @@ export default function GlobalError({
             Something went wrong
           </h1>
           <p style={{ color: "#64748b", marginBottom: "1.25rem" }}>
-            NexaPOS hit an unexpected error.
+            The register hit an unexpected error.
             {error.digest ? ` Reference: ${error.digest}` : ""}
           </p>
           <button

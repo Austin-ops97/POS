@@ -102,9 +102,16 @@ export default async function WorkforcePage() {
                       {getShiftElapsedHours(entry).toFixed(1)}h open
                     </p>
                   </div>
-                  <Badge variant="warning" className="w-fit shrink-0">
-                    Forgot to clock out?
-                  </Badge>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <Badge variant="warning" className="w-fit shrink-0">
+                      Forgot to clock out?
+                    </Badge>
+                    {canApproveTimesheets ? (
+                      <Button asChild size="sm" className="w-full sm:w-auto">
+                        <Link href={`/workforce/timesheets?entry=${entry.id}`}>Correct hours</Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -143,7 +143,7 @@ export function PaymentsDashboard() {
           </h3>
           <p className="mt-2 max-w-md text-sm text-slate-500">
             Link your Stripe account to view balances, payouts, and payment health — all
-            inside NexaPOS.
+            inside this workspace.
           </p>
           <Button className="mt-6" onClick={handleConnect} disabled={connecting}>
             {connecting ? "Connecting…" : "Connect Stripe"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
@@ -46,6 +46,7 @@ type EditRequest = {
 type TimesheetsPanelProps = {
   canApprove: boolean;
   currentEmployeeId: string;
+  initialEntryId?: string;
 };
 
 function toLocalInputValue(iso: string | null | undefined): string {
@@ -69,7 +70,7 @@ function formatPunch(iso: string | null | undefined): string {
   }).format(new Date(iso));
 }
 
-export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPanelProps) {
+export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId }: TimesheetsPanelProps) {
   const router = useRouter();
   const [entries, setEntries] = useState<TimeEntryRow[]>([]);
   const [editRequests, setEditRequests] = useState<EditRequest[]>([]);
@@ -81,6 +82,9 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
   const [submitting, setSubmitting] = useState(false);
   const [denyId, setDenyId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
+
+  const [mode, setMode] = useState<"request" | "correct">("request");
+  const openedFromQuery = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,36 +104,71 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
     load();
   }, [load]);
 
-  function openEdit(entry: TimeEntryRow) {
+  function suggestedClockOut(entry: TimeEntryRow): string {
+    if (entry.clockOut) return toLocalInputValue(entry.clockOut);
+    const start = new Date(entry.clockIn);
+    const suggested = new Date(start.getTime() + 8 * 60 * 60 * 1000);
+    return toLocalInputValue(suggested.toISOString());
+  }
+
+  function openEdit(entry: TimeEntryRow, nextMode: "request" | "correct" = "request") {
     setEditing(entry);
+    setMode(nextMode);
     setClockIn(toLocalInputValue(entry.clockIn));
-    setClockOut(toLocalInputValue(entry.clockOut));
+    setClockOut(suggestedClockOut(entry));
     setReason("");
   }
+
+  useEffect(() => {
+    if (openedFromQuery.current || !initialEntryId || loading) return;
+    const match = entries.find((entry) => entry.id === initialEntryId);
+    if (match && canApprove) {
+      openedFromQuery.current = true;
+      openEdit(match, "correct");
+    }
+  }, [initialEntryId, loading, entries, canApprove]);
 
   async function submitEdit() {
     if (!editing || !clockIn || !reason.trim()) {
       toast.error("Clock in and a reason are required");
       return;
     }
+    if (mode === "correct" && !clockOut) {
+      toast.error("Set the clock-out time they actually left");
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/workforce/time-entry-edits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          timeEntryId: editing.id,
-          clockIn: fromLocalInputValue(clockIn),
-          clockOut: clockOut ? fromLocalInputValue(clockOut) : null,
-          reason: reason.trim(),
-        }),
-      });
+      const isManagerCorrect = canApprove && mode === "correct";
+      const res = await fetch(
+        isManagerCorrect
+          ? `/api/workforce/time-entries/${editing.id}`
+          : "/api/workforce/time-entry-edits",
+        {
+          method: isManagerCorrect ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isManagerCorrect
+              ? {
+                  clockIn: fromLocalInputValue(clockIn),
+                  clockOut: fromLocalInputValue(clockOut),
+                  adjustmentNote: reason.trim(),
+                }
+              : {
+                  timeEntryId: editing.id,
+                  clockIn: fromLocalInputValue(clockIn),
+                  clockOut: clockOut ? fromLocalInputValue(clockOut) : null,
+                  reason: reason.trim(),
+                }
+          ),
+        }
+      );
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        toast.error(data?.error ?? "Failed to submit edit");
+        toast.error(data?.error ?? "Failed to save time");
         return;
       }
-      toast.success("Edit submitted for manager approval");
+      toast.success(isManagerCorrect ? "Time corrected" : "Edit submitted for manager approval");
       setEditing(null);
       await load();
       router.refresh();
@@ -204,6 +243,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
   function EntryCard({ entry }: { entry: TimeEntryRow }) {
     const isOwn = entry.employee.id === currentEmployeeId;
     const canRequestEdit = isOwn && entry.status !== "ACTIVE" && !entry.pendingEdit;
+    const canCorrect = canApprove && !entry.pendingEdit;
     return (
       <li className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex items-start justify-between gap-3">
@@ -228,16 +268,30 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
             <FlagList flags={entry.flags} />
           </div>
         )}
-        {canRequestEdit && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-3 w-full"
-            onClick={() => openEdit(entry)}
-          >
-            <Pencil className="h-3 w-3" aria-hidden="true" />
-            Request edit
-          </Button>
+        {(canCorrect || canRequestEdit) && (
+          <div className="mt-3 grid gap-2">
+            {canCorrect && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => openEdit(entry, "correct")}
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+                Correct hours
+              </Button>
+            )}
+            {canRequestEdit && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => openEdit(entry, "request")}
+              >
+                Request edit
+              </Button>
+            )}
+          </div>
         )}
       </li>
     );
@@ -289,6 +343,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
                 const isOwn = entry.employee.id === currentEmployeeId;
                 const canRequestEdit =
                   isOwn && entry.status !== "ACTIVE" && !entry.pendingEdit;
+                const canCorrect = canApprove && !entry.pendingEdit;
                 return (
                   <tr key={entry.id} className="border-b border-slate-100 align-top">
                     {canApprove && (
@@ -311,12 +366,19 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      {canRequestEdit && (
-                        <Button size="sm" variant="outline" onClick={() => openEdit(entry)}>
-                          <Pencil className="h-3 w-3" aria-hidden="true" />
-                          Request edit
-                        </Button>
-                      )}
+                      <div className="flex flex-col gap-2">
+                        {canCorrect && (
+                          <Button size="sm" variant="outline" onClick={() => openEdit(entry, "correct")}>
+                            <Pencil className="h-3 w-3" aria-hidden="true" />
+                            Correct hours
+                          </Button>
+                        )}
+                        {canRequestEdit && (
+                          <Button size="sm" variant="outline" onClick={() => openEdit(entry, "request")}>
+                            Request edit
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -435,8 +497,8 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
   return (
     <div className="space-y-4">
       <p className="text-sm leading-relaxed text-slate-500">
-        Shifts open or lasting longer than {LONG_SHIFT_HOURS} hours are flagged. Employees can
-        request timesheet edits; managers approve before hours change.
+        Shifts open or lasting longer than {LONG_SHIFT_HOURS} hours are flagged. Managers can
+        correct a missed clock-out immediately, including shifts left open for 20 hours or more.
       </p>
 
       <Card className="overflow-hidden">
@@ -478,9 +540,13 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
           <Card className="flex max-h-[min(92dvh,100%)] w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:max-h-[min(90dvh,900px)] sm:rounded-xl sm:pb-0">
             <CardContent className="space-y-4 overflow-y-auto px-4 pt-6 sm:px-6">
-              <h3 className="text-lg font-semibold">Request timesheet edit</h3>
+              <h3 className="text-lg font-semibold">
+                {mode === "correct" ? "Correct hours" : "Request timesheet edit"}
+              </h3>
               <p className="text-sm text-slate-500">
-                Your manager will need to approve this change before it applies.
+                {mode === "correct"
+                  ? "Set the time they actually left. This applies immediately and is recorded as an adjustment."
+                  : "Your manager will need to approve this change before it applies."}
               </p>
               <label className="block min-w-0 text-sm font-medium">
                 Clock in
@@ -515,7 +581,11 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId }: TimesheetsPan
                   Cancel
                 </Button>
                 <Button disabled={submitting} className="w-full sm:w-auto" onClick={submitEdit}>
-                  {submitting ? "Submitting..." : "Submit for approval"}
+                  {submitting
+                    ? "Saving..."
+                    : mode === "correct"
+                      ? "Save corrected hours"
+                      : "Submit for approval"}
                 </Button>
               </div>
             </CardContent>

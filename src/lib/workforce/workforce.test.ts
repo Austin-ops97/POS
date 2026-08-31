@@ -211,4 +211,21 @@ describe("validateTimesheetEditTimes", () => {
     const end = new Date("2026-08-24T17:00:00Z");
     assert.equal(validateTimesheetEditTimes(start, end), null);
   });
+
+  it("lets a manager correct a 20-hour forgotten clock-out", () => {
+    const start = new Date("2026-08-24T08:00:00Z");
+    const end = new Date("2026-08-25T04:00:00Z");
+    assert.equal(
+      validateTimesheetEditTimes(start, end, { allowOpen: false, maxHours: 72 }),
+      null
+    );
+  });
+
+  it("requires clock out when correcting an open shift", () => {
+    const start = new Date("2026-08-24T08:00:00Z");
+    assert.equal(
+      validateTimesheetEditTimes(start, null, { allowOpen: false, maxHours: 72 }),
+      "Clock out is required"
+    );
+  });
 });

@@ -238,7 +238,11 @@ export function EmployeeForm({
         <Card className="border-emerald-200 bg-emerald-50">
           <CardHeader><CardTitle className="text-base">Employee invitation ready</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-slate-600">Send this private, expiring link to the employee. They must sign in with the email address on this profile.</p>
+          <p className="text-sm text-slate-600">
+            Send this private, expiring link. The employee creates a login with{" "}
+            <span className="font-medium">{watch("email") || "the email on this profile"}</span>,
+            then opens the link so their account is verified into this workspace.
+          </p>
             <Input readOnly value={invitationUrl} />
             <div className="flex gap-2">
               <Button type="button" onClick={async () => { await navigator.clipboard.writeText(invitationUrl); toast.success("Invitation link copied"); }}>Copy invitation link</Button>
@@ -253,6 +257,65 @@ export function EmployeeForm({
         </div>
       )}
 
+      {invitationUrl ? null : !isEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Invite a teammate</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" {...register("name")} onChange={(e) => { register("name").onChange(e); markDirty(); }} />
+              {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="email">Login email</Label>
+              <Input id="email" type="email" {...register("email")} onChange={(e) => { register("email").onChange(e); setValue("workEmail", e.target.value); markDirty(); }} />
+              {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
+              <p className="text-xs text-slate-500">They must create their login with this exact email, then open the invitation link.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={roleId} onValueChange={(v) => { setValue("roleId", v, { shouldValidate: true }); markDirty(); }}>
+                <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.roleId && <p className="text-sm text-red-600">{errors.roleId.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pin">Register PIN (optional, 4 digits)</Label>
+              <Input id="pin" type="password" inputMode="numeric" maxLength={4} autoComplete="off" {...register("pin")} />
+            </div>
+            {locations.length > 0 && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Assigned locations</Label>
+                <div className="space-y-2">
+                  {locations.map((location) => (
+                    <div key={location.id} className="flex items-center gap-3">
+                      <Checkbox
+                        id={`location-${location.id}`}
+                        checked={locationIds.includes(location.id)}
+                        onCheckedChange={(checked) => {
+                          const next = checked
+                            ? [...locationIds, location.id]
+                            : locationIds.filter((id) => id !== location.id);
+                          setValue("locationIds", next);
+                          markDirty();
+                        }}
+                      />
+                      <Label htmlFor={`location-${location.id}`}>{location.name}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
       <Tabs defaultValue="personal" className="space-y-4">
         <TabsList className="flex h-auto flex-wrap gap-1">
           <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -558,15 +621,18 @@ export function EmployeeForm({
           </Card>
         </TabsContent>
       </Tabs>
+      )}
 
+      {invitationUrl ? null : (
       <div className="flex gap-3">
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? (isEdit ? "Saving..." : "Creating...") : isEdit ? "Save Changes" : "Create Employee"}
+          {isSubmitting ? (isEdit ? "Saving..." : "Sending invitation...") : isEdit ? "Save Changes" : "Send invitation"}
         </Button>
         <Button type="button" variant="outline" onClick={handleCancel}>
           Cancel
         </Button>
       </div>
+      )}
 
       <ConfirmDialog
         open={leaveConfirmOpen}

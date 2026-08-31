@@ -72,7 +72,11 @@ export async function getAuthUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
-  const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+  const email =
+    clerkUser.primaryEmailAddress?.emailAddress ||
+    clerkUser.emailAddresses.find((item) => item.id === clerkUser.primaryEmailAddressId)?.emailAddress ||
+    clerkUser.emailAddresses[0]?.emailAddress ||
+    "";
   const platformRole = platformAdminEmails().has(email.toLowerCase()) ? "ADMIN" : undefined;
   const user = await db.user.upsert({
     where: { clerkId },

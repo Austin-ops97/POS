@@ -43,7 +43,7 @@ export function Topbar({
         ) : null}
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">
-            {businessName || "NexaPOS"}
+            {businessName || "Workspace"}
           </p>
         </div>
         {locationName ? (

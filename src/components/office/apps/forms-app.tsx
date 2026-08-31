@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardList, Eye, GripVertical, Inbox, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,14 @@ type FieldType = "text" | "email" | "number" | "textarea" | "select" | "checkbox
 type FormField = { id: string; label: string; type: FieldType; required: boolean; options: string[] };
 type FormData = { kind: "form"; description: string; fields: FormField[] };
 type ResponseData = { kind: "response"; formId: string; formTitle: string; answers: Record<string, string | boolean> };
-const emptyForm: FormData = { kind: "form", description: "", fields: [{ id: crypto.randomUUID(), label: "Name", type: "text", required: true, options: [] }] };
+
+function createEmptyForm(): FormData {
+  return {
+    kind: "form",
+    description: "",
+    fields: [{ id: crypto.randomUUID(), label: "Name", type: "text", required: true, options: [] }],
+  };
+}
 
 /** Keep trailing commas/empty segments while typing so "a," does not collapse back to "a". */
 function parseOptionsInput(value: string): string[] {
@@ -40,21 +48,25 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 ];
 
 export function FormsApp({ module, initialRecords, permissions }: { module: OfficeSuiteModule; initialRecords: OfficeWorkspaceRecordSummary[]; permissions: OfficeAppPermissions }) {
-  const forms = initialRecords.filter((record) => record.metadata?.kind !== "response");
+  const router = useRouter();
   const [records, setRecords] = useState(initialRecords);
-  const [activeId, setActiveId] = useState(forms[0]?.id ?? "");
+  const savedForms = records.filter((record) => record.metadata?.kind !== "response");
+  const [activeId, setActiveId] = useState(savedForms[0]?.id ?? "");
   const active = records.find((record) => record.id === activeId);
   const [title, setTitle] = useState(active?.title ?? "Untitled form");
-  const [form, setForm] = useState<FormData>(recordMetadata(active, emptyForm));
+  const [form, setForm] = useState<FormData>(recordMetadata(active, createEmptyForm()));
   const [mode, setMode] = useState<"build" | "preview" | "responses">("build");
   const [busy, setBusy] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(active ? "Saved" : null);
   const responses = useMemo(() => records.filter((record) => record.metadata?.kind === "response" && record.metadata?.formId === activeId), [records, activeId]);
+  const canSave = active ? permissions.canEdit || permissions.canCreate : permissions.canCreate;
 
   function load(record?: OfficeWorkspaceRecordSummary) {
     setActiveId(record?.id ?? "");
     setTitle(record?.title ?? "Untitled form");
-    setForm(recordMetadata(record, emptyForm));
+    setForm(recordMetadata(record, createEmptyForm()));
     setMode("build");
+    setSavedAt(record ? "Saved" : null);
   }
 
   function patchField(id: string, patch: Partial<FormField>) {
@@ -62,6 +74,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
       ...current,
       fields: current.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
     }));
+    setSavedAt(null);
   }
 
   async function save() {
@@ -69,25 +82,41 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
       toast.error("Add a form title");
       return undefined;
     }
+    if (!canSave) {
+      toast.error("You do not have permission to save forms");
+      return undefined;
+    }
     setBusy(true);
     const metadata: FormData = {
-      ...form,
+      kind: "form",
+      description: form.description,
       fields: form.fields.map((field) => ({ ...field, options: finalizedOptions(field.options) })),
     };
     try {
+      const payload = { title: title.trim(), summary: form.description, metadata };
       const saved = active
-        ? await updateWorkspaceRecord(module.slug, active.id, { title, summary: form.description, metadata })
-        : await createWorkspaceRecord(module.slug, { title, summary: form.description, metadata });
+        ? await updateWorkspaceRecord(module.slug, active.id, payload)
+        : await createWorkspaceRecord(module.slug, payload);
       setForm(metadata);
       setRecords((items) => (active ? items.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...items]));
       setActiveId(saved.id);
+      setSavedAt("Saved");
       toast.success("Form saved");
+      router.refresh();
       return saved;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save form");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function setAppMode(next: "build" | "preview" | "responses") {
+    if (next !== "build" && savedAt === null) {
+      const saved = await save();
+      if (!saved) return;
+    }
+    setMode(next);
   }
 
   async function submitResponse(event: FormEvent<HTMLFormElement>) {
@@ -120,13 +149,13 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
   return (
     <div className="space-y-5 pb-8">
       <OfficeAppHeader module={module}>
-        <Button variant="outline" onClick={() => load()} disabled={!permissions.canCreate}>
+        <Button type="button" variant="outline" onClick={() => load()} disabled={!permissions.canCreate}>
           <Plus className="h-4 w-4" />
           New form
         </Button>
-        <Button onClick={save} disabled={busy}>
+        <Button type="button" onClick={save} disabled={busy || !canSave}>
           <Save className="h-4 w-4" />
-          Save form
+          {busy ? "Saving…" : savedAt && activeId ? "Save form" : "Save form"}
         </Button>
       </OfficeAppHeader>
 
@@ -148,7 +177,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                   </span>
                 </button>
               ))}
-            {!forms.length ? <p className="p-3 text-sm text-fuchsia-900/60">Create your first form.</p> : null}
+            {!savedForms.length ? <p className="p-3 text-sm text-fuchsia-900/60">Create your first form.</p> : null}
           </div>
         </aside>
 
@@ -156,7 +185,10 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
           <div className="flex flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:p-4">
             <Input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setSavedAt(null);
+              }}
               className="w-full min-w-0 border-0 text-lg font-semibold shadow-none sm:max-w-md"
               aria-label="Form title"
             />
@@ -170,7 +202,7 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
               ).map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
-                  onClick={() => setMode(id)}
+                  onClick={() => setAppMode(id)}
                   className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap ${mode === id ? "bg-white shadow-sm" : "text-slate-500"}`}
                 >
                   <Icon className="h-4 w-4" />
@@ -186,7 +218,10 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                 Description
                 <Textarea
                   value={form.description}
-                  onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((current) => ({ ...current, description: e.target.value }));
+                    setSavedAt(null);
+                  }}
                   className="mt-1 min-h-20"
                   placeholder="Tell people what this form is for."
                 />
@@ -202,12 +237,13 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
                       </div>
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
                           setForm((current) => ({
                             ...current,
                             fields: current.fields.filter((item) => item.id !== field.id),
-                          }))
-                        }
+                          }));
+                          setSavedAt(null);
+                        }}
                         className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                         aria-label={`Delete question ${index + 1}`}
                       >
@@ -273,16 +309,24 @@ export function FormsApp({ module, initialRecords, permissions }: { module: Offi
               <Button
                 variant="outline"
                 className="mt-4 w-full sm:w-auto"
-                onClick={() =>
+                onClick={() => {
                   setForm((current) => ({
                     ...current,
                     fields: [...current.fields, { id: crypto.randomUUID(), label: "New question", type: "text", required: false, options: [] }],
-                  }))
-                }
+                  }));
+                  setSavedAt(null);
+                }}
               >
                 <Plus className="h-4 w-4" />
                 Add field
               </Button>
+              <div className="mt-6 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">{savedAt ? "This form is saved in the list on the left." : "Save so this form stays after you leave preview."}</p>
+                <Button type="button" onClick={save} disabled={busy || !canSave} className="w-full sm:w-auto">
+                  <Save className="h-4 w-4" />
+                  {busy ? "Saving…" : "Save form"}
+                </Button>
+              </div>
             </div>
           ) : null}
 

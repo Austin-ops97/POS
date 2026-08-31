@@ -63,13 +63,14 @@ export default async function DashboardLayout({
           "/office",
           "/office/documents",
           "/office/apps/projects",
+          "/office/apps/task-assignments",
           "/office/apps/forms-approvals",
           "/office/apps/automations-ai",
           ...(hasPermission(ctx, PERMISSIONS.MANAGE_PROJECT_REMINDERS) ? ["/office/reminders"] : []),
           ...(hasPermission(ctx, PERMISSIONS.APPROVE_PROJECT_COMPLETION) ? ["/office/approvals"] : []),
         ]
       : []),
-    ...(access.EXPENSES && hasAnyPermission(ctx, [PERMISSIONS.CREATE_EXPENSE, PERMISSIONS.VIEW_OWN_EXPENSES, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]) ? ["/finance/expenses", "/finance/cards", "/finance/reimbursements", "/finance/reports", "/finance/budgets"] : []),
+    ...(access.EXPENSES && hasAnyPermission(ctx, [PERMISSIONS.CREATE_EXPENSE, PERMISSIONS.VIEW_OWN_EXPENSES, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]) ? ["/finance/expenses", "/finance/statements", "/finance/cards", "/finance/reimbursements", "/finance/reports", "/finance/budgets"] : []),
     ...(isOwner || hasAnyPermission(ctx, [PERMISSIONS.MANAGE_EMPLOYEES, PERMISSIONS.MANAGE_LOCATIONS, PERMISSIONS.MANAGE_STRIPE]) ? ["/settings"] : []),
   ];
 

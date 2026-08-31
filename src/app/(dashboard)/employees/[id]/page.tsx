@@ -20,6 +20,7 @@ import { db } from "@/lib/db";
 import { getBusinessModuleAccess } from "@/lib/access-control";
 import { CUSTOMER_CONFIGURABLE_MODULES, type AppModuleKey } from "@/lib/modules";
 import { EmployeeModuleAccess } from "@/components/dashboard/employee-module-access";
+import { ResendInviteButton } from "@/components/dashboard/resend-invite-button";
 
 export default async function EmployeeDetailPage({
   params,
@@ -82,6 +83,10 @@ export default async function EmployeeDetailPage({
           </Button>
         )}
       </div>
+
+      {canManage && employee.status === "INVITED" ? (
+        <ResendInviteButton employeeId={id} email={employee.email} />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

@@ -6,7 +6,7 @@ export default function PaymentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
         <p className="text-sm text-slate-500">
-          Balances, payouts, and Stripe Connect health — without leaving NexaPOS
+          Balances, payouts, and Stripe Connect health — without leaving the register
         </p>
       </div>
       <PaymentsDashboard />

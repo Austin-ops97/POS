@@ -167,6 +167,57 @@ export async function reviewTimesheetEditRequest(params: {
   });
 }
 
+/** Manager/owner correction for forgotten clock-outs, including still-open shifts. */
+export async function managerAdjustTimeEntry(params: {
+  businessId: string;
+  reviewerId: string;
+  timeEntryId: string;
+  clockIn: Date;
+  clockOut: Date;
+  adjustmentNote: string;
+}) {
+  const timingError = validateTimesheetEditTimes(params.clockIn, params.clockOut, {
+    allowOpen: false,
+    maxHours: 72,
+  });
+  if (timingError) {
+    throw new Error(timingError);
+  }
+
+  const existing = await db.timeEntry.findFirst({
+    where: { id: params.timeEntryId, businessId: params.businessId },
+    include: { breaks: true },
+  });
+  if (!existing) {
+    throw new Error("Time entry not found");
+  }
+
+  return db.$transaction(async (tx) => {
+    const openBreaks = existing.breaks.filter((item) => !item.breakEnd);
+    for (const br of openBreaks) {
+      await tx.timeBreak.update({
+        where: { id: br.id },
+        data: { breakEnd: params.clockOut },
+      });
+    }
+
+    return tx.timeEntry.update({
+      where: { id: existing.id },
+      data: {
+        clockIn: params.clockIn,
+        clockOut: params.clockOut,
+        status: "ADJUSTED",
+        adjustedById: params.reviewerId,
+        adjustmentNote: params.adjustmentNote,
+      },
+      include: {
+        employee: { select: { id: true, name: true } },
+        breaks: true,
+      },
+    });
+  });
+}
+
 export type TimeEntryEditListInclude = Prisma.TimeEntryEditRequestGetPayload<{
   include: {
     employee: { select: { id: true; name: true; managerId: true } };

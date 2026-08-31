@@ -15,6 +15,7 @@ import {
 import { recordPtoLedgerEntry } from "@/lib/workforce/pto-service";
 import { assertEmployeeManagementAllowed, assertRoleAssignmentAllowed } from "@/lib/employee-security";
 import { requireModule } from "@/lib/access-control";
+import { createInvitationToken, INVITATION_TTL_MS } from "@/lib/employee-invitations";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -70,6 +71,40 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await request.json();
+    if (body?.action === "resend-invite") {
+      const employee = await db.employeeProfile.findFirst({
+        where: { id, businessId: ctx.business.id, deletedAt: null },
+        include: { role: { select: { name: true } } },
+      });
+      if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      assertEmployeeManagementAllowed(ctx, employee.role.name);
+      if (employee.userId && employee.status === "ACTIVE") {
+        return NextResponse.json(
+          { error: "This employee already has an active login" },
+          { status: 400 }
+        );
+      }
+      const invitation = createInvitationToken();
+      await db.employeeProfile.update({
+        where: { id },
+        data: {
+          status: "INVITED",
+          inviteTokenHash: invitation.hash,
+          inviteExpiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+          invitedAt: new Date(),
+        },
+      });
+      await createAuditLog({
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+        action: "EMPLOYEE_CHANGE",
+        entity: "EmployeeProfile",
+        entityId: id,
+        details: { action: "resend-invite", name: employee.name, email: employee.email },
+      });
+      const baseUrl = new URL(request.url).origin;
+      return NextResponse.json({ invitationUrl: `${baseUrl}/join/${invitation.token}` });
+    }
     if (body?.action === "archive" || body?.action === "restore") {
       const employee = await db.employeeProfile.findFirst({
         where: { id, businessId: ctx.business.id, deletedAt: null },

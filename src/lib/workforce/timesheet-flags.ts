@@ -57,15 +57,20 @@ export function collectTimeEntryFlags(
 
 export function validateTimesheetEditTimes(
   clockIn: Date,
-  clockOut: Date | null
+  clockOut: Date | null,
+  options: { maxHours?: number; allowOpen?: boolean } = {}
 ): string | null {
   if (clockOut && clockOut <= clockIn) {
     return "Clock out must be after clock in";
   }
+  if (!clockOut && options.allowOpen === false) {
+    return "Clock out is required";
+  }
   if (clockOut) {
     const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
-    if (hours > 24) {
-      return "Edited shift cannot exceed 24 hours";
+    const maxHours = options.maxHours ?? 24;
+    if (hours > maxHours) {
+      return `Edited shift cannot exceed ${maxHours} hours`;
     }
   }
   return null;

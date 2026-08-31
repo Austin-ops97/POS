@@ -167,8 +167,8 @@ export async function claimPendingInvitationsForUser(user: {
         userId: user.id,
         status: "ACTIVE",
         joinedAt: new Date(),
-        inviteTokenHash: null,
-        inviteExpiresAt: null,
+        // Keep the invitation token until expiry so the original link still
+        // verifies after the employee creates their login.
       },
       include: {
         business: { select: { id: true, name: true } },
