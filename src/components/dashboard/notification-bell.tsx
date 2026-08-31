@@ -112,7 +112,7 @@ export function NotificationBell() {
         ) : null}
       </Button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div className="fixed left-3 right-3 top-[calc(3.5rem+env(safe-area-inset-top))] z-50 max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-80 sm:overflow-visible">
           <p className="text-sm font-semibold text-slate-900">Notifications</p>
           <div className="mt-2 flex items-center gap-1">
             <Button
@@ -154,7 +154,7 @@ export function NotificationBell() {
               />
             </label>
           </div>
-          <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+          <div className="mt-2 space-y-2 sm:max-h-72 sm:overflow-y-auto">
             {items.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-slate-500">No notifications yet</p>
             ) : (

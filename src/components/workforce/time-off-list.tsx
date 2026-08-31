@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { formatDate } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 
 type TimeOffRequest = {
   id: string;
@@ -31,6 +31,7 @@ type TimeOffListProps = {
 };
 
 export function TimeOffList({ canApprove, currentEmployeeId }: TimeOffListProps) {
+  const formatDate = useFormatDate();
   const router = useRouter();
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [loading, setLoading] = useState(true);

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 
 type OrderReceiptActionsProps = {
   orderId: string;
@@ -54,6 +55,7 @@ export function OrderReceiptActions({
   printed,
   variant = "default",
 }: OrderReceiptActionsProps) {
+  const formatDate = useFormatDate();
   const [printing, setPrinting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
@@ -297,7 +299,7 @@ export function OrderReceiptActions({
             <p>
               Emailed to {emailedTo}
               {lastEmailedAt
-                ? ` · ${new Date(lastEmailedAt).toLocaleString()}`
+                ? ` · ${formatDate(lastEmailedAt)}`
                 : ""}
             </p>
           ) : (

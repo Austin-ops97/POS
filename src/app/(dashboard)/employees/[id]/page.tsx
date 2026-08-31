@@ -6,7 +6,8 @@ import {
   getEmployeeById,
   getEmployeeWorkforceSummary,
 } from "@/lib/queries";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { getWorkedMinutes } from "@/lib/workforce/time-clock-service";
 import { collectTimeEntryFlags } from "@/lib/workforce/timesheet-flags";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -159,8 +160,8 @@ export default async function EmployeeDetailPage({
                 <tbody>
                   {summary.upcomingShifts.map((shift) => (
                     <tr key={shift.id} className="border-b border-slate-100">
-                      <td className="py-2">{formatDate(shift.startAt)}</td>
-                      <td className="py-2">{formatDate(shift.endAt)}</td>
+                      <td className="py-2">{formatDisplayDate(shift.startAt, ctx)}</td>
+                      <td className="py-2">{formatDisplayDate(shift.endAt, ctx)}</td>
                       <td className="py-2">
                         <Badge variant="secondary">{shift.status}</Badge>
                       </td>
@@ -202,9 +203,9 @@ export default async function EmployeeDetailPage({
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm text-slate-600">
-                            {formatDate(entry.clockIn)}
+                            {formatDisplayDate(entry.clockIn, ctx)}
                             <span className="text-slate-400"> → </span>
-                            {entry.clockOut ? formatDate(entry.clockOut) : "Open"}
+                            {entry.clockOut ? formatDisplayDate(entry.clockOut, ctx) : "Open"}
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
                             {(getWorkedMinutes(entry) / 60).toFixed(2)}h
@@ -241,9 +242,9 @@ export default async function EmployeeDetailPage({
                       const flags = collectTimeEntryFlags(entry);
                       return (
                       <tr key={entry.id} className="border-b border-slate-100">
-                        <td className="py-2 whitespace-nowrap">{formatDate(entry.clockIn)}</td>
+                        <td className="py-2 whitespace-nowrap">{formatDisplayDate(entry.clockIn, ctx)}</td>
                         <td className="py-2 whitespace-nowrap">
-                          {entry.clockOut ? formatDate(entry.clockOut) : "—"}
+                          {entry.clockOut ? formatDisplayDate(entry.clockOut, ctx) : "—"}
                         </td>
                         <td className="py-2">
                           {(getWorkedMinutes(entry) / 60).toFixed(2)}h

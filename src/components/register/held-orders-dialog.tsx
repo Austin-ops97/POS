@@ -9,7 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 
 export type HeldOrderSummary = {
   id: string;
@@ -36,6 +37,7 @@ export function HeldOrdersDialog({
   onOpenChange,
   onSelect,
 }: HeldOrdersDialogProps) {
+  const formatDate = useFormatDate();
   const [orders, setOrders] = useState<HeldOrderSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

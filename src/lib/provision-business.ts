@@ -121,6 +121,7 @@ export async function provisionBusinessForLocalUser(
             enableReceiptPrinting: true,
             requireCustomer: false,
             requirePinAtRegister: false,
+            displayTimezone: DEFAULT_TIMEZONE,
           },
         });
 

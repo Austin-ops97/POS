@@ -23,6 +23,8 @@ export type AuthContext = {
   userId: string;
   email: string;
   isPlatformAdmin: boolean;
+  /** IANA timezone for displaying dates/times across the app. */
+  displayTimezone: string;
   employee: EmployeeProfile & {
     role: { name: string; permissions: { permission: { key: string } }[] };
     locations: { locationId: string; location: Location }[];
@@ -155,11 +157,22 @@ export async function getAuthContext(businessId?: string): Promise<AuthContext |
       where: { businessId: employee.businessId, isActive: true },
     }));
 
+  const businessSettings = await db.businessSetting.findUnique({
+    where: { businessId: employee.businessId },
+    select: { displayTimezone: true },
+  });
+
+  const displayTimezone =
+    businessSettings?.displayTimezone ??
+    defaultLocation?.timezone ??
+    "America/New_York";
+
   return {
     clerkId: user.clerkId,
     userId: user.id,
     email: user.email,
     isPlatformAdmin: user.platformRole === "ADMIN",
+    displayTimezone,
     employee,
     business: employee.business,
     location: defaultLocation,
@@ -221,6 +234,12 @@ export function hasAnyPermission(
   permissions: string[]
 ): boolean {
   return permissions.some((permission) => hasPermission(ctx, permission));
+}
+
+/** Owner and Admin roles can edit business profile settings. */
+export function canManageBusinessProfile(ctx: AuthContext): boolean {
+  const role = ctx.employee.role.name;
+  return role === "Owner" || role === "Admin";
 }
 
 export async function requireAnyPermission(

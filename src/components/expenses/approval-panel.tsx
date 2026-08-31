@@ -13,7 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import { ExpenseStatusBadge } from "./status-badge";
 import { AlertTriangle, Check, Download, Eye, Flag, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
 
@@ -60,6 +61,7 @@ export function ApprovalPanel({
   canReimburse: boolean;
   canDelete: boolean;
 }) {
+  const formatDate = useFormatDate();
   const router = useRouter();
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");

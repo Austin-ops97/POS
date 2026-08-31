@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getCustomerById } from "@/lib/queries";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export default async function CustomerDetailPage({
             {customer.firstName} {customer.lastName ?? ""}
           </h1>
           <p className="text-sm text-slate-500">
-            Customer since {formatDate(customer.createdAt)}
+            Customer since {formatDisplayDate(customer.createdAt, ctx)}
           </p>
         </div>
         <CustomerLifecycleActions customerId={customer.id} name={`${customer.firstName} ${customer.lastName ?? ""}`.trim()} />
@@ -62,7 +63,7 @@ export default async function CustomerDetailPage({
         <StatCard title="Average Order" value={formatCurrency(avgOrder)} />
         <StatCard
           title="Last Order"
-          value={lastOrder ? formatDate(lastOrder.createdAt) : "—"}
+          value={lastOrder ? formatDisplayDate(lastOrder.createdAt, ctx) : "—"}
         />
       </div>
 
@@ -129,7 +130,7 @@ export default async function CustomerDetailPage({
                         </Link>
                       </td>
                       <td className="py-3 text-slate-600">
-                        {formatDate(order.createdAt)}
+                        {formatDisplayDate(order.createdAt, ctx)}
                       </td>
                       <td className="py-3 font-medium text-slate-900">
                         {formatCurrency(Number(order.total))}

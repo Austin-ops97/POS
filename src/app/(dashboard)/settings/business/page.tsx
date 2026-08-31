@@ -1,14 +1,24 @@
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, canManageBusinessProfile } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ChevronLeft } from "lucide-react";
+import { BusinessProfileForm } from "@/components/dashboard/business-profile-form";
+import { ChevronLeft, Building2 } from "lucide-react";
 
 export default async function BusinessSettingsPage() {
   const ctx = await requireAuth();
   const biz = ctx.business;
+  const canEdit = canManageBusinessProfile(ctx);
+
+  const initial = {
+    name: biz.name,
+    legalName: biz.legalName ?? "",
+    type: biz.type,
+    phone: biz.phone ?? "",
+    email: biz.email ?? "",
+    website: biz.website ?? "",
+    primaryColor: biz.primaryColor ?? "#1e3a5f",
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -26,35 +36,18 @@ export default async function BusinessSettingsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Business profile</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-slate-400" aria-hidden="true" />
+            Business profile
+          </CardTitle>
           <CardDescription>
-            Your company profile and branding details.
+            {canEdit
+              ? "Update your company name, contact details, and branding."
+              : "View-only — contact an owner or admin to make changes."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="business-name">Business name</Label>
-            <Input id="business-name" defaultValue={biz.name} readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="legal-name">Legal name</Label>
-            <Input id="legal-name" defaultValue={biz.legalName ?? ""} readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="business-type">Type</Label>
-            <Input id="business-type" defaultValue={biz.type} readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="business-phone">Phone</Label>
-            <Input id="business-phone" defaultValue={biz.phone ?? ""} readOnly />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="business-email">Email</Label>
-            <Input id="business-email" defaultValue={biz.email ?? ""} readOnly />
-          </div>
-          <p className="text-sm text-slate-500 sm:col-span-2">
-            Full business editing will be available in a future update.
-          </p>
+        <CardContent>
+          <BusinessProfileForm initial={initial} canEdit={canEdit} />
         </CardContent>
       </Card>
     </div>

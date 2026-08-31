@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { formatDate } from "@/lib/utils";
+import { useDisplayTimezone, useFormatDate } from "@/components/providers/timezone-provider";
 import { LONG_SHIFT_HOURS } from "@/lib/workforce/timesheet-flags";
 
 type TimeEntryRow = {
@@ -60,17 +60,20 @@ function fromLocalInputValue(value: string): string {
   return new Date(value).toISOString();
 }
 
-function formatPunch(iso: string | null | undefined): string {
+function formatPunch(iso: string | null | undefined, timeZone?: string): string {
   if (!iso) return "Open";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
   }).format(new Date(iso));
 }
 
 export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId }: TimesheetsPanelProps) {
+  const formatDate = useFormatDate();
+  const timeZone = useDisplayTimezone();
   const router = useRouter();
   const [entries, setEntries] = useState<TimeEntryRow[]>([]);
   const [editRequests, setEditRequests] = useState<EditRequest[]>([]);
@@ -252,9 +255,9 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
               <p className="truncate font-semibold text-slate-900">{entry.employee.name}</p>
             ) : null}
             <p className="text-sm text-slate-600">
-              {formatPunch(entry.clockIn)}
+              {formatPunch(entry.clockIn, timeZone)}
               <span className="text-slate-400"> → </span>
-              {formatPunch(entry.clockOut)}
+              {formatPunch(entry.clockOut, timeZone)}
             </p>
             <p className="mt-1 text-sm text-slate-500">{entry.workedHours.toFixed(2)}h worked</p>
           </div>
@@ -433,7 +436,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
                     Current
                   </dt>
                   <dd className="text-slate-600">
-                    {formatPunch(req.originalClockIn)} – {formatPunch(req.originalClockOut)}
+                    {formatPunch(req.originalClockIn, timeZone)} – {formatPunch(req.originalClockOut, timeZone)}
                   </dd>
                 </div>
                 <div>
@@ -441,7 +444,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
                     Requested
                   </dt>
                   <dd className="text-slate-600">
-                    {formatPunch(req.proposedClockIn)} – {formatPunch(req.proposedClockOut)}
+                    {formatPunch(req.proposedClockIn, timeZone)} – {formatPunch(req.proposedClockOut, timeZone)}
                   </dd>
                 </div>
               </dl>

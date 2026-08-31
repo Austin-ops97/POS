@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import {
   ORDER_TERMINATION_REASONS,
   type TerminateOrderInput,
@@ -67,6 +68,7 @@ export function TerminateOrderDialog({
   showTrigger = false,
   triggerLabel = "Terminate",
 }: TerminateOrderDialogProps) {
+  const formatDate = useFormatDate();
   const [reason, setReason] =
     useState<TerminateOrderInput["reason"]>("CUSTOMER_CANCELED");
   const [notes, setNotes] = useState("");

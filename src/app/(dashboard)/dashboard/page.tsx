@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { getDashboardData } from "@/lib/queries";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesChart } from "@/components/dashboard/sales-chart";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -38,7 +39,10 @@ export default async function DashboardPage() {
   const chartData =
     salesByDay.length > 0
       ? salesByDay.map((d) => ({
-          date: new Date(d.date).toLocaleDateString("en-US", { weekday: "short" }),
+          date: new Date(d.date).toLocaleDateString("en-US", {
+            weekday: "short",
+            timeZone: ctx.displayTimezone,
+          }),
           sales: d.sales,
         }))
       : [];
@@ -131,7 +135,7 @@ export default async function DashboardPage() {
           value={formatCurrency(stripe.pending)}
           subtitle={
             stripe.upcomingDeposit?.arrivalDate
-              ? `Deposit ${formatDate(stripe.upcomingDeposit.arrivalDate)}`
+              ? `Deposit ${formatDisplayDate(stripe.upcomingDeposit.arrivalDate, ctx)}`
               : "Awaiting transfer"
           }
           icon={CreditCard}
@@ -260,7 +264,7 @@ export default async function DashboardPage() {
                         {order.customer
                           ? `${order.customer.firstName} ${order.customer.lastName ?? ""}`.trim()
                           : "Walk-in"}
-                        · {formatDate(order.createdAt)}
+                        · {formatDisplayDate(order.createdAt, ctx)}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -295,7 +299,7 @@ export default async function DashboardPage() {
                 <p className="text-sm text-slate-600">
                   {formatCurrency(stripe.upcomingDeposit.amount)} arriving{" "}
                   {stripe.upcomingDeposit.arrivalDate
-                    ? formatDate(stripe.upcomingDeposit.arrivalDate)
+                    ? formatDisplayDate(stripe.upcomingDeposit.arrivalDate, ctx)
                     : "soon"}
                 </p>
               </div>

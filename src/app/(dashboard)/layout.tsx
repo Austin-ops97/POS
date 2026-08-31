@@ -8,6 +8,7 @@ import { normalizeModuleKey } from "@/lib/modules";
 import { getEmployeeModuleAccess } from "@/lib/access-control";
 import { hasAnyPermission, hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
+import { TimezoneProvider } from "@/components/providers/timezone-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,8 @@ export default async function DashboardLayout({
   ];
 
   return (
-    <DashboardShell
+    <TimezoneProvider displayTimezone={ctx.displayTimezone}>
+      <DashboardShell
       businessName={ctx.business.name}
       locationName={ctx.location?.name}
       authEnabled={isClerkConfigured()}
@@ -90,5 +92,6 @@ export default async function DashboardLayout({
     >
       {children}
     </DashboardShell>
+    </TimezoneProvider>
   );
 }

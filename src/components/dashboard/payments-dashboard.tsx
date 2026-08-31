@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { useFormatDate } from "@/components/providers/timezone-provider";
 import { getStripeStatusVariant } from "@/lib/status-utils";
 import type { StripeAccountStatus } from "@prisma/client";
 
@@ -63,6 +64,7 @@ type DashboardData = {
 };
 
 export function PaymentsDashboard() {
+  const formatDate = useFormatDate();
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);

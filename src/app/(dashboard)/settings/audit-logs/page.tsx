@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { formatDate } from "@/lib/utils";
+import { formatDisplayDate } from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +45,7 @@ export default async function AuditLogsPage() {
                       {log.action} · {log.entity}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {log.employee?.name ?? "System"} · {formatDate(log.createdAt)}
+                      {log.employee?.name ?? "System"} · {formatDisplayDate(log.createdAt, ctx)}
                     </p>
                   </div>
                   <Badge variant="secondary">{log.action}</Badge>
