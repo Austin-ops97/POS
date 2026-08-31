@@ -3,7 +3,7 @@ import { getAuthUser, isClerkConfigured } from "@/lib/auth";
 import { hashInvitationToken } from "@/lib/employee-invitations";
 import { AcceptInvitation } from "@/components/auth/accept-invitation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmeraldMark } from "@/components/brand/emerald-mark";
+import { EmeraldWordmark } from "@/components/brand/emerald-mark";
 
 export default async function JoinPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -40,7 +40,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
     <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
-          <EmeraldMark className="h-10 w-10" title="Emerald" />
+          <EmeraldWordmark size="md" />
           <CardTitle>Join your business workspace</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

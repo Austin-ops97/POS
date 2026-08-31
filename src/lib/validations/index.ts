@@ -224,6 +224,18 @@ export const employeeSchema = z.object({
   ptoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]).optional(),
 });
 
+/** Fields shown on Invite employee — keep this lean so extra profile fields cannot block send. */
+export const employeeInviteFormSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  email: z.string().trim().email("Enter a valid email"),
+  roleId: z.string().min(1, "Select a role"),
+  pin: z
+    .string()
+    .optional()
+    .refine((value) => !value || /^\d{4}$/.test(value), "PIN must be 4 digits"),
+  locationIds: z.array(z.string()).optional(),
+});
+
 export const businessInfoSchema = businessProfileSchema.omit({ type: true });
 
 export const businessTypeSchema = z.object({

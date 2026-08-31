@@ -1,6 +1,6 @@
 {
-  "name": "POS",
-  "short_name": "POS",
+  "name": "EmeraldPOS",
+  "short_name": "EmeraldPOS",
   "description": "Point of sale, inventory, payments, and workforce for your business.",
   "start_url": "/dashboard",
   "display": "standalone",

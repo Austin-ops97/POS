@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { isClerkConfigured } from "@/lib/auth";
 import { safeAppRedirect } from "@/lib/employee-invitations";
+import { EmeraldWordmark } from "@/components/brand/emerald-mark";
 
 export default async function SignInPage({
   searchParams,
@@ -20,7 +21,8 @@ export default async function SignInPage({
       : `/sign-up?redirect_url=${encodeURIComponent(redirectTo)}`;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-50 px-6 py-10">
+      <EmeraldWordmark size="md" />
       <SignIn
         fallbackRedirectUrl={redirectTo}
         forceRedirectUrl={redirectTo.startsWith("/join/") ? redirectTo : undefined}

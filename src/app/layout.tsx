@@ -17,16 +17,16 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "Point of sale",
-    template: "%s",
+    default: "EmeraldPOS",
+    template: "%s · EmeraldPOS",
   },
   description:
     "Point of sale, inventory, payments, customers, employees, and reports.",
-  applicationName: "POS",
+  applicationName: "EmeraldPOS",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "POS",
+    title: "EmeraldPOS",
   },
   formatDetection: {
     telephone: false,

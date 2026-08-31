@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { z } from "zod";
-import { employeeSchema } from "@/lib/validations";
+import { employeeInviteFormSchema } from "@/lib/validations";
 import { employeeUpdateSchema } from "@/lib/validations/workforce";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,8 +69,6 @@ export function EmployeeForm({
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const createSchema = isEdit ? employeeFormSchema : employeeSchema.merge(employeeFormSchema);
-
   const {
     register,
     handleSubmit,
@@ -78,7 +76,7 @@ export function EmployeeForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormValues>({
-    resolver: zodResolver(createSchema) as Resolver<EmployeeFormValues>,
+    resolver: zodResolver(isEdit ? employeeFormSchema : employeeInviteFormSchema) as Resolver<EmployeeFormValues>,
     defaultValues: {
       name: defaultValues?.name ?? "",
       legalFirstName: defaultValues?.legalFirstName ?? defaultValues?.name?.split(" ")[0] ?? "",
@@ -224,6 +222,27 @@ export function EmployeeForm({
     }
   }
 
+  function firstErrorMessage(formErrors: FieldErrors<EmployeeFormValues>) {
+    const walk = (value: unknown): string | null => {
+      if (!value || typeof value !== "object") return null;
+      if ("message" in value && typeof value.message === "string" && value.message) {
+        return value.message;
+      }
+      for (const nested of Object.values(value as Record<string, unknown>)) {
+        const found = walk(nested);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(formErrors) ?? "Check the required fields and try again";
+  }
+
+  function onInvalid(formErrors: FieldErrors<EmployeeFormValues>) {
+    const message = firstErrorMessage(formErrors);
+    setSubmitError(message);
+    toast.error(message);
+  }
+
   function handleCancel() {
     if (dirty) {
       setLeaveConfirmOpen(true);
@@ -233,7 +252,7 @@ export function EmployeeForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl space-y-6">
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="max-w-4xl space-y-6">
       {invitationUrl ? (
         <Card className="border-emerald-200 bg-emerald-50">
           <CardHeader><CardTitle className="text-base">Employee invitation ready</CardTitle></CardHeader>
@@ -265,18 +284,36 @@ export function EmployeeForm({
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" {...register("name")} onChange={(e) => { register("name").onChange(e); markDirty(); }} />
+              <Input
+                id="name"
+                autoComplete="name"
+                {...register("name")}
+                onChange={(event) => {
+                  void register("name").onChange(event);
+                  markDirty();
+                }}
+              />
               {errors.name && <p className="text-sm text-red-600">{errors.name.message}</p>}
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="email">Login email</Label>
-              <Input id="email" type="email" {...register("email")} onChange={(e) => { register("email").onChange(e); setValue("workEmail", e.target.value); markDirty(); }} />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                {...register("email")}
+                onChange={(event) => {
+                  void register("email").onChange(event);
+                  setValue("workEmail", event.target.value);
+                  markDirty();
+                }}
+              />
               {errors.email && <p className="text-sm text-red-600">{errors.email.message}</p>}
               <p className="text-xs text-slate-500">They must create their login with this exact email, then open the invitation link.</p>
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={roleId} onValueChange={(v) => { setValue("roleId", v, { shouldValidate: true }); markDirty(); }}>
+              <Select value={roleId || undefined} onValueChange={(v) => { setValue("roleId", v, { shouldValidate: true, shouldDirty: true }); markDirty(); }}>
                 <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                 <SelectContent>
                   {roles.map((role) => (
@@ -289,6 +326,7 @@ export function EmployeeForm({
             <div className="space-y-2">
               <Label htmlFor="pin">Register PIN (optional, 4 digits)</Label>
               <Input id="pin" type="password" inputMode="numeric" maxLength={4} autoComplete="off" {...register("pin")} />
+              {errors.pin && <p className="text-sm text-red-600">{errors.pin.message}</p>}
             </div>
             {locations.length > 0 && (
               <div className="space-y-2 sm:col-span-2">
@@ -625,7 +663,7 @@ export function EmployeeForm({
 
       {invitationUrl ? null : (
       <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className="min-w-40">
           {isSubmitting ? (isEdit ? "Saving..." : "Sending invitation...") : isEdit ? "Save Changes" : "Send invitation"}
         </Button>
         <Button type="button" variant="outline" onClick={handleCancel}>

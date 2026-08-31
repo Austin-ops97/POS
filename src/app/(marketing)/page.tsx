@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { isClerkConfigured } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { EmeraldMark } from "@/components/brand/emerald-mark";
+import { EmeraldWordmark } from "@/components/brand/emerald-mark";
 
 export const metadata = {
-  title: "Point of sale for the whole store",
+  title: { absolute: "EmeraldPOS" },
   description:
     "Fast retail checkout, inventory, workforce, and expenses. Sign in and unlock everything.",
 };
@@ -39,8 +39,8 @@ export default async function HomePage() {
 
       <main className="relative flex flex-1 flex-col justify-center px-6 py-16 sm:px-10 lg:px-16">
         <div className="mx-auto w-full max-w-3xl animate-[fadeRise_0.7s_ease-out_both]">
-          <EmeraldMark className="h-16 w-16 sm:h-20 sm:w-20" title="Emerald" />
-          <h1 className="mt-5 max-w-2xl text-balance text-2xl font-medium text-slate-100 sm:text-3xl">
+          <EmeraldWordmark size="lg" tone="on-dark" />
+          <h1 className="mt-6 max-w-2xl text-balance text-2xl font-medium text-slate-100 sm:text-3xl">
             Point of sale for the whole store.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">
