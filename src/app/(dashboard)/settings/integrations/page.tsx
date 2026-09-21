@@ -39,13 +39,18 @@ export default function IntegrationsSettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Puzzle className="h-5 w-5 text-slate-400" aria-hidden="true" />
-            More integrations
+            QuickBooks
           </CardTitle>
           <CardDescription>
-            Accounting, e-commerce, and marketing connectors are not available yet. We will
-            add them here when they ship — nothing is hidden behind a fake settings form.
+            Official Intuit connection for a one-way pull of customers, vendors, products, and expenses.
+            The page stays disconnected until OAuth completes.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/settings/integrations/quickbooks">QuickBooks settings</Link>
+          </Button>
+        </CardContent>
       </Card>
     </div>
   );

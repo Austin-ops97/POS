@@ -118,8 +118,8 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 12. Data Import Center | Missing | Settings entry and a wizard. Spreadsheet CSV import inside Office is not this. Store mapping, row provenance, and a rollback batch. No live QuickBooks calls in the wizard until OAuth exists |
-| 13. QuickBooks architecture | Missing | Official OAuth and APIs only. External ids, sync status, and logs on a connection record. No scraping and no writes until the user connects a real app |
+| 12. Data Import Center | Done | Settings → Data Import. CSV, xlsx, text, and QuickBooks IIF. Customers, vendors, products, and expenses write to the existing models. Other detected types stay preview-only. Batches store mapping, row results, external ids, and a rollback |
+| 13. QuickBooks architecture | Done for connect and one-way pull | Official OAuth. Tokens encrypted at rest. Pull of customers, vendors, items, and purchases when Intuit env vars exist. No write-back. Accounts, invoices, and payments are listed without a pull button |
 
 ### Phase 6 — Banking and accounting
 
@@ -148,6 +148,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - Phase 2 added `Expense.entryMode`, receipt fields, line-item categories, `ExpenseReceipt.role`, and `ExpenseFlagType.LINE_TOTAL_MISMATCH`. The enum value is its own migration so Postgres can commit `ADD VALUE` before the column migration. Viewer zoom state stays in the browser.
 - Phase 3 added availability windows and exceptions, overtime rule columns, max/preferred hours, and `OvertimeCalculation` snapshots. Suggestions are not stored; published shifts are normal `Shift` rows.
 - Phase 4 added `PayrollRun`, `PayStub`, `PayStubLine`, `PayrollTaxConfig`, and `PayrollDeductionConfig`, plus `WorkforceSettings.employerReference`. One processed run per business and period is enforced with a partial unique index. Voided runs remain in the table. Stubs do not reuse mutable `PayrollBonus` rows; bonuses are copied into the snapshot at process time.
+- Phase 5 added `ImportBatch`, `ImportBatchRow`, and `ImportExternalId` for provenance and rollback, plus `QuickBooksConnection` and `QuickBooksSyncLog`. Imported customers, vendors, products, and expenses stay on those tables. QuickBooks tokens are ciphertext columns, not audit details.
 - Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
 - Backfill nothing that rewrites historical pay or posted expenses.
@@ -171,7 +172,7 @@ Phase 1 does not block on these. Do not invent buttons that pretend they are con
 
 | Later phase | What the user must provide |
 | --- | --- |
-| QuickBooks | Intuit app client id, client secret, redirect URI, and the realm/company to link. Official OAuth only |
+| QuickBooks | `INTUIT_CLIENT_ID`, `INTUIT_CLIENT_SECRET`, `INTUIT_REDIRECT_URI` (must match the Intuit app and end in `/api/integrations/quickbooks/callback`), `INTUIT_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `INTUIT_ENVIRONMENT` (`sandbox` or `production`). Official OAuth only. The realm id comes back from Intuit when the user connects |
 | Bank link | Plaid (or the chosen provider) client id, secret, and environment (sandbox vs production). No bank passwords in EmeraldOne |
 | Social | Meta app id/secret for Facebook and Instagram, LinkedIn client id/secret, and the OAuth redirect URLs for each |
 

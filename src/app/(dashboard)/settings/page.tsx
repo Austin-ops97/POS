@@ -13,6 +13,7 @@ import {
   Shield,
   Puzzle,
   FileText,
+  Upload,
   ChevronRight,
   Layers,
   CalendarClock,
@@ -117,9 +118,15 @@ const settingsSections = [
     group: "Account",
     items: [
       {
+        href: "/settings/import",
+        title: "Data Import",
+        description: "CSV, Excel, and QuickBooks export files",
+        icon: Upload,
+      },
+      {
         href: "/settings/integrations",
         title: "Integrations",
-        description: "Stripe Connect today; more connectors later",
+        description: "Stripe Connect and QuickBooks",
         icon: Puzzle,
       },
       {

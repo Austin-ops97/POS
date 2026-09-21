@@ -419,6 +419,11 @@ model Business {
   payrollRuns               PayrollRun[]
   payStubs                  PayStub[]
   payStubLines              PayStubLine[]
+  importBatches             ImportBatch[]
+  importBatchRows           ImportBatchRow[]
+  importExternalIds         ImportExternalId[]
+  quickBooksConnection      QuickBooksConnection?
+  quickBooksSyncLogs        QuickBooksSyncLog[]
 
   @@index([createdAt])
 }
@@ -636,6 +641,7 @@ model EmployeeProfile {
   overtimeCalculations           OvertimeCalculation[]
   payStubs                       PayStub[]
   payrollRunsProcessed          PayrollRun[]                    @relation("PayrollRunProcessedBy")
+  importBatchesCreated          ImportBatch[]                   @relation("ImportBatchCreatedBy")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -1914,6 +1920,147 @@ model PayStubLine {
   @@index([businessId])
   @@index([payStubId])
   @@index([businessId, code, side])
+}
+
+// ─── Data import and QuickBooks ──────────────────────────────────────────────
+
+enum ImportBatchStatus {
+  UPLOADED
+  PREVIEWED
+  IMPORTED
+  ROLLED_BACK
+  FAILED
+}
+
+enum ImportRowAction {
+  PENDING
+  VALID
+  INVALID
+  DUPLICATE
+  CREATED
+  UPDATED
+  SKIPPED
+  FAILED
+}
+
+enum QuickBooksConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+model ImportBatch {
+  id            String            @id @default(cuid())
+  businessId    String
+  createdById   String
+  fileName      String
+  sourceFormat  String
+  source        String            @default("FILE")
+  entityType    String
+  status        ImportBatchStatus @default(UPLOADED)
+  headers       Json
+  mapping       Json?
+  rowCount      Int
+  importedCount Int               @default(0)
+  updatedCount  Int               @default(0)
+  skippedCount  Int               @default(0)
+  failedCount   Int               @default(0)
+  createdAt     DateTime          @default(now())
+  importedAt    DateTime?
+  rolledBackAt  DateTime?
+
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile  @relation("ImportBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  rows      ImportBatchRow[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+}
+
+model ImportBatchRow {
+  id            String          @id @default(cuid())
+  businessId    String
+  batchId       String
+  rowNumber     Int
+  externalId    String?
+  action        ImportRowAction @default(PENDING)
+  entityType    String
+  entityId      String?
+  message       String?
+  raw           Json
+  normalized    Json?
+  previous      Json?
+  createdAt     DateTime        @default(now())
+
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, batchId])
+  @@index([batchId, rowNumber])
+  @@index([businessId, entityType, externalId])
+}
+
+model ImportExternalId {
+  id         String   @id @default(cuid())
+  businessId String
+  entityType String
+  entityId   String
+  source     String
+  externalId String
+  batchId    String?
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, entityType, source, externalId])
+  @@index([businessId, entityType, entityId])
+  @@index([batchId])
+}
+
+model QuickBooksConnection {
+  id                   String                     @id @default(cuid())
+  businessId           String                     @unique
+  realmId              String?
+  companyName          String?
+  status               QuickBooksConnectionStatus @default(DISCONNECTED)
+  environment          String?
+  accessTokenCipher    String?                    @db.Text
+  refreshTokenCipher   String?                    @db.Text
+  accessTokenExpiresAt DateTime?
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String?
+  lastSyncError        String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  logs     QuickBooksSyncLog[]
+
+  @@index([businessId, status])
+}
+
+model QuickBooksSyncLog {
+  id            String    @id @default(cuid())
+  businessId    String
+  connectionId  String
+  direction     String
+  entityType    String
+  status        String
+  message       String?
+  importedCount Int       @default(0)
+  updatedCount  Int       @default(0)
+  skippedCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connection QuickBooksConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startedAt])
+  @@index([connectionId])
 }
 
 // ─── Expense Management ──────────────────────────────────────────────────────
