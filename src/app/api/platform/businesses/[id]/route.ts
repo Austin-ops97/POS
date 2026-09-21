@@ -17,18 +17,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const admin = await requirePlatformAdmin();
     const { id } = await params;
     const data = schema.parse(await request.json());
+    if (data.modules) {
+      return NextResponse.json(
+        { error: "Feature licensing is changed in Builder", code: "FORBIDDEN" },
+        { status: 403 }
+      );
+    }
     const business = await db.business.findFirst({ where: { id, deletedAt: null } });
     if (!business) throw new Error("Business not found");
 
     await db.$transaction(async (tx) => {
       if (data.status) await tx.business.update({ where: { id }, data: { status: data.status } });
-      for (const setting of data.modules || []) {
-        await tx.moduleSetting.upsert({
-          where: { businessId_module: { businessId: id, module: setting.module } },
-          create: { businessId: id, module: setting.module, enabled: setting.enabled },
-          update: { enabled: setting.enabled },
-        });
-      }
       await tx.auditLog.create({
         data: {
           businessId: id,

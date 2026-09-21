@@ -81,6 +81,14 @@ export const MODULE_SETTING_KEYS = [
   "PROJECT_REMINDERS",
   "PROJECT_COMPLETION",
   "VIDEO_CALLING",
+  "SCHEDULING",
+  "PAYROLL",
+  "PROJECTS",
+  "IMPORT",
+  "QUICKBOOKS",
+  "BANKING",
+  "ACCOUNTING",
+  "SOCIAL",
 ] as const;
 
 export const moduleSettingsSchema = z.object({

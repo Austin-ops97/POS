@@ -15,6 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="text-sm font-medium text-slate-300">Platform admin</span>
           </Link>
           <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white">Open my workspace</Link>
+          <Link href="/admin/builder" className="text-sm text-slate-300 hover:text-white">Builder</Link>
         </div>
       </header>
       <main className="mx-auto max-w-7xl p-6">{children}</main>

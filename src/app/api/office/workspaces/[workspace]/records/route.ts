@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { requireModule } from "@/lib/access-control";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import { checkRateLimitAsync } from "@/lib/rate-limit";
 import {
@@ -14,6 +15,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
     const { workspace } = await params;
+    if (workspace === "projects") await requireModule(ctx, "PROJECTS");
     const search = new URL(request.url).searchParams;
     return NextResponse.json(
       await listOfficeWorkspaceRecords(ctx, workspace, {
@@ -34,6 +36,7 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Too many requests", code: "RATE_LIMITED" }, { status: 429 });
     }
     const { workspace } = await params;
+    if (workspace === "projects") await requireModule(ctx, "PROJECTS");
     const body = await request.json();
     if (body?.action === "clear-complete") {
       return NextResponse.json(

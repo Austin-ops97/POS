@@ -68,6 +68,7 @@ Required variables:
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `NEXT_PUBLIC_APP_URL` | App URL (e.g. `http://localhost:3000`) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated Clerk emails allowed to use `/admin` |
+| `BUILDER_UNLOCK_SECRET` | Second gate for `/admin/builder`. At least 16 characters. See `docs/emeraldone-builder.md` |
 
 ### 3. Database Setup
 

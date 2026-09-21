@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { OrderServiceError } from "./order-service";
 import { publicErrorMessage } from "./audit-redaction";
+import { BuilderGateError } from "./builder/gate-decision";
 
 export type ApiErrorBody = {
   error: string;
@@ -117,6 +118,10 @@ export function handleApiError(error: unknown, context: string) {
       code: "DATABASE_UNAVAILABLE",
       requestId,
     });
+  }
+
+  if (error instanceof BuilderGateError) {
+    return apiError(error.message, error.status, { code: error.code, requestId });
   }
 
   if (error instanceof Error) {

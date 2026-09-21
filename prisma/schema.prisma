@@ -374,6 +374,7 @@ model Business {
   stripeAccount             StripeAccount?
   settings                  BusinessSetting?
   moduleSettings            ModuleSetting[]
+  builderState              BuilderBusinessState?
   auditLogs                 AuditLog[]
   registerSessions          RegisterSession[]
   workforceSettings         WorkforceSettings?
@@ -1538,6 +1539,35 @@ model ModuleSetting {
 
   @@unique([businessId, module])
   @@index([businessId])
+}
+
+/// Platform Builder plan + onboarding state. Feature on/off stays on ModuleSetting.
+model BuilderBusinessState {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  planKey    String   @default("CUSTOM")
+  customized Boolean  @default(false)
+  checklist  Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+/// Builder actions, including unlock attempts. Never store secrets in details.
+model BuilderAuditEvent {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actorEmail  String?
+  action      String
+  businessId  String?
+  details     Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([businessId])
+  @@index([action])
 }
 
 model AuditLog {

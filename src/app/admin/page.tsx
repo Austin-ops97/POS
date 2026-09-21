@@ -12,7 +12,8 @@ export default async function AdminPage() {
   });
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">Businesses</h1><p className="text-slate-500">Your customers, licensing, and account status.</p></div>
+      <div><h1 className="text-2xl font-bold">Businesses</h1><p className="text-slate-500">Your customers, licensing, and account status. Feature plans and connections live in Builder.</p></div>
+      <Link href="/admin/builder" className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">Open Builder</Link>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {businesses.map((business) => (
           <Link href={`/admin/businesses/${business.id}`} key={business.id}>

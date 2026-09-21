@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { requireModule } from "@/lib/access-control";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import {
   archiveOfficeWorkspaceRecord,
@@ -13,6 +14,7 @@ export async function PATCH(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
     const { workspace, id } = await params;
+    if (workspace === "projects") await requireModule(ctx, "PROJECTS");
     return NextResponse.json(
       await updateOfficeWorkspaceRecord(ctx, workspace, id, await request.json(), getClientIp(request))
     );
@@ -24,6 +26,7 @@ export async function DELETE(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
     const { workspace, id } = await params;
+    if (workspace === "projects") await requireModule(ctx, "PROJECTS");
     await archiveOfficeWorkspaceRecord(ctx, workspace, id, getClientIp(request));
     return new NextResponse(null, { status: 204 });
   } catch (error) {
@@ -35,6 +38,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
     const { workspace, id } = await params;
+    if (workspace === "projects") await requireModule(ctx, "PROJECTS");
     const body = await request.json().catch(() => ({}));
     if (body?.action !== "restore") {
       return NextResponse.json({ error: "Only restore is supported" }, { status: 400 });
