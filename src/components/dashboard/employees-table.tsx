@@ -21,6 +21,9 @@ export type EmployeeRow = {
   archivedAt?: Date | string | null;
   hourlyWage: number | string | null;
   role: { name: string };
+  jobTitle?: string | null;
+  birthdayLabel?: string | null;
+  anniversaryLabel?: string | null;
 };
 
 export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
@@ -115,8 +118,15 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                       {emp.name}
                     </Link>
                     <p className="mt-0.5 truncate text-sm text-slate-500">
-                      {emp.role.name} · {emp.email}
+                      {emp.jobTitle || emp.role.name} · {emp.email}
                     </p>
+                    {emp.birthdayLabel || emp.anniversaryLabel ? (
+                      <p className="mt-1 text-xs text-slate-400">
+                        {emp.birthdayLabel ? `Birthday ${emp.birthdayLabel}` : ""}
+                        {emp.birthdayLabel && emp.anniversaryLabel ? " · " : ""}
+                        {emp.anniversaryLabel ? `Anniversary ${emp.anniversaryLabel}` : ""}
+                      </p>
+                    ) : null}
                   </div>
                   <Badge variant={getEmployeeStatusVariant(emp.status as EmployeeStatus)}>
                     {emp.status}
@@ -141,6 +151,8 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Name</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Email</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Role</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">Birthday</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600">Anniversary</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Wage</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
                   <th className="px-4 py-3 text-right font-medium text-slate-600">Actions</th>
@@ -160,7 +172,9 @@ export function EmployeesTable({ employees }: { employees: EmployeeRow[] }) {
                     <td className="max-w-[12rem] truncate px-4 py-3 text-slate-600">
                       {emp.email}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{emp.role.name}</td>
+                    <td className="px-4 py-3 text-slate-600">{emp.jobTitle || emp.role.name}</td>
+                    <td className="px-4 py-3 text-slate-600">{emp.birthdayLabel ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{emp.anniversaryLabel ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-600">
                       {emp.hourlyWage != null
                         ? `${formatCurrency(Number(emp.hourlyWage))}/hr`

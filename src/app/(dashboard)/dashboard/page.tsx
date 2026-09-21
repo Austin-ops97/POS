@@ -29,6 +29,8 @@ import { hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getEmployeeModuleAccess } from "@/lib/access-control";
 import { NewProjectButton } from "@/components/dashboard/new-project-button";
+import { db } from "@/lib/db";
+import { celebrationSentence, upcomingCelebrations } from "@/lib/workforce/hr-dates";
 
 
 export const metadata = { title: "Dashboard" };
@@ -37,6 +39,17 @@ export default async function DashboardPage() {
   const ctx = await requireAuth();
   const moduleAccess = await getEmployeeModuleAccess(ctx);
   const canCreateProject = moduleAccess.OFFICE && hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  const canSeeAnniversaries = moduleAccess.WORKFORCE && hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
+  const anniversaries = canSeeAnniversaries
+    ? upcomingCelebrations(
+        await db.employeeProfile.findMany({
+          where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE" },
+          select: { id: true, name: true, hireDate: true, startDate: true },
+        }),
+        new Date(),
+        14
+      ).filter((item) => item.kind === "anniversary")
+    : [];
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
 
@@ -81,6 +94,19 @@ export default async function DashboardPage() {
           {canCreateProject ? <NewProjectButton /> : null}
         </div>
       </div>
+
+      {anniversaries.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Work anniversaries</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm text-slate-700">
+            {anniversaries.map((item) => (
+              <p key={item.employeeId}>{celebrationSentence(item)}</p>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <SetupChecklist
         status={setup}

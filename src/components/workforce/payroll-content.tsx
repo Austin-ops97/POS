@@ -27,6 +27,9 @@ type PayrollRow = {
   breakHours: number;
   regularHours: number;
   overtimeHours: number;
+  doubleTimeHours?: number;
+  totalHours?: number;
+  grossPay?: number;
   ptoHours?: number;
   sickHours?: number;
   vacationHours?: number;
@@ -209,7 +212,7 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                       <div>
                         <p className="font-semibold text-slate-900">{row.employeeName}</p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {row.actualHours.toFixed(1)}h actual · {row.scheduledHours.toFixed(1)}h sched
+                          {row.regularHours.toFixed(2)} regular · {row.overtimeHours.toFixed(2)} OT · {(row.totalHours ?? row.actualHours).toFixed(2)} total
                         </p>
                         {row.flags.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-1">
@@ -246,8 +249,12 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                       <th className="px-4 py-3 font-medium">PTO</th>
                       <th className="px-4 py-3 font-medium">Sick</th>
                       <th className="px-4 py-3 font-medium">Vacation</th>
-                      <th className="px-4 py-3 font-medium">Regular</th>
-                      <th className="px-4 py-3 font-medium">OT</th>
+                      <th className="px-4 py-3 font-medium">Regular hours</th>
+                      <th className="px-4 py-3 font-medium">OT hours</th>
+                      <th className="px-4 py-3 font-medium">Total hours</th>
+                      <th className="px-4 py-3 font-medium">Regular pay</th>
+                      <th className="px-4 py-3 font-medium">OT pay</th>
+                      <th className="px-4 py-3 font-medium">Gross</th>
                       <th className="px-4 py-3 font-medium">Bonuses</th>
                       <th className="px-4 py-3 font-medium">Total</th>
                       <th className="px-4 py-3 font-medium">Flags</th>
@@ -264,8 +271,12 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
                         <td className="px-4 py-3">{(row.ptoHours ?? 0).toFixed(1)}</td>
                         <td className="px-4 py-3">{(row.sickHours ?? 0).toFixed(1)}</td>
                         <td className="px-4 py-3">{(row.vacationHours ?? 0).toFixed(1)}</td>
+                        <td className="px-4 py-3">{row.regularHours.toFixed(2)}</td>
+                        <td className="px-4 py-3">{row.overtimeHours.toFixed(2)}</td>
+                        <td className="px-4 py-3">{(row.totalHours ?? row.regularHours + row.overtimeHours).toFixed(2)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.regularPay)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.overtimePay)}</td>
+                        <td className="px-4 py-3">{formatCurrency(row.grossPay ?? row.regularPay + row.overtimePay)}</td>
                         <td className="px-4 py-3">{formatCurrency(row.bonusTotal)}</td>
                         <td className="px-4 py-3 font-medium">{formatCurrency(row.totalPay)}</td>
                         <td className="max-w-xs px-4 py-3 text-xs leading-snug text-amber-700">

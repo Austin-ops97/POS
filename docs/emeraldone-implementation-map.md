@@ -101,15 +101,16 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
 | 5. Quick project from dashboard | Done | Dashboard **New Project** posts to the existing `/api/office/workspaces/projects/records` path when Office and `CREATE_DOCUMENTS` are enabled. No second project model |
-| 6. HR profile expansion | Partial | Fields mostly exist on `EmployeeProfile`. UI work: month/day birthday display (keep the full date stored; do not collect a public birth year in the directory), anniversary from `hireDate` / `startDate`, vCard QR from contact fields (`qrcode` is already a dependency) |
-| 7. Availability | Missing | New tenant-scoped availability (weekly windows, exceptions) that the scheduler reads. Check `TimeOffRequest` for PTO conflicts. Do not overload `Shift` |
-| 8. Assisted scheduler | Missing | Suggestions only, with labor cost from `EmployeeCompensation` and warnings. Manager must publish onto existing `Shift` rows. Never auto-publish |
+| 6. HR profile expansion | Done | Existing profile fields are shown on the employee page. Directories get month/day birthday and anniversary labels. Full birth date stays on the server and is shown only with personal-info permission. Contact QR is a vCard of work contact fields |
+| 7. Availability | Done | `EmployeeAvailabilityWindow` and `EmployeeAvailabilityException` are tenant-scoped. Approved `TimeOffRequest` rows block shifts. Weekly max and preferred hours live on `EmployeeProfile` |
+| 8. Assisted scheduler | Done | `/workforce/schedule/assist` suggests assignments with warnings and labor cost. Publish calls the existing shift create path only after the manager confirms |
+| 9. Overtime hours | Done in Phase 3 | Timesheets and payroll show regular, OT, and total hours plus pay. Rules live on `WorkforceSettings` (weekly, daily, double time, multiplier). Each payroll and timesheet calculation is stored on `OvertimeCalculation` |
 
 ### Phase 4 — Payroll
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 9. Overtime hours and pay | Partial | `computeWeeklyOvertimeHours` and `WorkforceSettings.overtimeThresholdHours` already exist. Surface OT **hours** on timesheets and payroll (the payroll table currently shows OT pay, not hours) and keep the threshold/multiplier that produced them |
+| 9. Overtime hours and pay | Done for hours | Hours, pay, and configurable rules shipped with Phase 3. Pay stubs and employer tax remain Phase 4 |
 | 10. Pay stubs | Missing | New immutable snapshot per employee per pay period (earnings, taxes, deductions, YTD) plus PDF. Generate from the existing payroll calculator. Do not rewrite historical rows when rules change |
 | 11. Employer payroll tax | Missing | Separate employee withholding from employer liability. Version tax config by effective date, same pattern as `EmployeeCompensation.effectiveFrom` |
 
@@ -145,6 +146,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - One shared Postgres database. Every new table gets `businessId`, a foreign key to `Business`, and indexes that start with `businessId`.
 - Add columns and enum values with Prisma migrations (`npm run db:migrate` locally, `db:deploy` in production). Do not `db push` against production.
 - Phase 2 added `Expense.entryMode`, receipt fields, line-item categories, `ExpenseReceipt.role`, and `ExpenseFlagType.LINE_TOTAL_MISMATCH`. The enum value is its own migration so Postgres can commit `ADD VALUE` before the column migration. Viewer zoom state stays in the browser.
+- Phase 3 added availability windows and exceptions, overtime rule columns, max/preferred hours, and `OvertimeCalculation` snapshots. Suggestions are not stored; published shifts are normal `Shift` rows.
 - Later payroll snapshots and tax tables are new models keyed by `employeeId` + period. They must not reuse mutable `PayrollBonus` rows as the stub.
 - Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.

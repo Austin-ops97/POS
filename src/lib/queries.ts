@@ -388,6 +388,10 @@ export async function getEmployees(ctx: AuthContext, includeArchived = false) {
       status: true,
       archivedAt: true,
       hourlyWage: true,
+      jobTitle: true,
+      dateOfBirth: true,
+      hireDate: true,
+      startDate: true,
       ptoBalanceHours: true,
       ptoAnnualHours: true,
       role: { select: { id: true, name: true } },
@@ -508,6 +512,10 @@ export async function getEmployeeById(ctx: AuthContext, id: string) {
     include: {
       role: { select: { id: true, name: true } },
       locations: { include: { location: { select: { id: true, name: true } } } },
+      manager: { select: { id: true, name: true } },
+      defaultLocation: { select: { id: true, name: true } },
+      emergencyContacts: { orderBy: { sortOrder: "asc" }, take: 3 },
+      compensationHistory: { orderBy: { effectiveFrom: "desc" }, take: 1 },
     },
   });
 }

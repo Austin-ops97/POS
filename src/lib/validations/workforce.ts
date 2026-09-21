@@ -1,12 +1,88 @@
 import { z } from "zod";
 
-export const workforceSettingsSchema = z.object({
-  payPeriodType: z.enum(["WEEKLY", "BIWEEKLY", "SEMIMONTHLY", "MONTHLY"]),
-  weekStartDay: z.number().int().min(0).max(6),
-  overtimeThresholdHours: z.number().min(0).max(168),
-  defaultPtoAnnualHours: z.number().min(0).max(1000),
-  defaultPtoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]),
-  paidBreaks: z.boolean(),
+export const workforceSettingsSchema = z
+  .object({
+    payPeriodType: z.enum(["WEEKLY", "BIWEEKLY", "SEMIMONTHLY", "MONTHLY"]),
+    weekStartDay: z.number().int().min(0).max(6),
+    overtimeThresholdHours: z.number().min(0).max(168),
+    overtimeMultiplier: z.number().min(1).max(3),
+    dailyOvertimeThresholdHours: z.number().min(0).max(24).nullable(),
+    doubleTimeDailyThresholdHours: z.number().min(0).max(24).nullable(),
+    doubleTimeMultiplier: z.number().min(1).max(3),
+    laborCostAlertAmount: z.number().min(0).nullable(),
+    defaultPtoAnnualHours: z.number().min(0).max(1000),
+    defaultPtoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]),
+    paidBreaks: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.dailyOvertimeThresholdHours != null &&
+      data.doubleTimeDailyThresholdHours != null &&
+      data.doubleTimeDailyThresholdHours <= data.dailyOvertimeThresholdHours
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Double time must start after daily overtime",
+        path: ["doubleTimeDailyThresholdHours"],
+      });
+    }
+  });
+
+const minuteOfDay = z.number().int().min(0).max(24 * 60);
+
+export const availabilitySaveSchema = z.object({
+  employeeId: z.string().min(1),
+  maxWeeklyHours: z.number().min(0).max(168).nullable(),
+  preferredWeeklyHours: z.number().min(0).max(168).nullable(),
+  windows: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        startMinute: minuteOfDay,
+        endMinute: minuteOfDay,
+      })
+    )
+    .max(14),
+});
+
+export const availabilityExceptionSchema = z.object({
+  employeeId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  available: z.boolean(),
+  startMinute: minuteOfDay.nullable(),
+  endMinute: minuteOfDay.nullable(),
+  note: z.string().max(300).optional().nullable(),
+});
+
+export const scheduleSuggestSchema = z.object({
+  locationId: z.string().min(1).nullable().optional(),
+  slots: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        headcount: z.number().int().min(1).max(20),
+        requiredRole: z.string().max(80).optional().nullable(),
+        projectTitle: z.string().max(180).optional().nullable(),
+      })
+    )
+    .min(1)
+    .max(40),
+});
+
+export const schedulePublishSchema = z.object({
+  assignments: z
+    .array(
+      z.object({
+        employeeId: z.string().min(1),
+        locationId: z.string().nullable().optional(),
+        startAt: z.string().min(1),
+        endAt: z.string().min(1),
+      })
+    )
+    .min(1)
+    .max(80),
 });
 
 export const timeClockActionSchema = z.object({

@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { getEmployees } from "@/lib/queries";
 import { EmployeesTable } from "@/components/dashboard/employees-table";
+import { anniversarySource, monthDayLabel } from "@/lib/workforce/hr-dates";
 
 
 export const metadata = { title: "Employees" };
@@ -20,6 +21,11 @@ export default async function EmployeesPage() {
         ? Number(emp.hourlyWage)
         : null,
     role: emp.role,
+    jobTitle: emp.jobTitle,
+    birthdayLabel: emp.dateOfBirth ? monthDayLabel(emp.dateOfBirth) : null,
+    anniversaryLabel: anniversarySource(emp.hireDate, emp.startDate)
+      ? monthDayLabel(anniversarySource(emp.hireDate, emp.startDate)!)
+      : null,
   }));
 
   return (

@@ -411,6 +411,9 @@ model Business {
   projectSubmissions        ProjectSubmission[]
   projectApprovalEvents     ProjectApprovalEvent[]
   communicationCalls        CommunicationCall[]
+  availabilityWindows       EmployeeAvailabilityWindow[]
+  availabilityExceptions    EmployeeAvailabilityException[]
+  overtimeCalculations      OvertimeCalculation[]
 
   @@index([createdAt])
 }
@@ -546,6 +549,8 @@ model EmployeeProfile {
   managerId           String?
   defaultLocationId   String?
   employmentNotes     String?
+  maxWeeklyHours      Decimal?            @db.Decimal(6, 2)
+  preferredWeeklyHours Decimal?           @db.Decimal(6, 2)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   deletedAt           DateTime?
@@ -621,6 +626,9 @@ model EmployeeProfile {
   communicationCallsStarted      CommunicationCall[]            @relation("CommunicationCallStartedBy")
   callParticipations             CallParticipant[]
   bankStatementsUploaded         BankStatement[]                @relation("BankStatementUploadedBy")
+  availabilityWindows            EmployeeAvailabilityWindow[]
+  availabilityExceptions         EmployeeAvailabilityException[]
+  overtimeCalculations           OvertimeCalculation[]
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -1530,6 +1538,11 @@ model WorkforceSettings {
   payPeriodType            PayPeriodType    @default(BIWEEKLY)
   weekStartDay             Int              @default(0)
   overtimeThresholdHours   Decimal          @default(40) @db.Decimal(6, 2)
+  overtimeMultiplier       Decimal          @default(1.5) @db.Decimal(4, 2)
+  dailyOvertimeThresholdHours Decimal?      @db.Decimal(6, 2)
+  doubleTimeDailyThresholdHours Decimal?    @db.Decimal(6, 2)
+  doubleTimeMultiplier     Decimal          @default(2) @db.Decimal(4, 2)
+  laborCostAlertAmount     Decimal?         @db.Decimal(12, 2)
   defaultPtoAnnualHours    Decimal          @default(80) @db.Decimal(8, 2)
   defaultPtoAccrualPolicy  PtoAccrualPolicy @default(ANNUAL_GRANT)
   paidBreaks               Boolean          @default(false)
@@ -1679,6 +1692,67 @@ model PayrollBonus {
   @@index([businessId])
   @@index([employeeId])
   @@index([payPeriodStart, payPeriodEnd])
+}
+
+model EmployeeAvailabilityWindow {
+  id          String   @id @default(cuid())
+  businessId  String
+  employeeId  String
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId, weekday])
+}
+
+model EmployeeAvailabilityException {
+  id          String   @id @default(cuid())
+  businessId  String
+  employeeId  String
+  date        DateTime @db.Date
+  available   Boolean  @default(false)
+  startMinute Int?
+  endMinute   Int?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId, date])
+}
+
+model OvertimeCalculation {
+  id               String   @id @default(cuid())
+  businessId       String
+  employeeId       String
+  periodStart      DateTime @db.Date
+  periodEnd        DateTime @db.Date
+  regularHours     Decimal  @db.Decimal(8, 2)
+  overtimeHours    Decimal  @db.Decimal(8, 2)
+  doubleTimeHours  Decimal  @db.Decimal(8, 2)
+  totalHours       Decimal  @db.Decimal(8, 2)
+  regularPay       Decimal  @db.Decimal(12, 2)
+  overtimePay      Decimal  @db.Decimal(12, 2)
+  doubleTimePay    Decimal  @db.Decimal(12, 2)
+  grossPay         Decimal  @db.Decimal(12, 2)
+  rules            Json
+  calculatedAt     DateTime @default(now())
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([businessId, periodStart])
+  @@index([employeeId])
 }
 
 // ─── Expense Management ──────────────────────────────────────────────────────
