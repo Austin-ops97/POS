@@ -91,16 +91,16 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 1. Simple vs itemized expenses | Partial | Keep `Expense`, `ExpenseLineItem`, `ExpenseFlag`. Add a mode on the existing expense (or derive itemized from line items) and a discrepancy flag such as `LINE_TOTAL_MISMATCH` on `ExpenseFlagType`. Do not add a second expense table |
-| 2. Receipt scanner | Partial | Expense capture already detects corners and warps. Office scanner already rotates and filters. Extend those clients: corner handles, color/gray/B&W, original plus cleaned file, multi-page PDF. OCR today is regex over text, not a vision engine — confirm extracted fields before save |
-| 3. Receipt zoom viewer | Partial | Extend the approval-panel dialog (and any office preview) with zoom, fit, 100%, pan, pinch, double-tap |
-| 4. Receipt search and bulk download | Partial | Expense list, saved filters, and `ocrText` / `ocrRawText` are the search base. Add ZIP + CSV index using the existing `jszip` dependency. Filenames from merchant, date, and amount |
+| 1. Simple vs itemized expenses | Done | `Expense.entryMode` (`SIMPLE` / `ITEMIZED`) plus line categories. Save is blocked until the user confirms a line-total discrepancy; `LINE_TOTAL_MISMATCH` is then stored on `ExpenseFlag`. No second expense table |
+| 2. Receipt scanner | Done | Expense capture and the office scanner share the corner editor (detect, drag, warp, rotate, color/gray/B&W/contrast). Original JPEG is kept and a cleaned multi-page PDF is stored. OCR remains regex and is confirmed in the expense form before submit |
+| 3. Receipt zoom viewer | Done | Approval dialog and office file preview use the shared viewer: zoom, fit, 100%, pan, wheel, pinch, double-tap |
+| 4. Receipt search and bulk download | Done | `/finance/receipts` filters date, merchant, amount, employee, category, project, card, receipt number, location, and OCR text. ZIP via `jszip` (80 files / 30 MB) plus `receipt-index.csv`. Filenames `YYYY-MM-DD_Merchant_147.82.pdf` |
 
 ### Phase 3 — HR and scheduling
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 5. Quick project from dashboard | Partial | Projects already create `OfficeWorkspaceRecord` rows. Add a dashboard action that calls the same create path. No second project model |
+| 5. Quick project from dashboard | Done | Dashboard **New Project** posts to the existing `/api/office/workspaces/projects/records` path when Office and `CREATE_DOCUMENTS` are enabled. No second project model |
 | 6. HR profile expansion | Partial | Fields mostly exist on `EmployeeProfile`. UI work: month/day birthday display (keep the full date stored; do not collect a public birth year in the directory), anniversary from `hireDate` / `startDate`, vCard QR from contact fields (`qrcode` is already a dependency) |
 | 7. Availability | Missing | New tenant-scoped availability (weekly windows, exceptions) that the scheduler reads. Check `TimeOffRequest` for PTO conflicts. Do not overload `Shift` |
 | 8. Assisted scheduler | Missing | Suggestions only, with labor cost from `EmployeeCompensation` and warnings. Manager must publish onto existing `Shift` rows. Never auto-publish |
@@ -144,7 +144,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 
 - One shared Postgres database. Every new table gets `businessId`, a foreign key to `Business`, and indexes that start with `businessId`.
 - Add columns and enum values with Prisma migrations (`npm run db:migrate` locally, `db:deploy` in production). Do not `db push` against production.
-- Phase 2 can ship with a small migration: expense mode and/or `ExpenseFlagType` value for line-total mismatch, plus any receipt viewer state that must be stored (most viewer state is client-only and needs no migration).
+- Phase 2 added `Expense.entryMode`, receipt fields, line-item categories, `ExpenseReceipt.role`, and `ExpenseFlagType.LINE_TOTAL_MISMATCH`. The enum value is its own migration so Postgres can commit `ADD VALUE` before the column migration. Viewer zoom state stays in the browser.
 - Later payroll snapshots and tax tables are new models keyed by `employeeId` + period. They must not reuse mutable `PayrollBonus` rows as the stub.
 - Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.

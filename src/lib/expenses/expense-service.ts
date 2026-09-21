@@ -18,6 +18,7 @@ import { logExpenseAudit } from "./audit";
 import { notifyEmployee, notifyManagers } from "./notifications";
 import { hashContent } from "./hash";
 import { checkBudgetAlerts } from "./budget-service";
+import { reconcileItemizedExpense } from "./reconciliation";
 
 export const expenseInclude = {
   employee: { select: { id: true, name: true, department: true, email: true } },
@@ -35,7 +36,10 @@ export const expenseInclude = {
   },
   location: { select: { id: true, name: true } },
   receipts: { where: { deletedAt: null }, orderBy: { pageNumber: "asc" as const } },
-  lineItems: { orderBy: { sortOrder: "asc" as const } },
+  lineItems: {
+    orderBy: { sortOrder: "asc" as const },
+    include: { category: { select: { id: true, name: true } } },
+  },
   tags: { include: { tag: true } },
   comments: {
     where: { deletedAt: null },
@@ -150,6 +154,9 @@ export async function listExpenses(
             { department: { contains: query.q, mode: "insensitive" } },
             { project: { contains: query.q, mode: "insensitive" } },
             { jobNumber: { contains: query.q, mode: "insensitive" } },
+            { receiptNumber: { contains: query.q, mode: "insensitive" } },
+            { ocrRawText: { contains: query.q, mode: "insensitive" } },
+            { businessPurpose: { contains: query.q, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -268,6 +275,95 @@ async function applyPolicyFlags(params: {
   return signals;
 }
 
+function normalizeBlank(value: string | null | undefined) {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function resolveAmounts(data: {
+  entryMode?: "SIMPLE" | "ITEMIZED";
+  amount: number;
+  tax?: number;
+  tip?: number;
+  total?: number;
+  lineItems?: Array<{
+    description: string;
+    quantity?: number;
+    unitPrice?: number | null;
+    amount: number;
+    categoryId?: string | null;
+  }>;
+  acknowledgeDiscrepancy?: boolean;
+}) {
+  const tax = data.tax ?? 0;
+  const tip = data.tip ?? 0;
+  const mode = data.entryMode ?? "SIMPLE";
+  if (mode !== "ITEMIZED") {
+    return {
+      entryMode: "SIMPLE" as const,
+      amount: data.amount,
+      tax,
+      tip,
+      total: computeTotal(data.amount, tax, tip, data.total),
+      mismatch: false,
+      difference: 0,
+      lines: [] as NonNullable<typeof data.lineItems>,
+    };
+  }
+  const lines = data.lineItems ?? [];
+  if (!lines.length) throw new Error("Invalid itemized expense: add at least one line");
+  const fallback = reconcileItemizedExpense({ lines, tax, tip, receiptTotal: 0 });
+  const receiptTotal = data.total ?? fallback.expectedTotal;
+  const reconciliation = reconcileItemizedExpense({ lines, tax, tip, receiptTotal });
+  if (!reconciliation.matches && !data.acknowledgeDiscrepancy) {
+    throw new Error(
+      "Invalid itemized expense: line totals do not match the receipt total. Confirm the discrepancy before saving."
+    );
+  }
+  return {
+    entryMode: "ITEMIZED" as const,
+    amount: reconciliation.lineSum,
+    tax,
+    tip,
+    total: reconciliation.receiptTotal,
+    mismatch: !reconciliation.matches,
+    difference: reconciliation.difference,
+    lines,
+  };
+}
+
+async function assertOwnedCategories(businessId: string, ids: Array<string | null | undefined>) {
+  const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (!unique.length) return;
+  const found = await db.expenseCategory.count({
+    where: { businessId, id: { in: unique }, deletedAt: null },
+  });
+  if (found !== unique.length) throw new Error("Invalid expense category");
+}
+
+async function syncLineTotalFlag(params: {
+  expenseId: string;
+  actorId: string;
+  mismatch: boolean;
+  difference: number;
+}) {
+  await db.expenseFlag.deleteMany({
+    where: { expenseId: params.expenseId, type: "LINE_TOTAL_MISMATCH", resolved: false },
+  });
+  if (!params.mismatch) return;
+  const direction = params.difference > 0 ? "higher" : "lower";
+  await db.expenseFlag.create({
+    data: {
+      expenseId: params.expenseId,
+      type: "LINE_TOTAL_MISMATCH",
+      severity: "WARNING",
+      message: `Receipt total is ${direction} than the itemized lines, tax, and tip by $${Math.abs(params.difference).toFixed(2)}.`,
+      raisedById: params.actorId,
+    },
+  });
+}
+
 export async function createExpense(
   ctx: AuthContext,
   raw: z.infer<typeof expenseCreateSchema>,
@@ -284,10 +380,13 @@ export async function createExpense(
   const employeeId =
     data.employeeId && canViewAllExpenses(ctx) ? data.employeeId : ctx.employee.id;
 
-  const tax = data.tax ?? 0;
-  const tip = data.tip ?? 0;
-  const total = computeTotal(data.amount, tax, tip, data.total);
+  const amounts = resolveAmounts(data);
+  const { tax, tip, total } = amounts;
   const purchaseDate = parseDateOnly(data.purchaseDate);
+  await assertOwnedCategories(ctx.business.id, [
+    data.categoryId,
+    ...amounts.lines.map((line) => line.categoryId),
+  ]);
   const submit = Boolean(data.submit) || settings.autoSubmitOnCreate;
   const status: ExpenseStatus = submit ? "PENDING_APPROVAL" : (data.status ?? "DRAFT");
 
@@ -336,10 +435,16 @@ export async function createExpense(
       project: data.project ?? null,
       jobNumber: data.jobNumber ?? null,
       merchant: data.merchant.trim(),
-      amount: data.amount,
+      amount: amounts.amount,
       tax,
       tip,
       total,
+      entryMode: amounts.entryMode,
+      receiptNumber: normalizeBlank(data.receiptNumber),
+      merchantAddress: normalizeBlank(data.merchantAddress),
+      businessPurpose: normalizeBlank(data.businessPurpose),
+      paymentLast4: normalizeBlank(data.paymentLast4),
+      purchaseTime: normalizeBlank(data.purchaseTime),
       currency: data.currency ?? settings.defaultCurrency,
       purchaseDate,
       paymentMethod: data.paymentMethod ?? "COMPANY_CARD",
@@ -351,13 +456,14 @@ export async function createExpense(
       receiptReminderAt: data.missingReceipt !== false ? new Date() : null,
       submittedAt: submit ? new Date() : null,
       contentHash,
-      lineItems: data.lineItems?.length
+      lineItems: amounts.lines.length
         ? {
-            create: data.lineItems.map((item, index) => ({
+            create: amounts.lines.map((item, index) => ({
               description: item.description,
               quantity: item.quantity ?? 1,
               unitPrice: item.unitPrice ?? null,
               amount: item.amount,
+              categoryId: item.categoryId ?? null,
               sortOrder: index,
             })),
           }
@@ -450,6 +556,12 @@ export async function createExpense(
   }
 
   await checkBudgetAlerts(ctx.business.id, expense.categoryId);
+  await syncLineTotalFlag({
+    expenseId: expense.id,
+    actorId: ctx.employee.id,
+    mismatch: amounts.mismatch,
+    difference: amounts.difference,
+  });
 
   const refreshed = await db.expense.findUniqueOrThrow({
     where: { id: expense.id },
@@ -484,10 +596,30 @@ export async function updateExpense(
   }
 
   const data = expenseUpdateSchema.parse(raw);
-  const tax = data.tax ?? Number(existing.tax);
-  const tip = data.tip ?? Number(existing.tip);
-  const amount = data.amount ?? Number(existing.amount);
-  const total = computeTotal(amount, tax, tip, data.total);
+  const entryMode = data.entryMode ?? existing.entryMode;
+  const lines =
+    data.lineItems ??
+    existing.lineItems.map((item) => ({
+      description: item.description,
+      quantity: Number(item.quantity),
+      unitPrice: item.unitPrice == null ? null : Number(item.unitPrice),
+      amount: Number(item.amount),
+      categoryId: item.categoryId,
+    }));
+  const amounts = resolveAmounts({
+    entryMode,
+    amount: data.amount ?? Number(existing.amount),
+    tax: data.tax ?? Number(existing.tax),
+    tip: data.tip ?? Number(existing.tip),
+    total: data.total ?? Number(existing.total),
+    lineItems: lines,
+    acknowledgeDiscrepancy: data.acknowledgeDiscrepancy,
+  });
+  const { tax, tip, total } = amounts;
+  await assertOwnedCategories(ctx.business.id, [
+    data.categoryId === undefined ? existing.categoryId : data.categoryId,
+    ...amounts.lines.map((line) => line.categoryId),
+  ]);
   const purchaseDate = data.purchaseDate
     ? parseDateOnly(data.purchaseDate)
     : existing.purchaseDate;
@@ -507,10 +639,18 @@ export async function updateExpense(
     where: { id: expenseId },
     data: {
       merchant: data.merchant?.trim(),
-      amount: data.amount,
-      tax: data.tax,
-      tip: data.tip,
+      amount: amounts.amount,
+      tax,
+      tip,
       total,
+      entryMode: amounts.entryMode,
+      receiptNumber: data.receiptNumber === undefined ? undefined : normalizeBlank(data.receiptNumber),
+      merchantAddress:
+        data.merchantAddress === undefined ? undefined : normalizeBlank(data.merchantAddress),
+      businessPurpose:
+        data.businessPurpose === undefined ? undefined : normalizeBlank(data.businessPurpose),
+      paymentLast4: data.paymentLast4 === undefined ? undefined : normalizeBlank(data.paymentLast4),
+      purchaseTime: data.purchaseTime === undefined ? undefined : normalizeBlank(data.purchaseTime),
       purchaseDate: data.purchaseDate ? purchaseDate : undefined,
       companyCardId: data.companyCardId === undefined ? undefined : data.companyCardId,
       categoryId: data.categoryId === undefined ? undefined : data.categoryId,
@@ -538,20 +678,19 @@ export async function updateExpense(
 
   if (data.tags) await syncTags(expenseId, ctx.business.id, data.tags);
 
-  if (data.lineItems) {
-    await db.expenseLineItem.deleteMany({ where: { expenseId } });
-    if (data.lineItems.length) {
-      await db.expenseLineItem.createMany({
-        data: data.lineItems.map((item, index) => ({
-          expenseId,
-          description: item.description,
-          quantity: item.quantity ?? 1,
-          unitPrice: item.unitPrice ?? null,
-          amount: item.amount,
-          sortOrder: index,
-        })),
-      });
-    }
+  await db.expenseLineItem.deleteMany({ where: { expenseId } });
+  if (amounts.lines.length) {
+    await db.expenseLineItem.createMany({
+      data: amounts.lines.map((item, index) => ({
+        expenseId,
+        description: item.description,
+        quantity: item.quantity ?? 1,
+        unitPrice: item.unitPrice ?? null,
+        amount: item.amount,
+        categoryId: item.categoryId ?? null,
+        sortOrder: index,
+      })),
+    });
   }
 
   if (data.submit) {
@@ -583,6 +722,13 @@ export async function updateExpense(
     categoryName: updated.category?.name,
     missingReceipt: updated.missingReceipt,
     merchant: updated.merchant,
+  });
+
+  await syncLineTotalFlag({
+    expenseId,
+    actorId: ctx.employee.id,
+    mismatch: amounts.mismatch,
+    difference: amounts.difference,
   });
 
   await logExpenseAudit({

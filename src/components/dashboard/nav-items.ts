@@ -75,6 +75,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Finance",
     items: [
       { href: "/finance/expenses", label: "Expenses", icon: Wallet },
+      { href: "/finance/receipts", label: "Receipts", icon: Receipt },
       { href: "/finance/statements", label: "Bank statements", icon: Landmark },
       { href: "/finance/cards", label: "Company Cards", icon: CreditCard },
       { href: "/finance/reimbursements", label: "Reimbursements", icon: Receipt },
@@ -95,6 +96,9 @@ export function isNavItemActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
   if (href === "/dashboard") return false;
   if (href === "/office") return false;
+  if (href === "/finance/receipts") {
+    return pathname === "/finance/receipts" || pathname.startsWith("/finance/receipts/");
+  }
   if (href === "/finance/expenses") {
     return (
       pathname === "/finance/expenses" ||

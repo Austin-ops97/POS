@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useFormatDate } from "@/components/providers/timezone-provider";
 import { ExpenseStatusBadge } from "./status-badge";
 import { AlertTriangle, Check, Download, Eye, Flag, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
+import { ZoomViewer } from "@/components/receipts/zoom-viewer";
 
 type ExpenseDetail = {
   id: string;
@@ -36,7 +37,11 @@ type ExpenseDetail = {
   category: { name: string } | null;
   companyCard: { name: string; lastFour: string } | null;
   location: { name: string } | null;
-  receipts: Array<{ id: string; storageUrl: string; kind: string; fileName: string }>;
+  entryMode?: string;
+  businessPurpose?: string | null;
+  receiptNumber?: string | null;
+  receipts: Array<{ id: string; storageUrl: string; kind: string; fileName: string; mimeType?: string }>;
+  lineItems?: Array<{ id?: string; description: string; quantity: unknown; unitPrice: unknown; amount: unknown; category?: { name: string } | null }>;
   flags: Array<{ id: string; message: string; type: string; severity: string }>;
   comments: Array<{ id: string; body: string; createdAt: string | Date; author: { name: string } }>;
   approvalEvents: Array<{
@@ -193,6 +198,25 @@ export function ApprovalPanel({
           </dl>
         </div>
 
+        {expense.lineItems && expense.lineItems.length > 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {expense.entryMode === "ITEMIZED" ? "Itemized lines" : "Lines"}
+            </h2>
+            <ul className="space-y-2 text-sm">
+              {expense.lineItems.map((line, index) => (
+                <li key={line.id ?? index} className="flex justify-between gap-3">
+                  <span>
+                    {String(line.quantity)} × {line.description}
+                    {line.category ? <span className="text-slate-500"> · {line.category.name}</span> : null}
+                  </span>
+                  <span className="font-medium">{formatCurrency(Number(line.amount))}</span>
+                </li>
+              ))}
+            </ul>
+            {expense.businessPurpose ? <p className="mt-3 text-sm text-slate-600">{expense.businessPurpose}</p> : null}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Receipt
@@ -416,14 +440,11 @@ export function ApprovalPanel({
             <DialogDescription>Tap download to save a copy of this receipt.</DialogDescription>
           </DialogHeader>
           {selectedReceipt ? (
-            <div className="flex max-h-[65vh] justify-center overflow-auto rounded-xl bg-slate-100 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/expenses/receipts/${selectedReceipt.id}/file`}
-                alt={selectedReceipt.fileName}
-                className="max-h-[62vh] max-w-full object-contain"
-              />
-            </div>
+            <ZoomViewer
+              src={`/api/expenses/receipts/${selectedReceipt.id}/file`}
+              alt={selectedReceipt.fileName}
+              kind={selectedReceipt.kind === "PDF" || selectedReceipt.mimeType === "application/pdf" ? "pdf" : "image"}
+            />
           ) : null}
           <DialogFooter>
             {selectedReceipt ? (

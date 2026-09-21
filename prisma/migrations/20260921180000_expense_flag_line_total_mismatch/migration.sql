@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ExpenseFlagType" ADD VALUE 'LINE_TOTAL_MISMATCH';

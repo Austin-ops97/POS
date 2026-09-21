@@ -27,12 +27,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatOrderStatus, getOrderStatusVariant } from "@/lib/status-utils";
 import { hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
+import { getEmployeeModuleAccess } from "@/lib/access-control";
+import { NewProjectButton } from "@/components/dashboard/new-project-button";
 
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
+  const moduleAccess = await getEmployeeModuleAccess(ctx);
+  const canCreateProject = moduleAccess.OFFICE && hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
 
@@ -74,6 +78,7 @@ export default async function DashboardPage() {
               Reports
             </Button>
           </Link>
+          {canCreateProject ? <NewProjectButton /> : null}
         </div>
       </div>
 

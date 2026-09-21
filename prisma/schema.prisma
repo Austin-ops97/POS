@@ -1728,6 +1728,17 @@ enum ExpenseFlagType {
   OUT_OF_POLICY
   MISSING_RECEIPT
   MANUAL
+  LINE_TOTAL_MISMATCH
+}
+
+enum ExpenseEntryMode {
+  SIMPLE
+  ITEMIZED
+}
+
+enum ExpenseReceiptRole {
+  ORIGINAL
+  PROCESSED
 }
 
 enum ExpenseFlagSeverity {
@@ -1803,6 +1814,7 @@ model ExpenseCategory {
 
   business       Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   expenses       Expense[]
+  lineItems      ExpenseLineItem[] @relation("ExpenseLineCategory")
   budgets        ExpenseBudget[]
   vendors        ExpenseVendor[]
   allowedOnCards CompanyCardAllowedCategory[]
@@ -1949,6 +1961,12 @@ model Expense {
   contentHash       String?
   ocrRawText        String?
   ocrConfidence     Decimal?             @db.Decimal(5, 2)
+  entryMode         ExpenseEntryMode     @default(SIMPLE)
+  receiptNumber     String?
+  merchantAddress   String?
+  businessPurpose   String?
+  paymentLast4      String?
+  purchaseTime      String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   deletedAt         DateTime?
@@ -1980,6 +1998,7 @@ model Expense {
   @@index([total])
   @@index([contentHash])
   @@index([deletedAt])
+  @@index([businessId, receiptNumber])
 }
 
 model ExpenseReceipt {
@@ -1998,6 +2017,7 @@ model ExpenseReceipt {
   contentHash String?
   ocrText     String?
   enhanced    Boolean            @default(false)
+  role        ExpenseReceiptRole @default(ORIGINAL)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   deletedAt   DateTime?
@@ -2011,6 +2031,7 @@ model ExpenseReceipt {
 model ExpenseLineItem {
   id          String   @id @default(cuid())
   expenseId   String
+  categoryId  String?
   description String
   quantity    Decimal  @default(1) @db.Decimal(10, 2)
   unitPrice   Decimal? @db.Decimal(12, 2)
@@ -2018,9 +2039,11 @@ model ExpenseLineItem {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  expense  Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation("ExpenseLineCategory", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([expenseId])
+  @@index([categoryId])
 }
 
 model ExpenseTag {

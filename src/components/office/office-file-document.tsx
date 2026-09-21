@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- previews are private authenticated file routes */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,6 +6,7 @@ import { ArrowLeft, Download, File, FileText, LockKeyhole, Printer, Trash2 } fro
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ZoomViewer } from "@/components/receipts/zoom-viewer";
 import type { OfficeDocumentDetail } from "./types";
 
 async function apiMessage(response: Response) {
@@ -32,7 +32,7 @@ export function OfficeFileDocument({ document, capabilities }: { document: Offic
         const url = `/api/office/files/${file.id}`;
         const image = file.mimeType.startsWith("image/");
         const pdf = file.mimeType === "application/pdf";
-        return <article key={file.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="flex items-center gap-3 border-b border-slate-100 p-3"><div className="rounded-lg bg-slate-100 p-2">{image ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{document.kind === "SCAN" ? `Page ${index + 1}` : file.fileName}</p><p className="text-xs text-slate-400">{(file.sizeBytes / 1024 / 1024).toFixed(1)} MB</p></div><Button asChild variant="ghost" size="icon"><a href={url} download={file.fileName} aria-label={`Download ${file.fileName}`}><Download className="h-4 w-4" /></a></Button></div>{image ? <a href={url} target="_blank" rel="noreferrer">{/* Authenticated dynamic files cannot use the Next image optimizer. */}<img src={url} alt={`${document.title}, page ${index + 1}`} className="mx-auto max-h-[70vh] w-full bg-slate-100 object-contain" /></a> : pdf ? <iframe src={url} title={file.fileName} className="h-[60vh] w-full bg-slate-100" /> : <div className="flex min-h-48 flex-col items-center justify-center p-6 text-center"><File className="h-10 w-10 text-slate-300" /><p className="mt-2 text-sm text-slate-500">Preview is unavailable for this file type.</p><Button asChild variant="outline" className="mt-4"><a href={url} download={file.fileName}><Download className="h-4 w-4" />Download file</a></Button></div>}</article>;
+        return <article key={file.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="flex items-center gap-3 border-b border-slate-100 p-3"><div className="rounded-lg bg-slate-100 p-2">{image ? <FileText className="h-4 w-4" /> : <File className="h-4 w-4" />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{pdf ? file.fileName : document.kind === "SCAN" ? `Original page ${index + 1}` : file.fileName}</p><p className="text-xs text-slate-400">{(file.sizeBytes / 1024 / 1024).toFixed(1)} MB</p></div><Button asChild variant="ghost" size="icon"><a href={url} download={file.fileName} aria-label={`Download ${file.fileName}`}><Download className="h-4 w-4" /></a></Button></div>{image || pdf ? <div className="p-3"><ZoomViewer src={url} alt={`${document.title}, file ${index + 1}`} kind={pdf ? "pdf" : "image"} /></div> : <div className="flex min-h-48 flex-col items-center justify-center p-6 text-center"><File className="h-10 w-10 text-slate-300" /><p className="mt-2 text-sm text-slate-500">Preview is unavailable for this file type.</p><Button asChild variant="outline" className="mt-4"><a href={url} download={file.fileName}><Download className="h-4 w-4" />Download file</a></Button></div>}</article>;
       })}</div> : <div className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><File className="h-10 w-10 text-slate-300" /><h2 className="mt-3 font-semibold text-slate-800">No files attached</h2><p className="mt-1 text-sm text-slate-500">This document record exists, but its file upload did not finish.</p></div>}
     </div>
   );

@@ -64,6 +64,7 @@ export async function attachReceipt(
       contentHash,
       ocrText: data.ocrText,
       enhanced: data.enhanced ?? false,
+      role: data.role ?? (data.enhanced ? "PROCESSED" : "ORIGINAL"),
     },
   });
 

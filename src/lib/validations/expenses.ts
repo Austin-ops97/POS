@@ -46,6 +46,23 @@ export const expenseCreateSchema = z.object({
   status: expenseStatusSchema.optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   missingReceipt: z.boolean().optional(),
+  entryMode: z.enum(["SIMPLE", "ITEMIZED"]).optional(),
+  receiptNumber: z.string().max(80).optional().nullable(),
+  merchantAddress: z.string().max(300).optional().nullable(),
+  businessPurpose: z.string().max(500).optional().nullable(),
+  paymentLast4: z
+    .string()
+    .regex(/^\d{4}$/, "Enter the last 4 digits only")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  purchaseTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Use HH:MM")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  acknowledgeDiscrepancy: z.boolean().optional(),
   lineItems: z
     .array(
       z.object({
@@ -53,6 +70,7 @@ export const expenseCreateSchema = z.object({
         quantity: z.number().min(0).optional(),
         unitPrice: z.number().min(0).optional().nullable(),
         amount: money,
+        categoryId: optionalId,
       })
     )
     .max(100)
@@ -119,6 +137,7 @@ export const expenseReceiptSchema = z.object({
   ocrText: z.string().max(50_000).optional(),
   enhanced: z.boolean().optional(),
   kind: z.enum(["IMAGE", "PDF"]).optional(),
+  role: z.enum(["ORIGINAL", "PROCESSED"]).optional(),
 });
 
 export const ocrParseSchema = z.object({
@@ -226,4 +245,26 @@ export const reportQuerySchema = z.object({
   status: expenseStatusSchema.optional(),
   project: z.string().optional(),
   jobNumber: z.string().optional(),
+});
+
+export const receiptLibraryQuerySchema = z.object({
+  dateFrom: dateOnly.optional(),
+  dateTo: dateOnly.optional(),
+  merchant: z.string().max(200).optional(),
+  minAmount: z.coerce.number().optional(),
+  maxAmount: z.coerce.number().optional(),
+  employeeId: z.string().optional(),
+  categoryId: z.string().optional(),
+  project: z.string().max(120).optional(),
+  companyCardId: z.string().optional(),
+  receiptNumber: z.string().max(80).optional(),
+  locationId: z.string().optional(),
+  q: z.string().max(200).optional(),
+});
+
+export const receiptDownloadSchema = z.object({
+  receiptIds: z.array(z.string().min(1)).max(80).optional(),
+  allFiltered: z.boolean().optional(),
+  includeCsv: z.boolean().optional(),
+  filters: receiptLibraryQuerySchema.optional(),
 });
