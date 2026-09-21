@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth";
+import { PERMISSIONS } from "@/lib/permissions";
 import { normalizeVendorName } from "@/lib/expenses/constants";
 import { IMPORT_BYTE_LIMIT, parseTextTable } from "@/lib/import/import-plan";
 import { parseXlsx } from "@/lib/import/parse-xlsx";
-import { canEditBankTransactions, canExportTaxSummary, canImportStatements, canViewBankTransactions, canViewProfitAndLoss } from "./access";
+import { BANK_PAGE_SIZE, bankListWindow, canEditBankTransactions, canExportTaxSummary, canImportStatements, canViewBankTransactions, canViewProfitAndLoss } from "./access";
 import { assertSplitsBalance, suggestCategory } from "./categorize";
 import { bankTransactionWhere, dayEnd, dayStart } from "./filters";
 import { buildProfitAndLoss } from "./pnl";
@@ -45,6 +46,7 @@ export type BankListQuery = {
   categoryId?: string;
   q?: string;
   personal?: "all" | "personal" | "business";
+  page?: number;
 };
 
 async function categorizationContext(businessId: string) {
@@ -110,6 +112,7 @@ export async function listBankCenter(ctx: AuthContext, query: BankListQuery) {
         }
       : {}),
   };
+  const window = bankListWindow(query.page);
   const [transactions, accounts, categories, vendors, projects, customers, employees, expenses, receipts] = await Promise.all([
     db.bankTransaction.findMany({
       where,
@@ -123,7 +126,8 @@ export async function listBankCenter(ctx: AuthContext, query: BankListQuery) {
         associations: { select: { id: true, receiptId: true, documentId: true, expenseId: true, projectId: true, vendorId: true, employeeId: true, customerId: true } },
       },
       orderBy: [{ postedOn: "desc" }, { createdAt: "desc" }],
-      take: 200,
+      skip: window.skip,
+      take: window.take,
     }),
     db.bankAccount.findMany({ where: { businessId }, select: { id: true, name: true, mask: true, kind: true }, orderBy: { name: "asc" } }),
     db.expenseCategory.findMany({ where: { businessId, deletedAt: null, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -144,8 +148,11 @@ export async function listBankCenter(ctx: AuthContext, query: BankListQuery) {
       take: 80,
     }),
   ]);
+  const pageRows = transactions.slice(0, BANK_PAGE_SIZE);
   return {
-    transactions: transactions.map((txn) => ({
+    page: window.page,
+    hasMore: transactions.length > BANK_PAGE_SIZE,
+    transactions: pageRows.map((txn) => ({
       id: txn.id,
       postedOn: isoDate(txn.postedOn),
       rawDescription: txn.rawDescription,
@@ -366,7 +373,7 @@ export async function importBankStatement(
   ctx: AuthContext,
   input: { fileName: string; mimeType: string; buffer: Buffer; accountName: string },
 ) {
-  if (!canImportStatements(ctx)) throw new Error("Missing permission: view_expense_reports");
+  if (!canImportStatements(ctx)) throw new Error(`Missing permission: ${PERMISSIONS.IMPORT_DATA}`);
   if (input.buffer.byteLength > IMPORT_BYTE_LIMIT) throw new Error("Invalid statement: file is larger than 1.5 MB");
   const lower = input.fileName.toLowerCase();
   if (lower.endsWith(".pdf") || input.mimeType.includes("pdf")) {

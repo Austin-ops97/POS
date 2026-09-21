@@ -7,7 +7,7 @@ import { quickBooksConnectUrl } from "@/lib/integrations/quickbooks-service";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_bank");
     const url = quickBooksConnectUrl({ businessId: ctx.business.id, employeeId: ctx.employee.id });
     return NextResponse.redirect(url);
   } catch (error) {

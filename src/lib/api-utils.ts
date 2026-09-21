@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { OrderServiceError } from "./order-service";
+import { publicErrorMessage } from "./audit-redaction";
 
 export type ApiErrorBody = {
   error: string;
@@ -165,7 +166,21 @@ export function handleApiError(error: unknown, context: string) {
         error.message
       )
     ) {
-      return apiError(error.message, 400, { code: "BAD_REQUEST", requestId });
+      return apiError(
+        publicErrorMessage(
+          error.message,
+          error.message.startsWith("Invalid Plaid")
+            ? "The bank could not be synced. Reconnect the account or try again."
+            : error.message.startsWith("Invalid social")
+              ? "The social account could not be updated. Reconnect it or try again."
+              : "That request could not be completed."
+        ),
+        error.message.startsWith("Invalid Plaid") ? 502 : 400,
+        {
+          code: error.message.startsWith("Invalid Plaid") ? "BANK_SYNC_FAILED" : "BAD_REQUEST",
+          requestId,
+        }
+      );
     }
     if (
       error.message.startsWith("Unsupported office file") ||

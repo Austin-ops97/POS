@@ -15,13 +15,12 @@ import { Button } from "@/components/ui/button";
 import { NAV_ITEMS } from "@/components/dashboard/nav-items";
 import { OFFICE_SUITE_MODULES, officeModuleHref } from "@/lib/office/suite";
 
-type SearchHit =
-  | { kind: "page"; label: string; href: string }
-  | { kind: "product"; label: string; href: string; detail?: string }
-  | { kind: "customer"; label: string; href: string; detail?: string }
-  | { kind: "order"; label: string; href: string; detail?: string }
-  | { kind: "document"; label: string; href: string; detail?: string }
-  | { kind: "tool"; label: string; href: string; detail?: string };
+type SearchHit = {
+  kind: "page" | "product" | "customer" | "employee" | "vendor" | "project" | "transaction" | "expense" | "receipt" | "document" | "invoice" | "order" | "tool";
+  label: string;
+  href: string;
+  detail?: string;
+};
 
 export function GlobalSearch() {
   const router = useRouter();
@@ -90,55 +89,12 @@ export function GlobalSearch() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const [productsRes, customersRes, ordersRes, documentsRes] = await Promise.all([
-          fetch(`/api/products?search=${encodeURIComponent(q)}&limit=5`),
-          fetch(`/api/customers?search=${encodeURIComponent(q)}&limit=5`),
-          fetch(`/api/orders?search=${encodeURIComponent(q)}&limit=5`),
-          fetch(`/api/office/documents?q=${encodeURIComponent(q)}&pageSize=5`),
-        ]);
+        const response = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
         const next: SearchHit[] = [...pageHits];
-        if (productsRes.ok) {
-          const data = await productsRes.json();
-          for (const p of data.products || []) {
-            next.push({
-              kind: "product",
-              label: p.name,
-              href: `/products/${p.id}`,
-              detail: p.sku || undefined,
-            });
-          }
-        }
-        if (customersRes.ok) {
-          const data = await customersRes.json();
-          for (const c of data.customers || []) {
-            next.push({
-              kind: "customer",
-              label: `${c.firstName}${c.lastName ? ` ${c.lastName}` : ""}`,
-              href: `/customers/${c.id}`,
-              detail: c.email || c.phone || undefined,
-            });
-          }
-        }
-        if (ordersRes.ok) {
-          const data = await ordersRes.json();
-          for (const o of data.orders || []) {
-            next.push({
-              kind: "order",
-              label: o.orderNumber,
-              href: `/orders/${o.id}`,
-              detail: o.status,
-            });
-          }
-        }
-        if (documentsRes.ok) {
-          const data = await documentsRes.json();
-          for (const document of data.items || []) {
-            next.push({
-              kind: "document",
-              label: document.title,
-              href: `/office/documents/${document.id}`,
-              detail: document.kind === "SCAN" ? "Scanned document" : "Office document",
-            });
+        if (response.ok) {
+          const data = await response.json();
+          for (const hit of data.hits || []) {
+            next.push(hit);
           }
         }
         setHits(next);
@@ -182,7 +138,7 @@ export function GlobalSearch() {
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
             <DialogDescription>
-              Find pages, records, documents, and every Office & Admin capability.
+              Find pages, people, sales, expenses, receipts, and documents.
             </DialogDescription>
           </DialogHeader>
           <div className="relative">

@@ -7,7 +7,7 @@ import { bankConnectionStatus } from "@/lib/banking/plaid-service";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    if (!canConnectBank(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canConnectBank(ctx)) throw new Error("Missing permission: manage_bank");
     return NextResponse.json(await bankConnectionStatus(ctx.business.id));
   } catch (error) {
     return handleApiError(error, "GET /api/integrations/plaid");

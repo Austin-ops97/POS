@@ -8,7 +8,7 @@ import { createImportBatch, parseUpload } from "@/lib/import/import-service";
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    if (!canOpenImport(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canOpenImport(ctx)) throw new Error("Missing permission: import_data");
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new Error("Invalid import: choose a file");

@@ -1,9 +1,16 @@
-import { hasAnyPermission, type AuthContext } from "@/lib/auth";
-import { canManageBankStatements } from "@/lib/expenses/bank-statement-service";
+import { hasAnyPermission, hasPermission, type AuthContext } from "@/lib/auth";
+import { canImportFinancialFiles } from "@/lib/expenses/bank-statement-service";
 import { PERMISSIONS } from "@/lib/permissions";
 
+export const BANK_PAGE_SIZE = 50;
+
+export function bankListWindow(page: number | undefined) {
+  const current = Number.isFinite(page) ? Math.min(100, Math.max(1, Math.floor(page as number))) : 1;
+  return { page: current, skip: (current - 1) * BANK_PAGE_SIZE, take: BANK_PAGE_SIZE + 1 };
+}
+
 export function canConnectBank(ctx: AuthContext): boolean {
-  return hasAnyPermission(ctx, [PERMISSIONS.MANAGE_LOCATIONS, PERMISSIONS.MANAGE_STRIPE]);
+  return hasPermission(ctx, PERMISSIONS.MANAGE_BANK);
 }
 
 export function canViewBankTransactions(ctx: AuthContext): boolean {
@@ -25,7 +32,7 @@ export function canEditBankTransactions(ctx: AuthContext): boolean {
 }
 
 export function canImportStatements(ctx: AuthContext): boolean {
-  return canManageBankStatements(ctx);
+  return canImportFinancialFiles(ctx);
 }
 
 export function canViewProfitAndLoss(ctx: AuthContext): boolean {
@@ -33,5 +40,5 @@ export function canViewProfitAndLoss(ctx: AuthContext): boolean {
 }
 
 export function canExportTaxSummary(ctx: AuthContext): boolean {
-  return hasAnyPermission(ctx, [PERMISSIONS.EXPORT_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]);
+  return hasPermission(ctx, PERMISSIONS.EXPORT_EXPENSES);
 }

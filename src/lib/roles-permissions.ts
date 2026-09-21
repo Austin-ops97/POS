@@ -61,3 +61,18 @@ export async function ensureRolesAndPermissions(
 
   return roleIds;
 }
+
+let roleSeed: Promise<void> | null = null;
+
+/** One upsert pass per process so existing businesses pick up new permission keys. */
+export function ensureRolesAndPermissionsOnce(db: DbClient): Promise<void> {
+  if (!roleSeed) {
+    roleSeed = ensureRolesAndPermissions(db)
+      .then(() => undefined)
+      .catch((error) => {
+        roleSeed = null;
+        console.error("Could not refresh role permissions:", error);
+      });
+  }
+  return roleSeed;
+}

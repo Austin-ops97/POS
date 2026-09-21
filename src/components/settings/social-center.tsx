@@ -45,12 +45,16 @@ export function SocialCenter({
   accounts,
   posts,
   notice,
+  canConnect,
+  canPublish,
 }: {
   meta: { ready: boolean; missing: string[] };
   linkedin: { ready: boolean; missing: string[] };
   accounts: Account[];
   posts: Post[];
   notice: string | null;
+  canConnect: boolean;
+  canPublish: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -114,9 +118,11 @@ export function SocialCenter({
       {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
         <p className="text-sm text-slate-600">Official OAuth only. EmeraldOne does not ask for a Facebook, Instagram, or LinkedIn password.</p>
-        <Button asChild>
-          <Link href="/settings/integrations/social/compose">Create social post</Link>
-        </Button>
+        {canPublish ? (
+          <Button asChild>
+            <Link href="/settings/integrations/social/compose">Create social post</Link>
+          </Button>
+        ) : null}
       </div>
       {PLATFORMS.map((platform) => {
         const provider = platform === "LINKEDIN" ? linkedin : meta;
@@ -144,6 +150,7 @@ export function SocialCenter({
                     <p className="text-slate-500">{account.externalId}</p>
                     {account.lastSyncAt ? <p className="text-xs text-slate-500">Last sync {account.lastSyncAt}</p> : null}
                     {account.lastSyncError ? <p className="text-red-700">{account.lastSyncError}</p> : null}
+                    {canConnect ? (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       {account.status === "CONNECTED" ? (
                         <Button type="button" variant="outline" disabled={busy !== null} onClick={() => refresh(account.id)}>
@@ -156,6 +163,7 @@ export function SocialCenter({
                         </Button>
                       ) : null}
                     </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -164,17 +172,17 @@ export function SocialCenter({
               <p className="mt-3 text-sm text-slate-600">Instagram uses the Facebook connection above. A professional account linked to a Page shows up here after that authorization. Image posts also need the existing blob token because Instagram requires a public image URL.</p>
             ) : (
               <div className="mt-3">
-                {provider.ready ? (
+                {canConnect && provider.ready ? (
                   <Button asChild variant={connected ? "outline" : "default"}>
                     <a href={platform === "LINKEDIN" ? "/api/integrations/linkedin/connect" : "/api/integrations/meta/connect"}>
                       {connected ? "Reconnect" : platform === "LINKEDIN" ? "Connect LinkedIn" : "Connect Facebook and Instagram"}
                     </a>
                   </Button>
-                ) : (
+                ) : canConnect ? (
                   <Button type="button" disabled>
                     Connect {platformLabel(platform)}
                   </Button>
-                )}
+                ) : null}
               </div>
             )}
           </section>
@@ -195,7 +203,7 @@ export function SocialCenter({
                   {post.deliveries.map((delivery) => (
                     <li key={delivery.id} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
                       <span>{platformLabel(delivery.platform)} {delivery.displayName}: {delivery.status === "PUBLISHED" ? "Published" : delivery.status === "FAILED" ? `Failed${delivery.error ? `: ${delivery.error}` : ""}` : "Scheduled"}</span>
-                      {delivery.status === "FAILED" ? (
+                      {canPublish && delivery.status === "FAILED" ? (
                         <Button type="button" variant="outline" disabled={busy !== null} onClick={() => retry(post.id, delivery.id)}>
                           {busy === delivery.id ? "Retrying…" : `Retry ${platformLabel(delivery.platform)}`}
                         </Button>

@@ -24,12 +24,12 @@ export function canManageBankStatements(ctx: AuthContext) {
   ].some((key) => hasPermission(ctx, key));
 }
 
+export function canImportFinancialFiles(ctx: AuthContext) {
+  return hasPermission(ctx, PERMISSIONS.IMPORT_DATA) && canManageBankStatements(ctx);
+}
+
 export function canViewBankStatements(ctx: AuthContext) {
-  return (
-    canManageBankStatements(ctx) ||
-    hasPermission(ctx, PERMISSIONS.VIEW_TEAM_EXPENSES) ||
-    hasPermission(ctx, PERMISSIONS.VIEW_OWN_EXPENSES)
-  );
+  return canManageBankStatements(ctx) || hasPermission(ctx, PERMISSIONS.VIEW_TEAM_EXPENSES);
 }
 
 function persistStatementFile(storageUrl: string, mimeType: string) {
@@ -65,8 +65,8 @@ export async function listBankStatements(ctx: AuthContext) {
 }
 
 export async function createBankStatement(ctx: AuthContext, payload: unknown) {
-  if (!canManageBankStatements(ctx)) {
-    throw new Error(`Missing permission: ${PERMISSIONS.VIEW_EXPENSE_REPORTS}`);
+  if (!canImportFinancialFiles(ctx)) {
+    throw new Error(`Missing permission: ${PERMISSIONS.IMPORT_DATA}`);
   }
   const input = bankStatementCreateSchema.parse(payload);
   const persisted = persistStatementFile(input.storageUrl, input.mimeType);
@@ -91,8 +91,8 @@ export async function createBankStatement(ctx: AuthContext, payload: unknown) {
 }
 
 export async function deleteBankStatement(ctx: AuthContext, id: string) {
-  if (!canManageBankStatements(ctx)) {
-    throw new Error(`Missing permission: ${PERMISSIONS.VIEW_EXPENSE_REPORTS}`);
+  if (!canImportFinancialFiles(ctx)) {
+    throw new Error(`Missing permission: ${PERMISSIONS.IMPORT_DATA}`);
   }
   const existing = await db.bankStatement.findFirst({
     where: { id, businessId: ctx.business.id, deletedAt: null },

@@ -11,7 +11,7 @@ const LOCAL: Record<string, string> = { Customer: "CUSTOMER", Vendor: "VENDOR", 
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_bank");
     const data = schema.parse(await request.json());
     assertImportEntity(ctx, LOCAL[data.entity]);
     const result = await pullQuickBooksEntity({ businessId: ctx.business.id, employeeId: ctx.employee.id, entity: data.entity });

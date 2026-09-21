@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { handleApiError } from "@/lib/api-utils";
 import { schedulePublishSchema } from "@/lib/validations/workforce";
 import { createShift } from "@/lib/workforce/schedule-service";
+import { createAuditLog } from "@/lib/audit";
 
 export async function POST(request: Request) {
   try {
@@ -35,6 +36,20 @@ export async function POST(request: Request) {
       });
       if (result.ok) created.push(result.shift);
       else failed.push({ employeeId: assignment.employeeId, error: result.error });
+    }
+    if (created.length > 0) {
+      await createAuditLog({
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+        action: "WORKFORCE_CHANGE",
+        entity: "Schedule",
+        details: {
+          kind: "SCHEDULE_PUBLISHED",
+          count: created.length,
+          failed: failed.length,
+          shiftIds: created.map((shift) => shift.id),
+        },
+      });
     }
     return NextResponse.json({ created, failed });
   } catch (error) {

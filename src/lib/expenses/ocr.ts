@@ -240,6 +240,12 @@ export function parseReceiptText(rawText: string, fileName?: string): OcrParseRe
   };
 }
 
+export function ocrReviewNote(confidence: number): string | null {
+  if (confidence >= 70) return null;
+  if (confidence <= 0) return "Nothing could be read from this receipt. Enter the fields yourself.";
+  return "Some receipt fields are uncertain. Review them before applying.";
+}
+
 export function emptyOcrResult(rawText = ""): OcrParseResult {
   return {
     items: [],

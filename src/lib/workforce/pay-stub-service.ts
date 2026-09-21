@@ -598,7 +598,7 @@ export async function recordPayStubDownload(input: { businessId: string; employe
     action: "WORKFORCE_CHANGE",
     entity: "PayStub",
     entityId: input.stubId,
-    details: { kind: "PAYROLL_STUB_PDF", payrollRunId: input.payrollRunId },
+    details: { kind: "PAY_STUB_GENERATED", payrollRunId: input.payrollRunId },
   });
 }
 

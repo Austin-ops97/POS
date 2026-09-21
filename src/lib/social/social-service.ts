@@ -2,7 +2,8 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth";
-import { canManageSocial } from "./access";
+import { canManageSocial, canPublishSocial, canViewSocial } from "./access";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   composedCaption,
   platformIssue,
@@ -31,8 +32,16 @@ const IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type AuthError = Error & { auth?: boolean };
 
-function assertSocial(ctx: AuthContext) {
-  if (!canManageSocial(ctx)) throw new Error("Missing permission: manage_locations");
+function assertManage(ctx: AuthContext) {
+  if (!canManageSocial(ctx)) throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_SOCIAL}`);
+}
+
+function assertPublish(ctx: AuthContext) {
+  if (!canPublishSocial(ctx)) throw new Error(`Missing permission: ${PERMISSIONS.PUBLISH_SOCIAL}`);
+}
+
+function assertSocialView(ctx: AuthContext) {
+  if (!canViewSocial(ctx)) throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_SOCIAL}`);
 }
 
 function authError(message: string): AuthError {
@@ -87,7 +96,7 @@ function requireKey(config: SocialProviderConfig): Buffer {
 }
 
 export function metaConnectUrl(ctx: AuthContext): string {
-  assertSocial(ctx);
+  assertManage(ctx);
   const config = metaConfig();
   requireKey(config);
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
@@ -95,7 +104,7 @@ export function metaConnectUrl(ctx: AuthContext): string {
 }
 
 export function linkedInConnectUrl(ctx: AuthContext): string {
-  assertSocial(ctx);
+  assertManage(ctx);
   const config = linkedInConfig();
   requireKey(config);
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
@@ -121,7 +130,7 @@ async function exchangeMetaUserToken(config: SocialProviderConfig, code: string)
 }
 
 export async function connectMeta(ctx: AuthContext, input: { code: string; state: string }) {
-  assertSocial(ctx);
+  assertManage(ctx);
   const config = metaConfig();
   const key = requireKey(config);
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
@@ -244,7 +253,7 @@ async function linkedInJson<T>(path: string, token: string, init?: { method?: st
 }
 
 export async function connectLinkedIn(ctx: AuthContext, input: { code: string; state: string }) {
-  assertSocial(ctx);
+  assertManage(ctx);
   const config = linkedInConfig();
   const key = requireKey(config);
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
@@ -366,7 +375,7 @@ export async function connectLinkedIn(ctx: AuthContext, input: { code: string; s
 }
 
 export async function disconnectSocial(ctx: AuthContext, connectionId: string) {
-  assertSocial(ctx);
+  assertManage(ctx);
   const connection = await db.socialConnection.findFirst({ where: { id: connectionId, ...socialConnectionWhere(ctx.business.id) } });
   if (!connection) throw new Error("Social account not found");
   await db.socialConnection.update({
@@ -392,7 +401,7 @@ export async function disconnectSocial(ctx: AuthContext, connectionId: string) {
 }
 
 export async function refreshSocial(ctx: AuthContext, connectionId: string) {
-  assertSocial(ctx);
+  assertManage(ctx);
   const connection = await db.socialConnection.findFirst({ where: { id: connectionId, businessId: ctx.business.id, status: "CONNECTED" } });
   if (!connection) throw new Error("Social account not found");
   const config = connection.platform === "LINKEDIN" ? linkedInConfig() : metaConfig();
@@ -442,7 +451,7 @@ export async function createSocialPost(
   ctx: AuthContext,
   input: { body: string; linkUrl?: string | null; scheduledFor?: string | null; connectionIds: string[]; image?: { name: string; mime: string; data: Buffer } | null },
 ) {
-  assertSocial(ctx);
+  assertPublish(ctx);
   const text = input.body.trim();
   const link = cleanLink(input.linkUrl);
   if (input.image && (!IMAGE_MIME.has(input.image.mime) || input.image.data.byteLength === 0 || input.image.data.byteLength > IMAGE_LIMIT)) {
@@ -504,7 +513,7 @@ export async function createSocialPost(
 }
 
 export async function retrySocialDelivery(ctx: AuthContext, postId: string, deliveryId: string) {
-  assertSocial(ctx);
+  assertPublish(ctx);
   const delivery = await db.socialDelivery.findFirst({
     where: { id: deliveryId, postId, businessId: ctx.business.id },
     include: { post: true, connection: true },
@@ -829,7 +838,7 @@ function serializeAccount(account: {
 }
 
 export async function socialOverview(ctx: AuthContext) {
-  assertSocial(ctx);
+  assertSocialView(ctx);
   await publishDueSocialPosts(ctx.business.id);
   const [accounts, posts] = await Promise.all([
     db.socialConnection.findMany({
@@ -872,7 +881,7 @@ export async function socialOverview(ctx: AuthContext) {
 }
 
 export async function readSocialImage(ctx: AuthContext, postId: string) {
-  assertSocial(ctx);
+  assertPublish(ctx);
   const post = await db.socialPost.findFirst({
     where: { id: postId, ...socialPostWhere(ctx.business.id) },
     select: { imageData: true, imageMime: true, imageName: true },

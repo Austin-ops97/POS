@@ -83,7 +83,7 @@ export function TaxSummaryClient({ report, canExport, canEdit }: { report: TaxSu
       ) : null}
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-[720px] text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
               <th className="px-4 py-3 font-medium">Category</th>

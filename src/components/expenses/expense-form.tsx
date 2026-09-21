@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { expenseCreateSchema } from "@/lib/validations/expenses";
 import { reconcileItemizedExpense, lineAmount } from "@/lib/expenses/reconciliation";
-import type { OcrParseResult } from "@/lib/expenses/ocr";
+import { ocrReviewNote, type OcrParseResult } from "@/lib/expenses/ocr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -289,6 +289,9 @@ export function ExpenseForm({
           {ocrDraft ? (
             <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
               <p className="font-medium text-emerald-950">Confirm extracted receipt fields before they are used.</p>
+              {ocrReviewNote(ocrDraft.confidence) ? (
+                <p className="text-amber-900">{ocrReviewNote(ocrDraft.confidence)}</p>
+              ) : null}
               <div className="grid gap-2 sm:grid-cols-2">
                 <Input value={ocrDraft.merchant ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, merchant: event.target.value })} placeholder="Merchant" />
                 <Input value={ocrDraft.date ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, date: event.target.value })} placeholder="Date" />

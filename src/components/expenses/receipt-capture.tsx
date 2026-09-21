@@ -262,7 +262,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
         ) : cameraOpen ? (
           <div className="relative aspect-[3/4] max-h-[420px] overflow-hidden rounded-xl bg-black sm:aspect-video">
             <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay onCanPlay={() => setVideoReady(true)} />
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 bg-gradient-to-t from-black/70 p-4">
+            <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-3 bg-gradient-to-t from-black/70 p-4">
               <Button type="button" variant="secondary" size="icon" onClick={stopCamera} aria-label="Close camera">
                 <X className="h-5 w-5" />
               </Button>

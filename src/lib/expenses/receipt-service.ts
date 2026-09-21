@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/auth";
 import { expenseReceiptSchema } from "@/lib/validations/expenses";
-import { getExpenseById, expenseInclude } from "./expense-service";
+import { getExpenseById, expenseInclude, canViewAllExpenses } from "./expense-service";
+import { PERMISSIONS } from "@/lib/permissions";
 import { hashReceiptPayload } from "./hash";
 import { findPossibleDuplicates } from "./duplicate-detection";
 import { logExpenseAudit } from "./audit";
@@ -127,6 +128,45 @@ export async function attachReceipt(
   });
 
   return { receipt, expense: updated, duplicates };
+}
+
+export async function softDeleteReceipt(ctx: AuthContext, receiptId: string, ipAddress?: string) {
+  const receipt = await db.expenseReceipt.findFirst({
+    where: {
+      id: receiptId,
+      deletedAt: null,
+      expense: { businessId: ctx.business.id, deletedAt: null },
+    },
+    include: { expense: { select: { id: true, employeeId: true } } },
+  });
+  if (!receipt) throw new Error("Receipt not found");
+  if (receipt.expense.employeeId !== ctx.employee.id && !canViewAllExpenses(ctx)) {
+    throw new Error(`Missing permission: ${PERMISSIONS.VIEW_TEAM_EXPENSES}`);
+  }
+  const deletedAt = new Date();
+  await db.expenseReceipt.update({ where: { id: receipt.id }, data: { deletedAt } });
+  const remaining = await db.expenseReceipt.count({
+    where: { expenseId: receipt.expense.id, deletedAt: null },
+  });
+  if (remaining === 0) {
+    await db.expense.update({
+      where: { id: receipt.expense.id },
+      data: { missingReceipt: true },
+    });
+  }
+  await logExpenseAudit({
+    businessId: ctx.business.id,
+    actorId: ctx.employee.id,
+    expenseId: receipt.expense.id,
+    action: "RECEIPT_DELETE",
+    entity: "ExpenseReceipt",
+    entityId: receipt.id,
+    before: { fileName: receipt.fileName, kind: receipt.kind },
+    after: { deletedAt: deletedAt.toISOString() },
+    ipAddress,
+    systemAction: "EXPENSE_UPDATE",
+  });
+  return { id: receipt.id };
 }
 
 export function parseOcrPayload(input: {

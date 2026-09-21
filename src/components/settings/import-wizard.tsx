@@ -256,6 +256,13 @@ export function ImportWizard() {
             <CardTitle>6. Results</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {result.failed > 0 || result.skipped > 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                Import finished with a partial result. {result.imported} added, {result.updated} updated, {result.skipped} skipped as duplicates, and {result.failed} could not be saved. Download the error report for the rows that failed.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-600">Import finished. Every ready row was saved.</p>
+            )}
             <div className="grid gap-3 sm:grid-cols-4">
               <Count label="Imported" value={result.imported} />
               <Count label="Updated" value={result.updated} />

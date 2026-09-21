@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const destination = new URL("/settings/integrations/social", appUrl);
   try {
     const ctx = await requireAuth();
-    if (!canManageSocial(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canManageSocial(ctx)) throw new Error("Missing permission: manage_social");
     const url = new URL(request.url);
     if (url.searchParams.get("error")) {
       destination.searchParams.set("error", "Meta authorization was cancelled");

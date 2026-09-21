@@ -781,7 +781,7 @@ export async function softDeleteExpense(ctx: AuthContext, id: string, ipAddress?
     businessId: ctx.business.id,
     actorId: ctx.employee.id,
     expenseId: id,
-    action: "ARCHIVE",
+    action: "EXPENSE_DELETE",
     entity: "Expense",
     entityId: id,
     before: { status: expense.status, deletedAt: expense.deletedAt },

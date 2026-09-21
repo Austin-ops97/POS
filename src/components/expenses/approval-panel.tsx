@@ -73,6 +73,7 @@ export function ApprovalPanel({
   const [pending, startTransition] = useTransition();
   const [selectedReceipt, setSelectedReceipt] = useState<ExpenseDetail["receipts"][number] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [removingReceipt, setRemovingReceipt] = useState<string | null>(null);
 
   function act(action: string, extra?: Record<string, string>) {
     startTransition(async () => {
@@ -109,6 +110,24 @@ export function ApprovalPanel({
       toast.success("Comment added");
       router.refresh();
     });
+  }
+
+  async function removeReceipt(receiptId: string, fileName: string) {
+    if (!window.confirm(`Remove ${fileName} from this expense?`)) return;
+    setRemovingReceipt(receiptId);
+    try {
+      const res = await fetch(`/api/expenses/receipts/${receiptId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not remove the receipt");
+        return;
+      }
+      toast.success("Receipt removed");
+      if (selectedReceipt?.id === receiptId) setSelectedReceipt(null);
+      router.refresh();
+    } finally {
+      setRemovingReceipt(null);
+    }
   }
 
   async function deleteExpense() {
@@ -227,17 +246,24 @@ export function ApprovalPanel({
             <div className="grid gap-3 sm:grid-cols-2">
               {expense.receipts.map((r) =>
                 r.kind === "PDF" ? (
-                  <a
-                    key={r.id}
-                    href={`/api/expenses/receipts/${r.id}/file`}
-                    download={r.fileName}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium hover:bg-slate-50"
-                  >
-                    <Download className="h-4 w-4" />
-                    {r.fileName}
-                  </a>
+                  <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium">
+                    <a
+                      href={`/api/expenses/receipts/${r.id}/file`}
+                      download={r.fileName}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-center gap-2 hover:bg-slate-50"
+                    >
+                      <Download className="h-4 w-4" />
+                      {r.fileName}
+                    </a>
+                    {canDelete ? (
+                      <Button type="button" variant="ghost" size="sm" disabled={removingReceipt === r.id} onClick={() => void removeReceipt(r.id, r.fileName)}>
+                        <Trash2 className="h-4 w-4" />
+                        {removingReceipt === r.id ? "Removing…" : "Remove receipt"}
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : (
                   <div key={r.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                     <button
@@ -265,6 +291,17 @@ export function ApprovalPanel({
                     >
                       <Download className="h-4 w-4" />
                     </a>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="absolute left-2 top-2 inline-flex h-10 items-center gap-1 rounded-full bg-white/90 px-3 text-xs font-medium text-slate-700 shadow-sm hover:bg-white"
+                        disabled={removingReceipt === r.id}
+                        onClick={() => void removeReceipt(r.id, r.fileName)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {removingReceipt === r.id ? "Removing…" : "Remove"}
+                      </button>
+                    ) : null}
                   </div>
                 )
               )}

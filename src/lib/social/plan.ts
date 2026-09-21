@@ -44,6 +44,14 @@ export function summarizeDeliveries(statuses: Array<"PUBLISHED" | "FAILED" | "SC
   return "PARTIAL";
 }
 
+export function publishStatusMessage(status: string): string {
+  if (status === "SCHEDULED") return "Post scheduled";
+  if (status === "PUBLISHED") return "Published to every selected account";
+  if (status === "PARTIAL") return "Published on some accounts. Retry the ones that failed from social history.";
+  if (status === "FAILED") return "Nothing was published. Check the account connection and try again.";
+  return "Publish finished";
+}
+
 export function retryableDeliveryIds(rows: { id: string; status: string }[]): string[] {
   return rows.filter((row) => row.status === "FAILED").map((row) => row.id);
 }

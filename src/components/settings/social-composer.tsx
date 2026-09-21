@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { publishStatusMessage } from "@/lib/social/plan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,7 +72,9 @@ export function SocialComposer({ accounts }: { accounts: Account[] }) {
       toast.error(data?.error ?? "Publish failed");
       return;
     }
-    toast.success(data.status === "SCHEDULED" ? "Post scheduled" : `Finished with status ${data.status}`);
+    const message = publishStatusMessage(data.status);
+    if (data.status === "FAILED" || data.status === "PARTIAL") toast.warning(message);
+    else toast.success(message);
     router.push("/settings/integrations/social");
     router.refresh();
   }

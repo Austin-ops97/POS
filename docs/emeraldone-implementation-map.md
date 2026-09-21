@@ -139,7 +139,14 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 | 14. Social connection center | Done for OAuth scaffolding | Settings → Integrations → Social media. Facebook and Instagram share the Meta app. LinkedIn is separate. Tokens are encrypted. The page stays Not connected until OAuth finishes |
 | 15. Post composer | Done | Create Social Post publishes to the selected connected accounts. One platform can fail without cancelling the others, and a failed delivery can be retried. Scheduled posts run on the existing reminders cron |
 
-Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, responsive polish) is mostly partial on top of the systems above. Global search, dashboard stat cards, audit logs, and RBAC already exist and should be extended rather than replaced.
+### Phase 8 — Polish and verification
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| Permissions | Done | `manage_bank`, `manage_social`, `publish_social`, and `import_data` sit on the existing role map. Cashiers and inventory staff do not receive them, payroll processing, or financial export. Finance can connect a bank and import. Managers can publish social posts. Server helpers enforce the keys. `ensureRolesAndPermissionsOnce` runs on the first authenticated request of a process so existing businesses pick the new rows up |
+| Audit | Done | `createAuditLog` redacts passwords, tokens, ciphers, and SSN-shaped values before insert. Expense delete, receipt upload/delete, pay changes, and published schedules write audit rows. Bank, import, payroll, and social actions already did |
+| Dashboard and search | Done | Quick actions are permission gated. Sales overview cards stay on the existing dashboard query. Search is one `/api/search` call, five rows per kind, scoped by `businessId` and permission, including receipt OCR text |
+| Lists and errors | Done | Bank transactions page 50 rows. Bank sync, import partial results, uncertain OCR, and partial social publish show plain sentences |
 
 ## Migration strategy
 
@@ -151,6 +158,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - Phase 5 added `ImportBatch`, `ImportBatchRow`, and `ImportExternalId` for provenance and rollback, plus `QuickBooksConnection` and `QuickBooksSyncLog`. Imported customers, vendors, products, and expenses stay on those tables. QuickBooks tokens are ciphertext columns, not audit details.
 - Phase 6 added `BankConnection`, `BankAccount`, `BankTransaction`, `BankTransactionSplit`, `ExpenseCategoryRule`, `TaxCategoryMapping`, and `RecordAssociation`. Bank rows reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id. Plaid access tokens are ciphertext and are omitted from audit details.
 - Phase 7 added `SocialConnection`, `SocialPost`, and `SocialDelivery`. Social tokens are ciphertext and are omitted from audit details. Connections chat stays the internal staff messenger.
+- Phase 8 does not add a migration. New permissions are rows created by `ensureRolesAndPermissions`.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
 - Backfill nothing that rewrites historical pay or posted expenses.
 
@@ -169,7 +177,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 
 ## Credentials to collect later
 
-Phase 1 does not block on these. Do not invent buttons that pretend they are connected. Stripe, Clerk, Resend, and LiveKit are already the live integrations.
+These stay server-side. The product stays Not connected until each provider's variables are set and the user finishes OAuth. Stripe, Clerk, Resend, and LiveKit are already the live integrations.
 
 | Later phase | What the user must provide |
 | --- | --- |

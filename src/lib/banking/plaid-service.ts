@@ -37,7 +37,7 @@ type PlaidTransaction = {
 };
 
 function assertConnect(ctx: AuthContext) {
-  if (!canConnectBank(ctx)) throw new Error("Missing permission: manage_locations");
+  if (!canConnectBank(ctx)) throw new Error("Missing permission: manage_bank");
 }
 
 async function plaidPost<T>(config: PlaidConfig, path: string, body: Record<string, unknown>): Promise<T> {

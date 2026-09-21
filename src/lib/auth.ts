@@ -2,6 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { db } from "./db";
 import { isClerkConfigured } from "./clerk-config";
+import { ensureRolesAndPermissionsOnce } from "./roles-permissions";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
 
 export { isClerkConfigured };
@@ -105,6 +106,7 @@ export async function getAuthUser() {
 export async function getAuthContext(businessId?: string): Promise<AuthContext | null> {
   const user = await getAuthUser();
   if (!user) return null;
+  await ensureRolesAndPermissionsOnce(db);
 
   const { findPreferredActiveMembership } = await import("./membership");
 

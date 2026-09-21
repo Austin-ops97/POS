@@ -2,17 +2,11 @@ import { hasAnyPermission, hasPermission, type AuthContext } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
 
 export function canOpenImport(ctx: AuthContext): boolean {
-  return hasAnyPermission(ctx, [
-    PERMISSIONS.MANAGE_LOCATIONS,
-    PERMISSIONS.MANAGE_CUSTOMERS,
-    PERMISSIONS.MANAGE_PRODUCTS,
-    PERMISSIONS.MANAGE_EXPENSE_SETTINGS,
-    PERMISSIONS.APPROVE_EXPENSES,
-  ]);
+  return hasPermission(ctx, PERMISSIONS.IMPORT_DATA);
 }
 
 export function canConnectQuickBooks(ctx: AuthContext): boolean {
-  return hasAnyPermission(ctx, [PERMISSIONS.MANAGE_LOCATIONS, PERMISSIONS.MANAGE_STRIPE]);
+  return hasPermission(ctx, PERMISSIONS.MANAGE_BANK);
 }
 
 export function assertImportEntity(ctx: AuthContext, entityType: string) {

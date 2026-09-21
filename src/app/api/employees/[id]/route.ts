@@ -183,9 +183,19 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
-    if (data.compensation && !hasPermission(ctx, PERMISSIONS.MANAGE_COMPENSATION)) {
+    const wageChanged =
+      data.hourlyWage !== undefined && Number(data.hourlyWage) !== Number(existing.hourlyWage);
+    if ((data.compensation || wageChanged) && !hasPermission(ctx, PERMISSIONS.MANAGE_COMPENSATION)) {
       throw new Error(`Missing permission: ${PERMISSIONS.MANAGE_COMPENSATION}`);
     }
+
+    const previousCompensation = data.compensation
+      ? await db.employeeCompensation.findFirst({
+          where: { employeeId: id, effectiveTo: null },
+          orderBy: { effectiveFrom: "desc" },
+          select: { payType: true, hourlyRate: true, annualSalary: true },
+        })
+      : null;
 
     if (data.ptoAdjustment && !hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES)) {
       return NextResponse.json(
@@ -252,6 +262,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const { pinHash: _pinHash, ...sanitized } = employee!;
     void _pinHash;
 
+    const payChanged = Boolean(data.compensation) || wageChanged;
     await createAuditLog({
       businessId: ctx.business.id,
       employeeId: ctx.employee.id,
@@ -259,9 +270,33 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       entity: "EmployeeProfile",
       entityId: id,
       details: {
-        ...data,
-        pin: data.pin ? "[redacted]" : undefined,
-        ptoAdjustment: data.ptoAdjustment ? "[recorded]" : undefined,
+        kind: payChanged ? "EMPLOYEE_PAY_CHANGED" : "EMPLOYEE_UPDATED",
+        fields: Object.keys(data).filter(
+          (key) => key !== "pin" && key !== "compensation" && key !== "emergencyContacts" && key !== "ptoAdjustment"
+        ),
+        ...(data.compensation
+          ? {
+              before: {
+                payType: previousCompensation?.payType ?? null,
+                hourlyRate:
+                  previousCompensation?.hourlyRate == null
+                    ? Number(existing.hourlyWage)
+                    : Number(previousCompensation.hourlyRate),
+                annualSalary:
+                  previousCompensation?.annualSalary == null ? null : Number(previousCompensation.annualSalary),
+              },
+              after: {
+                payType: data.compensation.payType,
+                hourlyRate: data.compensation.hourlyRate ?? null,
+                annualSalary: data.compensation.annualSalary ?? null,
+              },
+            }
+          : wageChanged
+            ? {
+                before: { hourlyRate: Number(existing.hourlyWage) },
+                after: { hourlyRate: data.hourlyWage },
+              }
+            : {}),
       },
     });
 

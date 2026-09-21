@@ -4,14 +4,14 @@ import { ChevronLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { SocialComposer } from "@/components/settings/social-composer";
-import { canManageSocial } from "@/lib/social/access";
+import { canPublishSocial } from "@/lib/social/access";
 import { socialOverview } from "@/lib/social/social-service";
 
 export const metadata = { title: "Create social post" };
 
 export default async function SocialComposePage() {
   const ctx = await requireAuth();
-  if (!canManageSocial(ctx)) redirect("/settings");
+  if (!canPublishSocial(ctx)) redirect("/settings");
   const overview = await socialOverview(ctx);
 
   return (

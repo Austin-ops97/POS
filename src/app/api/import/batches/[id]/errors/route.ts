@@ -7,7 +7,7 @@ import { importErrorReport } from "@/lib/import/import-service";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireAuth();
-    if (!canOpenImport(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canOpenImport(ctx)) throw new Error("Missing permission: import_data");
     const { id } = await params;
     const csv = await importErrorReport(ctx.business.id, id);
     return new NextResponse(csv, {

@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const destination = new URL("/settings/integrations/quickbooks", appUrl);
   try {
     const ctx = await requireAuth();
-    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_locations");
+    if (!canConnectQuickBooks(ctx)) throw new Error("Missing permission: manage_bank");
     const url = new URL(request.url);
     const error = url.searchParams.get("error");
     if (error) {

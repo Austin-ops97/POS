@@ -47,7 +47,17 @@ export type BankCenterData = {
   expenses: Option[];
 };
 
-export function TransactionsClient({ data, canEdit }: { data: BankCenterData; canEdit: boolean }) {
+export function TransactionsClient({
+  data,
+  canEdit,
+  previousHref,
+  nextHref,
+}: {
+  data: BankCenterData;
+  canEdit: boolean;
+  previousHref?: string | null;
+  nextHref?: string | null;
+}) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -213,6 +223,10 @@ export function TransactionsClient({ data, canEdit }: { data: BankCenterData; ca
           ))}
         </ul>
       )}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {previousHref ? <Link className="text-sm text-emerald-700 underline" href={previousHref}>Previous page</Link> : null}
+        {nextHref ? <Link className="text-sm text-emerald-700 underline" href={nextHref}>Next page</Link> : null}
+      </div>
       <p className="text-sm text-slate-500">
         Need a new receipt file? <Link className="text-emerald-700 underline" href="/finance/expenses/new">Create an expense</Link> and it can be linked here without uploading it twice.
       </p>
