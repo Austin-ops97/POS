@@ -323,7 +323,7 @@ export default async function WorkforcePage() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">Payroll</p>
-                  <p className="truncate text-xs text-slate-500">Audit & bonuses</p>
+                  <p className="truncate text-xs text-slate-500">Stubs & taxes</p>
                 </div>
               </CardContent>
             </Card>

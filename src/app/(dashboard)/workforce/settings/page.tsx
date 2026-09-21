@@ -44,6 +44,7 @@ export default async function WorkforceSettingsPage() {
           defaultPtoAnnualHours: Number(settings.defaultPtoAnnualHours),
           defaultPtoAccrualPolicy: settings.defaultPtoAccrualPolicy,
           paidBreaks: settings.paidBreaks,
+          employerReference: settings.employerReference ?? "",
         }}
       />
     </div>

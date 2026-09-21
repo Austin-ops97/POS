@@ -37,11 +37,15 @@ export default async function PayrollPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Payroll Audit</h1>
           <p className="text-sm text-slate-500">
-            Review hours, wages, bonuses, and export for payroll processing
+            Review hours, process pay stubs, and track employer payroll tax
           </p>
         </div>
       </div>
-      <PayrollContent periods={periods} defaultPeriod={defaultPeriod} />
+      <PayrollContent
+        periods={periods}
+        defaultPeriod={defaultPeriod}
+        canManage={hasPermission(ctx, PERMISSIONS.MANAGE_PAYROLL)}
+      />
     </div>
   );
 }

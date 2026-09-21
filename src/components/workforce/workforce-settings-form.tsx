@@ -184,6 +184,13 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
               Annual grants run on January 1, or the hire-date anniversary when a hire date is set.
             </p>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="employerReference">Employer ID or EIN</Label>
+            <Input id="employerReference" maxLength={40} autoComplete="off" {...register("employerReference")} />
+            <p className="text-xs text-slate-500">
+              Printed on pay stubs. A Social Security number is stored and shown masked. This value is left out of the audit log.
+            </p>
+          </div>
         </CardContent>
       </Card>
       <Button type="submit" disabled={isSubmitting}>

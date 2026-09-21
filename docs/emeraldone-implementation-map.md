@@ -69,7 +69,7 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 | Scheduling | Partial | `Shift` calendar is manual. No availability windows and no suggestion engine |
 | Time clock / timesheets | Exists | PIN kiosk, edit requests, breaks, flags. Timesheet UI does not label overtime hours |
 | PTO | Exists | Requests, balances, daily accrual cron, sick ledger |
-| Payroll | Partial | Period calculator with weekly OT threshold, multiplier, bonuses, CSV export. No pay stub PDF, no tax withholding, no immutable pay-run snapshot |
+| Payroll | Done for stubs and tax tracking | Period calculator, overtime, bonuses, CSV, immutable pay stubs with PDF, and effective-dated employee vs employer tax. No payroll filing or payment |
 | Sale receipts | Exists | HTML, PDF, email. Branded with the **business** name, not the product name |
 | Expenses | Partial | Draft through reimburse, approvals, budgets, cards, vendors, duplicate/fraud flags, keyword categorization |
 | Expense receipts | Partial | `ExpenseReceipt` image/PDF, client corner detect + perspective warp (`src/lib/receipts/document-scanner.ts`), contrast enhance, regex OCR on text (`src/lib/expenses/ocr.ts`). Line items persist but the form does not edit them |
@@ -111,8 +111,8 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
 | 9. Overtime hours and pay | Done for hours | Hours, pay, and configurable rules shipped with Phase 3. Pay stubs and employer tax remain Phase 4 |
-| 10. Pay stubs | Missing | New immutable snapshot per employee per pay period (earnings, taxes, deductions, YTD) plus PDF. Generate from the existing payroll calculator. Do not rewrite historical rows when rules change |
-| 11. Employer payroll tax | Missing | Separate employee withholding from employer liability. Version tax config by effective date, same pattern as `EmployeeCompensation.effectiveFrom` |
+| 10. Pay stubs | Done | `PayStub` and `PayStubLine` snapshot earnings, taxes, deductions, and YTD from `computePayrollSummary` plus the Phase 3 overtime result. PDF download and print read that snapshot. A processed period cannot be rewritten; void keeps the rows and drops them from YTD |
+| 11. Employer payroll tax | Done | `PayrollTaxConfig` and `PayrollDeductionConfig` are effective-dated. No rates are hard-coded. Reports split employee withholding from employer tax by run, month, quarter, year, employee, and tax type |
 
 ### Phase 5 — Import and QuickBooks
 
@@ -147,7 +147,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - Add columns and enum values with Prisma migrations (`npm run db:migrate` locally, `db:deploy` in production). Do not `db push` against production.
 - Phase 2 added `Expense.entryMode`, receipt fields, line-item categories, `ExpenseReceipt.role`, and `ExpenseFlagType.LINE_TOTAL_MISMATCH`. The enum value is its own migration so Postgres can commit `ADD VALUE` before the column migration. Viewer zoom state stays in the browser.
 - Phase 3 added availability windows and exceptions, overtime rule columns, max/preferred hours, and `OvertimeCalculation` snapshots. Suggestions are not stored; published shifts are normal `Shift` rows.
-- Later payroll snapshots and tax tables are new models keyed by `employeeId` + period. They must not reuse mutable `PayrollBonus` rows as the stub.
+- Phase 4 added `PayrollRun`, `PayStub`, `PayStubLine`, `PayrollTaxConfig`, and `PayrollDeductionConfig`, plus `WorkforceSettings.employerReference`. One processed run per business and period is enforced with a partial unique index. Voided runs remain in the table. Stubs do not reuse mutable `PayrollBonus` rows; bonuses are copied into the snapshot at process time.
 - Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
 - Backfill nothing that rewrites historical pay or posted expenses.

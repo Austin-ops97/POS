@@ -29,14 +29,15 @@ export function DashboardShell({
   const [navOpen, setNavOpen] = useState(false);
 
   return (
-    <div className="flex h-dvh max-h-dvh overflow-hidden bg-slate-50">
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-slate-50 print:block print:h-auto print:max-h-none print:overflow-visible">
       <DesktopSidebar visibility={navVisibility} />
       <MobileNav
         open={navOpen}
         onOpenChange={setNavOpen}
         visibility={navVisibility}
       />
-      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
+        <div className="print:hidden">
         <Topbar
           businessName={businessName}
           locationName={locationName}
@@ -47,7 +48,8 @@ export function DashboardShell({
           canOpenRegister={canOpenRegister}
           isPlatformAdmin={isPlatformAdmin}
         />
-        <main className="page-container flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-slate-50 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        </div>
+        <main className="page-container flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-slate-50 pb-[max(1.25rem,env(safe-area-inset-bottom))] print:overflow-visible print:bg-white">
           {children}
         </main>
       </div>

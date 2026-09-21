@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Download, Plus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,9 +47,10 @@ type PayrollRow = {
 type PayrollContentProps = {
   periods: PayPeriod[];
   defaultPeriod: PayPeriod;
+  canManage: boolean;
 };
 
-export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) {
+export function PayrollContent({ periods, defaultPeriod, canManage }: PayrollContentProps) {
   const [periodStart, setPeriodStart] = useState(
     defaultPeriod.start.toISOString().split("T")[0]
   );
@@ -60,6 +63,11 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
   const [loading, setLoading] = useState(true);
   const [bonusModal, setBonusModal] = useState<PayrollRow | null>(null);
   const [bonusForm, setBonusForm] = useState({ amount: "", description: "" });
+  const [reviewed, setReviewed] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processError, setProcessError] = useState<string | null>(null);
+  const [extras, setExtras] = useState<Array<{ employeeId: string; commission: string; other: string }>>([]);
+  const router = useRouter();
 
   const loadPayroll = useCallback(async () => {
     setLoading(true);
@@ -94,6 +102,36 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
       `/api/workforce/payroll?periodStart=${periodStart}&periodEnd=${periodEnd}&payDate=${payDate}&format=csv`,
       "_blank"
     );
+  }
+
+  async function processPayroll() {
+    setProcessing(true);
+    setProcessError(null);
+    const adjustments = extras
+      .filter((row) => row.employeeId)
+      .map((row) => ({
+        employeeId: row.employeeId,
+        commission: Number(row.commission || 0),
+        other: Number(row.other || 0),
+      }))
+      .filter((row) => row.commission > 0 || row.other > 0);
+    const res = await fetch("/api/workforce/payroll/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ periodStart, periodEnd, payDate, adjustments }),
+    });
+    setProcessing(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      const message = err?.error ?? "Could not process payroll";
+      setProcessError(message);
+      toast.error(message);
+      return;
+    }
+    const data = await res.json();
+    toast.success(`Processed ${data.stubCount} pay stub${data.stubCount === 1 ? "" : "s"}`);
+    router.push(`/workforce/payroll/stubs?runId=${data.id}`);
+    router.refresh();
   }
 
   async function addBonus() {
@@ -155,11 +193,99 @@ export function PayrollContent({ periods, defaultPeriod }: PayrollContentProps) 
             <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
           </div>
         </div>
-        <Button variant="outline" className="w-full sm:w-auto" onClick={exportCsv}>
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button variant="outline" className="w-full sm:w-auto" asChild>
+            <Link href="/workforce/payroll/stubs">Pay stubs</Link>
+          </Button>
+          <Button variant="outline" className="w-full sm:w-auto" asChild>
+            <Link href="/workforce/payroll/taxes">Payroll taxes</Link>
+          </Button>
+          <Button variant="outline" className="w-full sm:w-auto" onClick={exportCsv}>
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
+
+      {canManage ? (
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <div>
+              <p className="font-semibold text-slate-900">Process pay stubs</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Writes an immutable snapshot of this period. Later tax changes do not rewrite these stubs. Employer taxes stay off net pay.
+              </p>
+            </div>
+            {extras.map((extra, index) => (
+              <div key={index} className="grid gap-3 sm:grid-cols-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Employee</Label>
+                  <Select
+                    value={extra.employeeId}
+                    onValueChange={(value) =>
+                      setExtras((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, employeeId: value } : row)))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rows.map((row) => (
+                        <SelectItem key={row.employeeId} value={row.employeeId}>
+                          {row.employeeName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Commission</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={extra.commission}
+                    onChange={(event) =>
+                      setExtras((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, commission: event.target.value } : row)))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Other earnings</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={extra.other}
+                    onChange={(event) =>
+                      setExtras((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, other: event.target.value } : row)))
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" className="mt-1" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />
+                I reviewed hours, overtime, and bonuses for this period.
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setExtras((current) => [...current, { employeeId: "", commission: "", other: "" }])}
+                >
+                  Add commission or other
+                </Button>
+                <Button type="button" disabled={!reviewed || processing || loading} onClick={processPayroll}>
+                  {processing ? "Processing..." : "Process pay stubs"}
+                </Button>
+              </div>
+            </div>
+            {processError ? <p className="text-sm text-red-700">{processError}</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

@@ -112,7 +112,7 @@ export function DesktopSidebar({ visibility }: { visibility?: NavVisibility }) {
 
   return (
     <div
-      className="sidebar-rail"
+      className="sidebar-rail print:hidden"
       data-open={open ? "true" : "false"}
       data-ready={ready ? "true" : undefined}
     >
@@ -152,7 +152,7 @@ type MobileNavProps = {
 export function MobileNav({ open, onOpenChange, visibility }: MobileNavProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[min(20rem,100%)] p-0 lg:hidden" showClose>
+      <SheetContent side="left" className="w-[min(20rem,100%)] p-0 lg:hidden print:hidden" showClose>
         <SheetHeader className="sr-only">
           <SheetTitle>Navigation</SheetTitle>
           <SheetDescription>Primary application navigation</SheetDescription>
