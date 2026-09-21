@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useFormatDate } from "@/components/providers/timezone-provider";
 import { ExpenseStatusBadge } from "./status-badge";
 import { AlertTriangle, Check, Download, Eye, Flag, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
+import { ZoomViewer } from "@/components/receipts/zoom-viewer";
 
 type ExpenseDetail = {
   id: string;
@@ -36,7 +37,11 @@ type ExpenseDetail = {
   category: { name: string } | null;
   companyCard: { name: string; lastFour: string } | null;
   location: { name: string } | null;
-  receipts: Array<{ id: string; storageUrl: string; kind: string; fileName: string }>;
+  entryMode?: string;
+  businessPurpose?: string | null;
+  receiptNumber?: string | null;
+  receipts: Array<{ id: string; storageUrl: string; kind: string; fileName: string; mimeType?: string }>;
+  lineItems?: Array<{ id?: string; description: string; quantity: unknown; unitPrice: unknown; amount: unknown; category?: { name: string } | null }>;
   flags: Array<{ id: string; message: string; type: string; severity: string }>;
   comments: Array<{ id: string; body: string; createdAt: string | Date; author: { name: string } }>;
   approvalEvents: Array<{
@@ -68,6 +73,7 @@ export function ApprovalPanel({
   const [pending, startTransition] = useTransition();
   const [selectedReceipt, setSelectedReceipt] = useState<ExpenseDetail["receipts"][number] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [removingReceipt, setRemovingReceipt] = useState<string | null>(null);
 
   function act(action: string, extra?: Record<string, string>) {
     startTransition(async () => {
@@ -104,6 +110,24 @@ export function ApprovalPanel({
       toast.success("Comment added");
       router.refresh();
     });
+  }
+
+  async function removeReceipt(receiptId: string, fileName: string) {
+    if (!window.confirm(`Remove ${fileName} from this expense?`)) return;
+    setRemovingReceipt(receiptId);
+    try {
+      const res = await fetch(`/api/expenses/receipts/${receiptId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not remove the receipt");
+        return;
+      }
+      toast.success("Receipt removed");
+      if (selectedReceipt?.id === receiptId) setSelectedReceipt(null);
+      router.refresh();
+    } finally {
+      setRemovingReceipt(null);
+    }
   }
 
   async function deleteExpense() {
@@ -193,6 +217,25 @@ export function ApprovalPanel({
           </dl>
         </div>
 
+        {expense.lineItems && expense.lineItems.length > 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {expense.entryMode === "ITEMIZED" ? "Itemized lines" : "Lines"}
+            </h2>
+            <ul className="space-y-2 text-sm">
+              {expense.lineItems.map((line, index) => (
+                <li key={line.id ?? index} className="flex justify-between gap-3">
+                  <span>
+                    {String(line.quantity)} × {line.description}
+                    {line.category ? <span className="text-slate-500"> · {line.category.name}</span> : null}
+                  </span>
+                  <span className="font-medium">{formatCurrency(Number(line.amount))}</span>
+                </li>
+              ))}
+            </ul>
+            {expense.businessPurpose ? <p className="mt-3 text-sm text-slate-600">{expense.businessPurpose}</p> : null}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Receipt
@@ -203,17 +246,24 @@ export function ApprovalPanel({
             <div className="grid gap-3 sm:grid-cols-2">
               {expense.receipts.map((r) =>
                 r.kind === "PDF" ? (
-                  <a
-                    key={r.id}
-                    href={`/api/expenses/receipts/${r.id}/file`}
-                    download={r.fileName}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium hover:bg-slate-50"
-                  >
-                    <Download className="h-4 w-4" />
-                    {r.fileName}
-                  </a>
+                  <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 px-4 py-6 text-center text-sm font-medium">
+                    <a
+                      href={`/api/expenses/receipts/${r.id}/file`}
+                      download={r.fileName}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-center gap-2 hover:bg-slate-50"
+                    >
+                      <Download className="h-4 w-4" />
+                      {r.fileName}
+                    </a>
+                    {canDelete ? (
+                      <Button type="button" variant="ghost" size="sm" disabled={removingReceipt === r.id} onClick={() => void removeReceipt(r.id, r.fileName)}>
+                        <Trash2 className="h-4 w-4" />
+                        {removingReceipt === r.id ? "Removing…" : "Remove receipt"}
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : (
                   <div key={r.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                     <button
@@ -241,6 +291,17 @@ export function ApprovalPanel({
                     >
                       <Download className="h-4 w-4" />
                     </a>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="absolute left-2 top-2 inline-flex h-10 items-center gap-1 rounded-full bg-white/90 px-3 text-xs font-medium text-slate-700 shadow-sm hover:bg-white"
+                        disabled={removingReceipt === r.id}
+                        onClick={() => void removeReceipt(r.id, r.fileName)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {removingReceipt === r.id ? "Removing…" : "Remove"}
+                      </button>
+                    ) : null}
                   </div>
                 )
               )}
@@ -416,14 +477,11 @@ export function ApprovalPanel({
             <DialogDescription>Tap download to save a copy of this receipt.</DialogDescription>
           </DialogHeader>
           {selectedReceipt ? (
-            <div className="flex max-h-[65vh] justify-center overflow-auto rounded-xl bg-slate-100 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/expenses/receipts/${selectedReceipt.id}/file`}
-                alt={selectedReceipt.fileName}
-                className="max-h-[62vh] max-w-full object-contain"
-              />
-            </div>
+            <ZoomViewer
+              src={`/api/expenses/receipts/${selectedReceipt.id}/file`}
+              alt={selectedReceipt.fileName}
+              kind={selectedReceipt.kind === "PDF" || selectedReceipt.mimeType === "application/pdf" ? "pdf" : "image"}
+            />
           ) : null}
           <DialogFooter>
             {selectedReceipt ? (

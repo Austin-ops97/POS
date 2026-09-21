@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { AuditAction } from "@prisma/client";
+import { sanitizeAuditDetails } from "./audit-redaction";
 
 export async function createAuditLog(params: {
   businessId: string;
@@ -17,7 +18,9 @@ export async function createAuditLog(params: {
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,
-      details: params.details ? JSON.parse(JSON.stringify(params.details)) : undefined,
+      details: params.details
+        ? JSON.parse(JSON.stringify(sanitizeAuditDetails(params.details)))
+        : undefined,
       ipAddress: params.ipAddress,
     },
   });

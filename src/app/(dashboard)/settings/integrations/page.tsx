@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, CreditCard, Puzzle } from "lucide-react";
+import { ChevronLeft, CreditCard, Landmark, Puzzle, Share2 } from "lucide-react";
 
 export default function IntegrationsSettingsPage() {
   return (
@@ -38,14 +38,53 @@ export default function IntegrationsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Puzzle className="h-5 w-5 text-slate-400" aria-hidden="true" />
-            More integrations
+            <Landmark className="h-5 w-5 text-slate-400" aria-hidden="true" />
+            Banking
           </CardTitle>
           <CardDescription>
-            Accounting, e-commerce, and marketing connectors are not available yet. We will
-            add them here when they ship — nothing is hidden behind a fake settings form.
+            Plaid Link for checking, savings, and credit accounts. The page stays not connected until a bank finishes linking. EmeraldOne does not collect bank passwords.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/settings/integrations/banking">Banking settings</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-slate-400" aria-hidden="true" />
+            Social media
+          </CardTitle>
+          <CardDescription>
+            Official Facebook, Instagram, and LinkedIn OAuth. The page stays not connected until each platform finishes authorization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/settings/integrations/social">Social media settings</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Puzzle className="h-5 w-5 text-slate-400" aria-hidden="true" />
+            QuickBooks
+          </CardTitle>
+          <CardDescription>
+            Official Intuit connection for a one-way pull of customers, vendors, products, and expenses.
+            The page stays disconnected until OAuth completes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/settings/integrations/quickbooks">QuickBooks settings</Link>
+          </Button>
+        </CardContent>
       </Card>
     </div>
   );

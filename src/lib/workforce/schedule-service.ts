@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { ShiftStatus } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
+import { availabilityBlockReason } from "./availability-service";
 
 export type ShiftInput = {
   employeeId: string;
@@ -100,6 +101,7 @@ export async function createShift(params: {
   businessId: string;
   createdById: string;
   data: ShiftInput;
+  allowAvailabilityOverride?: boolean;
 }) {
   const { businessId, createdById, data } = params;
 
@@ -116,6 +118,17 @@ export async function createShift(params: {
   const timeError = validateShiftTimes(data.startAt, data.endAt);
   if (timeError) {
     return { ok: false as const, error: timeError, status: 400 };
+  }
+
+  if ((data.status ?? "SCHEDULED") !== "CANCELLED" && !params.allowAvailabilityOverride) {
+    const availability = await availabilityBlockReason({
+      businessId,
+      employeeId: data.employeeId,
+      locationId: data.locationId,
+      startAt: data.startAt,
+      endAt: data.endAt,
+    });
+    if (availability) return { ok: false as const, error: availability, status: 422 };
   }
 
   if (
@@ -171,6 +184,7 @@ export async function updateShift(params: {
   shiftId: string;
   actorId: string;
   data: Partial<ShiftInput>;
+  allowAvailabilityOverride?: boolean;
 }) {
   const existing = await db.shift.findFirst({
     where: { id: params.shiftId, businessId: params.businessId },
@@ -199,6 +213,18 @@ export async function updateShift(params: {
   const timeError = validateShiftTimes(startAt, endAt);
   if (timeError) {
     return { ok: false as const, error: timeError, status: 400 };
+  }
+
+  const nextStatus = params.data.status ?? existing.status;
+  if (nextStatus !== "CANCELLED" && !params.allowAvailabilityOverride) {
+    const availability = await availabilityBlockReason({
+      businessId: params.businessId,
+      employeeId,
+      locationId,
+      startAt,
+      endAt,
+    });
+    if (availability) return { ok: false as const, error: availability, status: 422 };
   }
 
   if (

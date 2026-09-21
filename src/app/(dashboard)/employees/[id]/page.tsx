@@ -22,6 +22,8 @@ import { getBusinessModuleAccess } from "@/lib/access-control";
 import { CUSTOMER_CONFIGURABLE_MODULES, type AppModuleKey } from "@/lib/modules";
 import { EmployeeModuleAccess } from "@/components/dashboard/employee-module-access";
 import { ResendInviteButton } from "@/components/dashboard/resend-invite-button";
+import { ContactCard } from "@/components/workforce/contact-card";
+import { anniversarySource, monthDayLabel } from "@/lib/workforce/hr-dates";
 
 export default async function EmployeeDetailPage({
   params,
@@ -31,6 +33,7 @@ export default async function EmployeeDetailPage({
   const { id } = await params;
   const ctx = await requireAuth();
   const canViewCompensation = hasPermission(ctx, PERMISSIONS.VIEW_COMPENSATION);
+  const canViewPersonal = hasPermission(ctx, PERMISSIONS.VIEW_EMPLOYEE_PERSONAL);
   const canManage = hasPermission(ctx, PERMISSIONS.MANAGE_EMPLOYEES);
 
   const employee = await getEmployeeById(ctx, id);
@@ -128,16 +131,56 @@ export default async function EmployeeDetailPage({
                 {employee.phone}
               </p>
             )}
+            {employee.employeeNumber ? <p><span className="font-medium text-slate-900">Employee ID:</span> {employee.employeeNumber}</p> : null}
+            {employee.jobTitle ? <p><span className="font-medium text-slate-900">Job title:</span> {employee.jobTitle}</p> : null}
+            {employee.department ? <p><span className="font-medium text-slate-900">Department:</span> {employee.department}</p> : null}
+            {employee.defaultLocation ? <p><span className="font-medium text-slate-900">Location:</span> {employee.defaultLocation.name}</p> : null}
+            {employee.manager ? <p><span className="font-medium text-slate-900">Manager:</span> {employee.manager.name}</p> : null}
+            {employee.hireDate || employee.startDate ? (
+              <p>
+                <span className="font-medium text-slate-900">Work anniversary:</span>{" "}
+                {monthDayLabel(anniversarySource(employee.hireDate, employee.startDate)!)}
+              </p>
+            ) : null}
+            {employee.dateOfBirth ? (
+              <p>
+                <span className="font-medium text-slate-900">Birthday:</span>{" "}
+                {canViewPersonal ? formatDisplayDate(employee.dateOfBirth, ctx) : monthDayLabel(employee.dateOfBirth)}
+              </p>
+            ) : null}
+            {canViewCompensation && employee.compensationHistory[0] ? (
+              <p>
+                <span className="font-medium text-slate-900">Pay:</span>{" "}
+                {employee.compensationHistory[0].payType === "SALARY"
+                  ? `${formatCurrency(Number(employee.compensationHistory[0].annualSalary ?? 0))} salary`
+                  : `${formatCurrency(Number(employee.compensationHistory[0].hourlyRate ?? hourlyWage ?? 0))}/hr`}
+                {employee.compensationHistory[0].overtimeEligible ? " · OT eligible" : " · OT exempt"}
+              </p>
+            ) : null}
             {locations.length > 0 && (
               <p>
                 <span className="font-medium text-slate-900">Locations:</span>{" "}
                 {locations.join(", ")}
               </p>
             )}
+            {canViewPersonal && employee.emergencyContacts[0] ? (
+              <p>
+                <span className="font-medium text-slate-900">Emergency:</span>{" "}
+                {employee.emergencyContacts[0].name} · {employee.emergencyContacts[0].primaryPhone}
+              </p>
+            ) : null}
             <p>
               <span className="font-medium text-slate-900">Annual PTO:</span>{" "}
               {Number(employee.ptoAnnualHours ?? 0)}h
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Contact card</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ContactCard employeeId={employee.id} name={employee.name} />
           </CardContent>
         </Card>
 

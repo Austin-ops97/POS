@@ -414,7 +414,7 @@ export function InventoryScanClient({
           </CardHeader>
           <CardContent className="space-y-3">
             {external.imageUrl && (
-              // External catalog image — attribution required; not owned by NexaPOS
+              // External catalog image — attribution required; not owned by EmeraldOne
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={external.imageUrl}

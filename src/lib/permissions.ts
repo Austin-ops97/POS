@@ -66,6 +66,12 @@ export const PERMISSIONS = {
   START_CONNECTION_CALLS: "start_connection_calls",
   JOIN_CONNECTION_CALLS: "join_connection_calls",
   MODERATE_CONNECTION_CALLS: "moderate_connection_calls",
+  // EmeraldOne financial, import, and social capabilities.
+  // Company-wide money and payroll stay off cashier and inventory roles.
+  MANAGE_BANK: "manage_bank",
+  MANAGE_SOCIAL: "manage_social",
+  PUBLISH_SOCIAL: "publish_social",
+  IMPORT_DATA: "import_data",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -200,6 +206,10 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_CONNECTIONS,
     ...CONNECTION_CALLS,
     PERMISSIONS.MODERATE_CONNECTION_CALLS,
+    PERMISSIONS.MANAGE_BANK,
+    PERMISSIONS.MANAGE_SOCIAL,
+    PERMISSIONS.PUBLISH_SOCIAL,
+    PERMISSIONS.IMPORT_DATA,
   ],
   Manager: [
     PERMISSIONS.OPEN_REGISTER,
@@ -230,6 +240,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_CONNECTIONS,
     ...CONNECTION_CALLS,
     PERMISSIONS.MODERATE_CONNECTION_CALLS,
+    PERMISSIONS.MANAGE_SOCIAL,
+    PERMISSIONS.PUBLISH_SOCIAL,
   ],
   Cashier: [
     PERMISSIONS.OPEN_REGISTER,
@@ -276,6 +288,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.MANAGE_PROJECT_REMINDERS,
     ...CONNECTION_USER,
     PERMISSIONS.JOIN_CONNECTION_CALLS,
+    PERMISSIONS.MANAGE_BANK,
+    PERMISSIONS.IMPORT_DATA,
   ],
 };
 

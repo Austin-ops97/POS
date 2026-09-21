@@ -18,7 +18,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { EmeraldWordmark } from "@/components/brand/emerald-mark";
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
 
 const SIDEBAR_STORAGE_KEY = "nexapos.sidebar.open";
 
@@ -77,8 +77,8 @@ export function SidebarNav({
 function BrandHeader() {
   return (
     <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-4 sm:px-6">
-      <Link href="/dashboard" className="inline-flex items-center" aria-label="EmeraldPOS home">
-        <EmeraldWordmark />
+      <Link href="/dashboard" className="inline-flex items-center" aria-label="EmeraldOne home">
+        <BrandWordmark />
       </Link>
     </div>
   );
@@ -112,7 +112,7 @@ export function DesktopSidebar({ visibility }: { visibility?: NavVisibility }) {
 
   return (
     <div
-      className="sidebar-rail"
+      className="sidebar-rail print:hidden"
       data-open={open ? "true" : "false"}
       data-ready={ready ? "true" : undefined}
     >
@@ -152,7 +152,7 @@ type MobileNavProps = {
 export function MobileNav({ open, onOpenChange, visibility }: MobileNavProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[min(20rem,100%)] p-0 lg:hidden" showClose>
+      <SheetContent side="left" className="w-[min(20rem,100%)] p-0 lg:hidden print:hidden" showClose>
         <SheetHeader className="sr-only">
           <SheetTitle>Navigation</SheetTitle>
           <SheetDescription>Primary application navigation</SheetDescription>

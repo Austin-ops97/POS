@@ -1,4 +1,38 @@
+export type DocumentColorMode = "color" | "grayscale" | "bw" | "contrast";
+
 export type ScannerPoint = { x: number; y: number };
+
+function clampByte(value: number) {
+  return Math.min(255, Math.max(0, Math.round(value)));
+}
+
+/** Adjusts pixels in place. Color keeps hue; grayscale, B&W, and contrast flatten to ink. */
+export function applyDocumentFilter(
+  data: Uint8ClampedArray,
+  mode: DocumentColorMode,
+  contrast = 1.12
+) {
+  const gain = Math.min(2.4, Math.max(0.6, contrast));
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] ?? 0;
+    const g = data[i + 1] ?? 0;
+    const b = data[i + 2] ?? 0;
+    if (mode === "color") {
+      data[i] = clampByte((r - 128) * gain + 128 + 3);
+      data[i + 1] = clampByte((g - 128) * gain + 128 + 3);
+      data[i + 2] = clampByte((b - 128) * gain + 128 + 3);
+      continue;
+    }
+    const gray = r * 0.299 + g * 0.587 + b * 0.114;
+    if (mode === "bw") {
+      const ink = gray > 168 ? 255 : 0;
+      data[i] = data[i + 1] = data[i + 2] = ink;
+      continue;
+    }
+    const tone = clampByte((gray - 128) * (mode === "contrast" ? gain * 1.35 : gain) + 128);
+    data[i] = data[i + 1] = data[i + 2] = tone;
+  }
+}
 
 export type DocumentScan = {
   canvas: HTMLCanvasElement;

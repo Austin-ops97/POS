@@ -329,7 +329,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
           ))}
         </ul>
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
                 {canApprove && <th className="px-4 py-3 font-medium">Employee</th>}

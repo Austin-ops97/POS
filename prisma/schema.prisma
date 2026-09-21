@@ -411,6 +411,29 @@ model Business {
   projectSubmissions        ProjectSubmission[]
   projectApprovalEvents     ProjectApprovalEvent[]
   communicationCalls        CommunicationCall[]
+  availabilityWindows       EmployeeAvailabilityWindow[]
+  availabilityExceptions    EmployeeAvailabilityException[]
+  overtimeCalculations      OvertimeCalculation[]
+  payrollTaxConfigs         PayrollTaxConfig[]
+  payrollDeductionConfigs   PayrollDeductionConfig[]
+  payrollRuns               PayrollRun[]
+  payStubs                  PayStub[]
+  payStubLines              PayStubLine[]
+  importBatches             ImportBatch[]
+  importBatchRows           ImportBatchRow[]
+  importExternalIds         ImportExternalId[]
+  quickBooksConnection      QuickBooksConnection?
+  quickBooksSyncLogs        QuickBooksSyncLog[]
+  bankConnection            BankConnection?
+  bankAccounts              BankAccount[]
+  bankTransactions          BankTransaction[]
+  bankTransactionSplits     BankTransactionSplit[]
+  expenseCategoryRules      ExpenseCategoryRule[]
+  taxCategoryMappings       TaxCategoryMapping[]
+  recordAssociations        RecordAssociation[]
+  socialConnections         SocialConnection[]
+  socialPosts               SocialPost[]
+  socialDeliveries          SocialDelivery[]
 
   @@index([createdAt])
 }
@@ -546,6 +569,8 @@ model EmployeeProfile {
   managerId           String?
   defaultLocationId   String?
   employmentNotes     String?
+  maxWeeklyHours      Decimal?            @db.Decimal(6, 2)
+  preferredWeeklyHours Decimal?           @db.Decimal(6, 2)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   deletedAt           DateTime?
@@ -621,6 +646,16 @@ model EmployeeProfile {
   communicationCallsStarted      CommunicationCall[]            @relation("CommunicationCallStartedBy")
   callParticipations             CallParticipant[]
   bankStatementsUploaded         BankStatement[]                @relation("BankStatementUploadedBy")
+  categoryRulesCreated           ExpenseCategoryRule[]          @relation("ExpenseCategoryRuleCreatedBy")
+  recordAssociationsCreated      RecordAssociation[]            @relation("RecordAssociationCreatedBy")
+  recordAssociationsAbout        RecordAssociation[]            @relation("RecordAssociationEmployee")
+  availabilityWindows            EmployeeAvailabilityWindow[]
+  availabilityExceptions         EmployeeAvailabilityException[]
+  overtimeCalculations           OvertimeCalculation[]
+  payStubs                       PayStub[]
+  payrollRunsProcessed          PayrollRun[]                    @relation("PayrollRunProcessedBy")
+  importBatchesCreated          ImportBatch[]                   @relation("ImportBatchCreatedBy")
+  socialPostsCreated            SocialPost[]                    @relation("SocialPostCreatedBy")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -1127,6 +1162,8 @@ model Customer {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   orders   Order[]
   signatures Signature[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId])
   @@index([businessId, deletedAt])
@@ -1530,9 +1567,15 @@ model WorkforceSettings {
   payPeriodType            PayPeriodType    @default(BIWEEKLY)
   weekStartDay             Int              @default(0)
   overtimeThresholdHours   Decimal          @default(40) @db.Decimal(6, 2)
+  overtimeMultiplier       Decimal          @default(1.5) @db.Decimal(4, 2)
+  dailyOvertimeThresholdHours Decimal?      @db.Decimal(6, 2)
+  doubleTimeDailyThresholdHours Decimal?    @db.Decimal(6, 2)
+  doubleTimeMultiplier     Decimal          @default(2) @db.Decimal(4, 2)
+  laborCostAlertAmount     Decimal?         @db.Decimal(12, 2)
   defaultPtoAnnualHours    Decimal          @default(80) @db.Decimal(8, 2)
   defaultPtoAccrualPolicy  PtoAccrualPolicy @default(ANNUAL_GRANT)
   paidBreaks               Boolean          @default(false)
+  employerReference        String?
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
 
@@ -1681,6 +1724,361 @@ model PayrollBonus {
   @@index([payPeriodStart, payPeriodEnd])
 }
 
+model EmployeeAvailabilityWindow {
+  id          String   @id @default(cuid())
+  businessId  String
+  employeeId  String
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId, weekday])
+}
+
+model EmployeeAvailabilityException {
+  id          String   @id @default(cuid())
+  businessId  String
+  employeeId  String
+  date        DateTime @db.Date
+  available   Boolean  @default(false)
+  startMinute Int?
+  endMinute   Int?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId, date])
+}
+
+model OvertimeCalculation {
+  id               String   @id @default(cuid())
+  businessId       String
+  employeeId       String
+  periodStart      DateTime @db.Date
+  periodEnd        DateTime @db.Date
+  regularHours     Decimal  @db.Decimal(8, 2)
+  overtimeHours    Decimal  @db.Decimal(8, 2)
+  doubleTimeHours  Decimal  @db.Decimal(8, 2)
+  totalHours       Decimal  @db.Decimal(8, 2)
+  regularPay       Decimal  @db.Decimal(12, 2)
+  overtimePay      Decimal  @db.Decimal(12, 2)
+  doubleTimePay    Decimal  @db.Decimal(12, 2)
+  grossPay         Decimal  @db.Decimal(12, 2)
+  rules            Json
+  calculatedAt     DateTime @default(now())
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([businessId, periodStart])
+  @@index([employeeId])
+}
+
+enum PayrollTaxSide {
+  EMPLOYEE
+  EMPLOYER
+}
+
+enum PayrollAmountBasis {
+  PERCENT_OF_GROSS
+  PERCENT_OF_TAXABLE
+  FLAT
+}
+
+enum PayrollDeductionTiming {
+  PRE_TAX
+  POST_TAX
+}
+
+enum PayrollRunStatus {
+  PROCESSED
+  VOID
+}
+
+enum PayStubLineKind {
+  EARNING
+  TAX
+  DEDUCTION
+  EMPLOYER_TAX
+}
+
+model PayrollTaxConfig {
+  id            String             @id @default(cuid())
+  businessId    String
+  side          PayrollTaxSide
+  code          String
+  name          String
+  basis         PayrollAmountBasis
+  rate          Decimal            @db.Decimal(12, 6)
+  wageBase      Decimal?           @db.Decimal(12, 2)
+  effectiveFrom DateTime           @db.Date
+  effectiveTo   DateTime?          @db.Date
+  sortOrder     Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, effectiveFrom])
+  @@index([businessId, side, code])
+}
+
+model PayrollDeductionConfig {
+  id            String                 @id @default(cuid())
+  businessId    String
+  code          String
+  name          String
+  timing        PayrollDeductionTiming
+  basis         PayrollAmountBasis
+  rate          Decimal                @db.Decimal(12, 6)
+  effectiveFrom DateTime               @db.Date
+  effectiveTo   DateTime?              @db.Date
+  sortOrder     Int                    @default(0)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, effectiveFrom])
+  @@index([businessId, code])
+}
+
+model PayrollRun {
+  id                String           @id @default(cuid())
+  businessId        String
+  periodStart       DateTime         @db.Date
+  periodEnd         DateTime         @db.Date
+  payDate           DateTime         @db.Date
+  status            PayrollRunStatus @default(PROCESSED)
+  employerName      String
+  employerAddress   String?
+  employerReference String?
+  processedById     String
+  processedAt       DateTime         @default(now())
+  voidedAt          DateTime?
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  processedBy EmployeeProfile  @relation("PayrollRunProcessedBy", fields: [processedById], references: [id])
+  stubs       PayStub[]
+
+  @@index([businessId, periodStart])
+  @@index([businessId, payDate])
+  @@index([businessId, status])
+}
+
+model PayStub {
+  id                 String   @id @default(cuid())
+  businessId         String
+  payrollRunId       String
+  employeeId         String
+  employeeName       String
+  employeeNumber     String?
+  employeeAddress    String?
+  payType            String
+  periodStart        DateTime @db.Date
+  periodEnd          DateTime @db.Date
+  payDate            DateTime @db.Date
+  gross              Decimal  @db.Decimal(12, 2)
+  preTaxDeductions   Decimal  @db.Decimal(12, 2)
+  taxableWages       Decimal  @db.Decimal(12, 2)
+  employeeTaxes      Decimal  @db.Decimal(12, 2)
+  postTaxDeductions  Decimal  @db.Decimal(12, 2)
+  net                Decimal  @db.Decimal(12, 2)
+  employerTaxes      Decimal  @db.Decimal(12, 2)
+  ytdGross           Decimal  @db.Decimal(12, 2)
+  ytdDeductions      Decimal  @db.Decimal(12, 2)
+  ytdEmployeeTaxes   Decimal  @db.Decimal(12, 2)
+  ytdNet             Decimal  @db.Decimal(12, 2)
+  ytdEmployerTaxes   Decimal  @db.Decimal(12, 2)
+  createdAt          DateTime @default(now())
+
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payrollRun PayrollRun     @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  lines      PayStubLine[]
+
+  @@unique([payrollRunId, employeeId])
+  @@index([businessId])
+  @@index([businessId, payDate])
+  @@index([employeeId, payDate])
+}
+
+model PayStubLine {
+  id            String          @id @default(cuid())
+  businessId    String
+  payStubId     String
+  kind          PayStubLineKind
+  side          PayrollTaxSide
+  code          String
+  label         String
+  detail        String?
+  hours         Decimal?        @db.Decimal(8, 2)
+  rate          Decimal?        @db.Decimal(12, 6)
+  amount        Decimal         @db.Decimal(12, 2)
+  subjectWages  Decimal         @default(0) @db.Decimal(12, 2)
+  ytdAmount     Decimal         @db.Decimal(12, 2)
+  sortOrder     Int             @default(0)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payStub  PayStub  @relation(fields: [payStubId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([payStubId])
+  @@index([businessId, code, side])
+}
+
+// ─── Data import and QuickBooks ──────────────────────────────────────────────
+
+enum ImportBatchStatus {
+  UPLOADED
+  PREVIEWED
+  IMPORTED
+  ROLLED_BACK
+  FAILED
+}
+
+enum ImportRowAction {
+  PENDING
+  VALID
+  INVALID
+  DUPLICATE
+  CREATED
+  UPDATED
+  SKIPPED
+  FAILED
+}
+
+enum QuickBooksConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+model ImportBatch {
+  id            String            @id @default(cuid())
+  businessId    String
+  createdById   String
+  fileName      String
+  sourceFormat  String
+  source        String            @default("FILE")
+  entityType    String
+  status        ImportBatchStatus @default(UPLOADED)
+  headers       Json
+  mapping       Json?
+  rowCount      Int
+  importedCount Int               @default(0)
+  updatedCount  Int               @default(0)
+  skippedCount  Int               @default(0)
+  failedCount   Int               @default(0)
+  createdAt     DateTime          @default(now())
+  importedAt    DateTime?
+  rolledBackAt  DateTime?
+
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile  @relation("ImportBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  rows      ImportBatchRow[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status])
+}
+
+model ImportBatchRow {
+  id            String          @id @default(cuid())
+  businessId    String
+  batchId       String
+  rowNumber     Int
+  externalId    String?
+  action        ImportRowAction @default(PENDING)
+  entityType    String
+  entityId      String?
+  message       String?
+  raw           Json
+  normalized    Json?
+  previous      Json?
+  createdAt     DateTime        @default(now())
+
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, batchId])
+  @@index([batchId, rowNumber])
+  @@index([businessId, entityType, externalId])
+}
+
+model ImportExternalId {
+  id         String   @id @default(cuid())
+  businessId String
+  entityType String
+  entityId   String
+  source     String
+  externalId String
+  batchId    String?
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, entityType, source, externalId])
+  @@index([businessId, entityType, entityId])
+  @@index([batchId])
+}
+
+model QuickBooksConnection {
+  id                   String                     @id @default(cuid())
+  businessId           String                     @unique
+  realmId              String?
+  companyName          String?
+  status               QuickBooksConnectionStatus @default(DISCONNECTED)
+  environment          String?
+  accessTokenCipher    String?                    @db.Text
+  refreshTokenCipher   String?                    @db.Text
+  accessTokenExpiresAt DateTime?
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String?
+  lastSyncError        String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  logs     QuickBooksSyncLog[]
+
+  @@index([businessId, status])
+}
+
+model QuickBooksSyncLog {
+  id            String    @id @default(cuid())
+  businessId    String
+  connectionId  String
+  direction     String
+  entityType    String
+  status        String
+  message       String?
+  importedCount Int       @default(0)
+  updatedCount  Int       @default(0)
+  skippedCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connection QuickBooksConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startedAt])
+  @@index([connectionId])
+}
+
 // ─── Expense Management ──────────────────────────────────────────────────────
 
 enum ExpenseStatus {
@@ -1728,6 +2126,17 @@ enum ExpenseFlagType {
   OUT_OF_POLICY
   MISSING_RECEIPT
   MANUAL
+  LINE_TOTAL_MISMATCH
+}
+
+enum ExpenseEntryMode {
+  SIMPLE
+  ITEMIZED
+}
+
+enum ExpenseReceiptRole {
+  ORIGINAL
+  PROCESSED
 }
 
 enum ExpenseFlagSeverity {
@@ -1803,9 +2212,14 @@ model ExpenseCategory {
 
   business       Business                     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   expenses       Expense[]
+  lineItems      ExpenseLineItem[] @relation("ExpenseLineCategory")
   budgets        ExpenseBudget[]
   vendors        ExpenseVendor[]
   allowedOnCards CompanyCardAllowedCategory[]
+  categoryRules  ExpenseCategoryRule[]
+  taxMapping     TaxCategoryMapping?
+  bankTransactions BankTransaction[]
+  bankSplits     BankTransactionSplit[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -1833,6 +2247,8 @@ model ExpenseVendor {
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   expenses Expense[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@unique([businessId, normalizedName])
   @@index([businessId])
@@ -1949,6 +2365,12 @@ model Expense {
   contentHash       String?
   ocrRawText        String?
   ocrConfidence     Decimal?             @db.Decimal(5, 2)
+  entryMode         ExpenseEntryMode     @default(SIMPLE)
+  receiptNumber     String?
+  merchantAddress   String?
+  businessPurpose   String?
+  paymentLast4      String?
+  purchaseTime      String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   deletedAt         DateTime?
@@ -1967,6 +2389,8 @@ model Expense {
   approvalEvents     ExpenseApprovalEvent[]
   flags              ExpenseFlag[]
   matchedTransaction CompanyCardTransaction?
+  bankTransactions   BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId])
   @@index([businessId, status])
@@ -1980,6 +2404,7 @@ model Expense {
   @@index([total])
   @@index([contentHash])
   @@index([deletedAt])
+  @@index([businessId, receiptNumber])
 }
 
 model ExpenseReceipt {
@@ -1998,11 +2423,13 @@ model ExpenseReceipt {
   contentHash String?
   ocrText     String?
   enhanced    Boolean            @default(false)
+  role        ExpenseReceiptRole @default(ORIGINAL)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   deletedAt   DateTime?
 
   expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  associations RecordAssociation[]
 
   @@index([expenseId])
   @@index([contentHash])
@@ -2011,6 +2438,7 @@ model ExpenseReceipt {
 model ExpenseLineItem {
   id          String   @id @default(cuid())
   expenseId   String
+  categoryId  String?
   description String
   quantity    Decimal  @default(1) @db.Decimal(10, 2)
   unitPrice   Decimal? @db.Decimal(12, 2)
@@ -2018,9 +2446,11 @@ model ExpenseLineItem {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  expense  Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation("ExpenseLineCategory", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([expenseId])
+  @@index([categoryId])
 }
 
 model ExpenseTag {
@@ -2203,9 +2633,304 @@ model BankStatement {
 
   business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   uploadedBy EmployeeProfile @relation("BankStatementUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  transactions BankTransaction[]
 
   @@index([businessId, deletedAt, createdAt])
   @@index([uploadedById])
+}
+
+enum BankConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum BankAccountKind {
+  CHECKING
+  SAVINGS
+  CREDIT
+  OTHER
+}
+
+enum BankTxnSource {
+  PLAID
+  STATEMENT
+}
+
+enum BankReconciliationStatus {
+  UNREVIEWED
+  CATEGORIZED
+  MATCHED
+  EXCLUDED
+}
+
+model BankConnection {
+  id                 String               @id @default(cuid())
+  businessId         String               @unique
+  provider           String               @default("PLAID")
+  status             BankConnectionStatus @default(DISCONNECTED)
+  institutionId      String?
+  institutionName    String?
+  itemId             String?
+  accessTokenCipher  String?              @db.Text
+  syncCursor         String?
+  environment        String?
+  lastSyncAt         DateTime?
+  lastSyncStatus     String?
+  lastSyncError      String?
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accounts BankAccount[]
+
+  @@index([businessId, status])
+}
+
+model BankAccount {
+  id               String          @id @default(cuid())
+  businessId       String
+  connectionId     String?
+  externalId       String?
+  name             String
+  officialName     String?
+  mask             String?
+  kind             BankAccountKind @default(CHECKING)
+  currency         String          @default("USD")
+  currentBalance   Decimal?        @db.Decimal(14, 2)
+  availableBalance Decimal?        @db.Decimal(14, 2)
+  lastSyncedAt     DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connection   BankConnection?  @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  transactions BankTransaction[]
+
+  @@unique([businessId, externalId])
+  @@index([businessId])
+  @@index([connectionId])
+}
+
+model BankTransaction {
+  id                   String                    @id @default(cuid())
+  businessId           String
+  accountId            String
+  source               BankTxnSource
+  externalId           String?
+  statementId          String?
+  postedOn             DateTime                  @db.Date
+  rawDescription       String
+  rawMerchant          String?
+  amount               Decimal                   @db.Decimal(14, 2)
+  rawBalance           Decimal?                  @db.Decimal(14, 2)
+  currency             String                    @default("USD")
+  categoryId           String?
+  suggestedCategoryId  String?
+  suggestionReason     String?
+  projectId            String?
+  vendorId             String?
+  customerId           String?
+  notes                String?
+  personal             Boolean                   @default(false)
+  reconciliation       BankReconciliationStatus  @default(UNREVIEWED)
+  matchedExpenseId     String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  account     BankAccount               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  statement   BankStatement?            @relation(fields: [statementId], references: [id], onDelete: SetNull)
+  category    ExpenseCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project     OfficeWorkspaceRecord?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  vendor      ExpenseVendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  customer    Customer?                 @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  expense     Expense?                  @relation(fields: [matchedExpenseId], references: [id], onDelete: SetNull)
+  splits      BankTransactionSplit[]
+  associations RecordAssociation[]
+
+  @@unique([businessId, source, externalId])
+  @@index([businessId, postedOn])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([statementId])
+}
+
+model BankTransactionSplit {
+  id             String   @id @default(cuid())
+  businessId     String
+  transactionId  String
+  categoryId     String?
+  projectId      String?
+  vendorId       String?
+  amount         Decimal  @db.Decimal(14, 2)
+  notes          String?
+  sortOrder      Int      @default(0)
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transaction BankTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, transactionId])
+}
+
+model ExpenseCategoryRule {
+  id          String   @id @default(cuid())
+  businessId  String
+  categoryId  String
+  pattern     String
+  createdById String
+  createdAt   DateTime @default(now())
+
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile  @relation("ExpenseCategoryRuleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, pattern])
+  @@index([businessId])
+}
+
+model TaxCategoryMapping {
+  id         String   @id @default(cuid())
+  businessId String
+  categoryId String   @unique
+  taxLabel   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model RecordAssociation {
+  id                String   @id @default(cuid())
+  businessId        String
+  receiptId         String?
+  documentId        String?
+  expenseId         String?
+  bankTransactionId String?
+  projectId         String?
+  vendorId          String?
+  employeeId        String?
+  customerId        String?
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  business        Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  receipt         ExpenseReceipt?        @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  document        OfficeDocument?        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  expense         Expense?               @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  bankTransaction BankTransaction?       @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  project         OfficeWorkspaceRecord? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor          ExpenseVendor?         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  employee        EmployeeProfile?       @relation("RecordAssociationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  customer        Customer?              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy       EmployeeProfile        @relation("RecordAssociationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, bankTransactionId])
+  @@index([businessId, expenseId])
+  @@index([receiptId])
+  @@index([documentId])
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+}
+
+enum SocialConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum SocialPostStatus {
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  PARTIAL
+  FAILED
+}
+
+enum SocialDeliveryStatus {
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+model SocialConnection {
+  id                 String                 @id @default(cuid())
+  businessId         String
+  platform           SocialPlatform
+  status             SocialConnectionStatus @default(DISCONNECTED)
+  externalId         String
+  displayName        String
+  accountKind        String
+  parentExternalId   String?
+  accessTokenCipher  String?                @db.Text
+  refreshTokenCipher String?                @db.Text
+  tokenExpiresAt     DateTime?
+  lastSyncAt         DateTime?
+  lastSyncStatus     String?
+  lastSyncError      String?
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  deliveries SocialDelivery[]
+
+  @@unique([businessId, platform, externalId])
+  @@index([businessId, status])
+}
+
+model SocialPost {
+  id           String           @id @default(cuid())
+  businessId   String
+  createdById  String
+  body         String           @db.Text
+  linkUrl      String?
+  imageName    String?
+  imageMime    String?
+  imageData    Bytes?
+  status       SocialPostStatus @default(SCHEDULED)
+  scheduledFor DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy  EmployeeProfile  @relation("SocialPostCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  deliveries SocialDelivery[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status, scheduledFor])
+}
+
+model SocialDelivery {
+  id             String               @id @default(cuid())
+  businessId     String
+  postId         String
+  connectionId   String
+  platform       SocialPlatform
+  status         SocialDeliveryStatus @default(SCHEDULED)
+  externalPostId String?
+  error          String?
+  publishedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  post       SocialPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, postId])
+  @@index([connectionId])
 }
 
 // ─── Office / Document Workspace ────────────────────────────────────────────
@@ -2260,6 +2985,7 @@ model OfficeDocument {
   files       OfficeDocumentFile[]
   tags        OfficeDocumentTag[]
   favorites   OfficeDocumentFavorite[]
+  associations RecordAssociation[]
   auditEvents OfficeAuditEvent[]
 
   @@index([businessId, deletedAt, updatedAt])
@@ -2393,6 +3119,8 @@ model OfficeWorkspaceRecord {
   attachments ProjectAttachment[]
   submissions ProjectSubmission[]
   approvalEvents ProjectApprovalEvent[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId, workspace, archivedAt, updatedAt])
   @@index([businessId, status, dueAt])

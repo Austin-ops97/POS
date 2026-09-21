@@ -47,6 +47,11 @@ export default async function SchedulePage() {
           <h1 className="text-2xl font-bold text-slate-900">Schedule</h1>
           <p className="text-sm text-slate-500">Manage weekly employee shifts</p>
         </div>
+        {canManage ? (
+          <Button asChild variant="outline" className="ml-auto">
+            <Link href="/workforce/schedule/assist">Suggest schedule</Link>
+          </Button>
+        ) : null}
       </div>
       <ScheduleCalendar
         employees={employees.map((e) => ({ id: e.id, name: e.name }))}

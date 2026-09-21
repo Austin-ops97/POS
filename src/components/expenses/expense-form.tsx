@@ -7,6 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { z } from "zod";
 import { expenseCreateSchema } from "@/lib/validations/expenses";
+import { reconcileItemizedExpense, lineAmount } from "@/lib/expenses/reconciliation";
+import { ocrReviewNote, type OcrParseResult } from "@/lib/expenses/ocr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +62,8 @@ export function ExpenseForm({
   const [receipts, setReceipts] = useState<CapturedReceipt[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [merchantSuggestions, setMerchantSuggestions] = useState<string[]>([]);
+  const [ocrDraft, setOcrDraft] = useState<OcrParseResult | null>(null);
+  const [acknowledgeDiscrepancy, setAcknowledgeDiscrepancy] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(expenseCreateSchema),
@@ -75,6 +79,8 @@ export function ExpenseForm({
       paymentMethod: "COMPANY_CARD",
       currency: "USD",
       missingReceipt: true,
+      entryMode: "SIMPLE",
+      lineItems: [],
       tags: [],
       ...initialValues,
     },
@@ -83,10 +89,25 @@ export function ExpenseForm({
   const amount = form.watch("amount") || 0;
   const tax = form.watch("tax") || 0;
   const tip = form.watch("tip") || 0;
-  const total = useMemo(
+  const entryMode = form.watch("entryMode") ?? "SIMPLE";
+  const watchedLines = form.watch("lineItems");
+  const lineItems = useMemo(() => watchedLines ?? [], [watchedLines]);
+  const receiptTotalInput = form.watch("total");
+  const simpleTotal = useMemo(
     () => Number((Number(amount) + Number(tax) + Number(tip)).toFixed(2)),
     [amount, tax, tip]
   );
+  const itemized = useMemo(() => {
+    const lines = lineItems.map((line) => ({ amount: Number(line.amount) || 0 }));
+    const receiptTotal = Number(receiptTotalInput ?? 0);
+    return reconcileItemizedExpense({
+      lines,
+      tax: Number(tax) || 0,
+      tip: Number(tip) || 0,
+      receiptTotal: Number.isFinite(receiptTotal) ? receiptTotal : 0,
+    });
+  }, [lineItems, tax, tip, receiptTotalInput]);
+  const discrepancy = entryMode === "ITEMIZED" && lineItems.length > 0 && !itemized.matches;
 
   useEffect(() => {
     setMerchantSuggestions(vendors.map((v) => v.name).slice(0, 12));
@@ -104,34 +125,48 @@ export function ExpenseForm({
         toast.error(data.error ?? "OCR failed");
         return;
       }
-      if (data.merchant) form.setValue("merchant", data.merchant, { shouldDirty: true });
-      if (data.date) form.setValue("purchaseDate", data.date, { shouldDirty: true });
-      if (data.amount != null) form.setValue("amount", data.amount, { shouldDirty: true });
-      if (data.tax != null) form.setValue("tax", data.tax, { shouldDirty: true });
-      if (data.tip != null) form.setValue("tip", data.tip, { shouldDirty: true });
-      if (data.total != null) {
-        // Keep tip/tax/amount if present; total is derived in UI
-      }
-      if (data.categoryId) form.setValue("categoryId", data.categoryId, { shouldDirty: true });
-      if (data.cardLast4) {
-        const card = cards.find((c) => c.lastFour === data.cardLast4);
-        if (card) form.setValue("companyCardId", card.id, { shouldDirty: true });
-      }
-      if (data.items?.length) {
-        form.setValue(
-          "lineItems",
-          data.items.map((item: { description: string; amount: number; quantity?: number }) => ({
-            description: item.description,
-            amount: item.amount,
-            quantity: item.quantity ?? 1,
-          })),
-          { shouldDirty: true }
-        );
-      }
-      toast.success(`Receipt parsed (${Math.round(data.confidence ?? 0)}% confidence)`);
+      setOcrDraft(data as OcrParseResult);
+      toast.message("Review the extracted receipt before applying it");
     } catch {
       toast.error("Unable to parse receipt text");
     }
+  }
+
+  function applyOcr() {
+    if (!ocrDraft) return;
+    if (ocrDraft.merchant) form.setValue("merchant", ocrDraft.merchant, { shouldDirty: true });
+    if (ocrDraft.address) form.setValue("merchantAddress", ocrDraft.address, { shouldDirty: true });
+    if (ocrDraft.date) form.setValue("purchaseDate", ocrDraft.date, { shouldDirty: true });
+    if (ocrDraft.time) form.setValue("purchaseTime", ocrDraft.time, { shouldDirty: true });
+    if (ocrDraft.receiptNumber) form.setValue("receiptNumber", ocrDraft.receiptNumber, { shouldDirty: true });
+    if (ocrDraft.tax != null) form.setValue("tax", ocrDraft.tax, { shouldDirty: true });
+    if (ocrDraft.tip != null) form.setValue("tip", ocrDraft.tip, { shouldDirty: true });
+    if (ocrDraft.cardLast4) form.setValue("paymentLast4", ocrDraft.cardLast4, { shouldDirty: true });
+    if (ocrDraft.categorySuggestion) {
+      const match = categories.find((category) => category.name.toLowerCase() === ocrDraft.categorySuggestion?.toLowerCase());
+      if (match) form.setValue("categoryId", match.id, { shouldDirty: true });
+    }
+    if (ocrDraft.items.length) {
+      form.setValue("entryMode", "ITEMIZED", { shouldDirty: true });
+      form.setValue(
+        "lineItems",
+        ocrDraft.items.map((item) => ({
+          description: item.description,
+          quantity: item.quantity ?? 1,
+          unitPrice: item.unitPrice ?? null,
+          amount: item.amount,
+        })),
+        { shouldDirty: true }
+      );
+      if (ocrDraft.total != null) form.setValue("total", ocrDraft.total, { shouldDirty: true });
+      else if (ocrDraft.amount != null) form.setValue("amount", ocrDraft.amount, { shouldDirty: true });
+    } else {
+      if (ocrDraft.amount != null) form.setValue("amount", ocrDraft.amount, { shouldDirty: true });
+      if (ocrDraft.total != null) form.setValue("total", ocrDraft.total, { shouldDirty: true });
+    }
+    setOcrDraft(null);
+    setAcknowledgeDiscrepancy(false);
+    toast.success("Extracted fields applied. Check them before you save.");
   }
 
   function onReceipt(receipt: CapturedReceipt) {
@@ -143,9 +178,23 @@ export function ExpenseForm({
     const values = form.getValues();
     startTransition(async () => {
       try {
+        if (entryMode === "ITEMIZED" && discrepancy && !acknowledgeDiscrepancy) {
+          toast.error("Line totals do not match the receipt total. Fix them or confirm the discrepancy.");
+          return;
+        }
+        const itemizedLines = (values.lineItems ?? []).filter((line) => line.description.trim());
+        if (entryMode === "ITEMIZED" && itemizedLines.length === 0) {
+          toast.error("Add at least one line with a description.");
+          return;
+        }
+        const receiptTotal = Number(values.total);
         const payload = {
           ...values,
-          total,
+          entryMode,
+          amount: entryMode === "ITEMIZED" ? itemized.lineSum : values.amount,
+          total: entryMode === "ITEMIZED" ? (Number.isFinite(receiptTotal) ? receiptTotal : itemized.expectedTotal) : simpleTotal,
+          lineItems: entryMode === "ITEMIZED" ? itemizedLines : [],
+          acknowledgeDiscrepancy,
           submit,
           missingReceipt: receipts.length === 0,
         };
@@ -175,7 +224,7 @@ export function ExpenseForm({
             const upload = await fetch(`/api/expenses/${id}/receipts`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(receipt),
+              body: JSON.stringify({ ...receipt, role: receipt.role ?? (receipt.enhanced ? "PROCESSED" : "ORIGINAL") }),
             });
             if (!upload.ok) {
               const err = await upload.json().catch(() => ({}));
@@ -196,6 +245,28 @@ export function ExpenseForm({
     });
   }
 
+  function setMode(mode: "SIMPLE" | "ITEMIZED") {
+    form.setValue("entryMode", mode, { shouldDirty: true });
+    setAcknowledgeDiscrepancy(false);
+    if (mode === "ITEMIZED" && lineItems.length === 0) {
+      form.setValue("lineItems", [{ description: "", quantity: 1, unitPrice: null, amount: 0 }], { shouldDirty: true });
+    }
+  }
+
+  function updateLine(index: number, patch: Partial<(typeof lineItems)[number]>) {
+    const next = lineItems.map((line, lineIndex) => {
+      if (lineIndex !== index) return line;
+      const merged = { ...line, ...patch };
+      if ("quantity" in patch || "unitPrice" in patch) {
+        const price = Number(merged.unitPrice ?? 0);
+        if (price > 0) merged.amount = lineAmount(Number(merged.quantity ?? 1), price);
+      }
+      return merged;
+    });
+    form.setValue("lineItems", next, { shouldDirty: true });
+    setAcknowledgeDiscrepancy(false);
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
       <Card className="overflow-hidden rounded-2xl border-slate-200/80 shadow-sm">
@@ -203,6 +274,41 @@ export function ExpenseForm({
           <CardTitle>Expense details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+            {(["SIMPLE", "ITEMIZED"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`min-h-11 rounded-lg text-sm font-medium ${entryMode === mode ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+                onClick={() => setMode(mode)}
+              >
+                {mode === "SIMPLE" ? "Simple expense" : "Itemized expense"}
+              </button>
+            ))}
+          </div>
+          {ocrDraft ? (
+            <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+              <p className="font-medium text-emerald-950">Confirm extracted receipt fields before they are used.</p>
+              {ocrReviewNote(ocrDraft.confidence) ? (
+                <p className="text-amber-900">{ocrReviewNote(ocrDraft.confidence)}</p>
+              ) : null}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input value={ocrDraft.merchant ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, merchant: event.target.value })} placeholder="Merchant" />
+                <Input value={ocrDraft.date ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, date: event.target.value })} placeholder="Date" />
+                <Input value={ocrDraft.total?.toString() ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, total: Number(event.target.value) })} placeholder="Total" />
+                <Input value={ocrDraft.receiptNumber ?? ""} onChange={(event) => setOcrDraft({ ...ocrDraft, receiptNumber: event.target.value })} placeholder="Receipt number" />
+              </div>
+              <p className="text-xs text-emerald-900">
+                {[ocrDraft.address, ocrDraft.time, ocrDraft.cardLast4 ? `Card ••${ocrDraft.cardLast4}` : null, ocrDraft.items.length ? `${ocrDraft.items.length} line items` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "No extra fields detected."}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" onClick={applyOcr}>Apply to expense</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setOcrDraft(null)}>Discard</Button>
+              </div>
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label htmlFor="merchant">Merchant</Label>
@@ -220,6 +326,7 @@ export function ExpenseForm({
                 ))}
               </datalist>
             </div>
+            {entryMode === "SIMPLE" ? (
             <div>
               <Label htmlFor="amount">Amount</Label>
               <Input
@@ -230,6 +337,14 @@ export function ExpenseForm({
                 {...form.register("amount", { valueAsNumber: true })}
               />
             </div>
+            ) : (
+            <div>
+              <Label>Line subtotal</Label>
+              <div className="mt-1.5 flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold text-slate-900">
+                ${itemized.lineSum.toFixed(2)}
+              </div>
+            </div>
+            )}
             <div>
               <Label htmlFor="tax">Tax</Label>
               <Input
@@ -251,10 +366,36 @@ export function ExpenseForm({
               />
             </div>
             <div>
-              <Label>Total</Label>
-              <div className="mt-1.5 flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-lg font-semibold text-slate-900">
-                ${total.toFixed(2)}
-              </div>
+              <Label htmlFor="receiptTotal">{entryMode === "ITEMIZED" ? "Receipt total" : "Total"}</Label>
+              {entryMode === "ITEMIZED" ? (
+                <Input
+                  id="receiptTotal"
+                  type="number"
+                  step="0.01"
+                  className="mt-1.5 h-11 rounded-xl"
+                  {...form.register("total", { valueAsNumber: true })}
+                />
+              ) : (
+                <div className="mt-1.5 flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-lg font-semibold text-slate-900">
+                  ${simpleTotal.toFixed(2)}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="purchaseTime">Time</Label>
+              <Input id="purchaseTime" type="time" className="mt-1.5 h-11 rounded-xl" {...form.register("purchaseTime")} />
+            </div>
+            <div>
+              <Label htmlFor="receiptNumber">Receipt number</Label>
+              <Input id="receiptNumber" className="mt-1.5 h-11 rounded-xl" {...form.register("receiptNumber")} />
+            </div>
+            <div>
+              <Label htmlFor="paymentLast4">Card last 4</Label>
+              <Input id="paymentLast4" inputMode="numeric" maxLength={4} className="mt-1.5 h-11 rounded-xl" {...form.register("paymentLast4")} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="merchantAddress">Merchant address</Label>
+              <Input id="merchantAddress" className="mt-1.5 h-11 rounded-xl" {...form.register("merchantAddress")} />
             </div>
             <div>
               <Label htmlFor="purchaseDate">Purchase date</Label>
@@ -412,6 +553,62 @@ export function ExpenseForm({
                 }
               />
             </div>
+            {entryMode === "ITEMIZED" ? (
+              <div className="sm:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900">Line items</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      form.setValue("lineItems", [...lineItems, { description: "", quantity: 1, unitPrice: null, amount: 0 }], { shouldDirty: true })
+                    }
+                  >
+                    Add line
+                  </Button>
+                </div>
+                {lineItems.map((line, index) => (
+                  <div key={index} className="grid gap-2 sm:grid-cols-6">
+                    <Input className="sm:col-span-2" placeholder="Description" value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} />
+                    <Input type="number" step="1" min="0" placeholder="Qty" value={line.quantity ?? 1} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} />
+                    <Input type="number" step="0.01" min="0" placeholder="Unit price" value={line.unitPrice ?? ""} onChange={(event) => updateLine(index, { unitPrice: event.target.value === "" ? null : Number(event.target.value) })} />
+                    <Input type="number" step="0.01" min="0" placeholder="Line total" value={line.amount} onChange={(event) => updateLine(index, { amount: Number(event.target.value) })} />
+                    <select
+                      className="h-10 rounded-md border border-slate-200 px-2 text-sm"
+                      value={line.categoryId ?? ""}
+                      onChange={(event) => updateLine(index, { categoryId: event.target.value || null })}
+                    >
+                      <option value="">Category</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                    <Button type="button" variant="ghost" className="sm:col-span-6 justify-start text-red-600" onClick={() => form.setValue("lineItems", lineItems.filter((_, lineIndex) => lineIndex !== index), { shouldDirty: true })}>
+                      Remove line
+                    </Button>
+                  </div>
+                ))}
+                <div>
+                  <Label htmlFor="businessPurpose">Business purpose</Label>
+                  <Input id="businessPurpose" className="mt-1.5 h-11 rounded-xl" {...form.register("businessPurpose")} />
+                </div>
+                {discrepancy ? (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                    <p className="font-medium">
+                      Receipt total ${itemized.receiptTotal.toFixed(2)} does not match lines + tax + tip (${itemized.expectedTotal.toFixed(2)}).
+                      Difference ${itemized.difference.toFixed(2)}.
+                    </p>
+                    <label className="mt-2 flex items-start gap-2">
+                      <input type="checkbox" className="mt-1" checked={acknowledgeDiscrepancy} onChange={(event) => setAcknowledgeDiscrepancy(event.target.checked)} />
+                      <span>I reviewed this discrepancy and still want to save. It will be flagged for approval.</span>
+                    </label>
+                  </div>
+                ) : lineItems.length > 0 ? (
+                  <p className="text-sm text-emerald-800">Line totals match the receipt total.</p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="sm:col-span-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" className="mt-1.5 rounded-xl" rows={3} {...form.register("notes")} />

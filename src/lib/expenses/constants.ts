@@ -31,7 +31,7 @@ export const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Airfare: ["airline", "delta", "united", "american air", "southwest", "jetblue", "flight"],
   Software: ["github", "adobe", "aws", "google cloud", "microsoft", "saas", "slack", "notion"],
   Subscriptions: ["subscription", "netflix", "spotify", "membership", "recurring"],
-  "Office Supplies": ["staples", "office depot", "paper", "toner", "supplies"],
+  "Office Supplies": ["staples", "office depot", "home depot", "paper", "toner", "supplies"],
   Marketing: ["ads", "facebook ads", "google ads", "campaign", "promo"],
   Advertising: ["advertising", "billboard", "ad spend"],
   Utilities: ["electric", "gas bill", "water", "internet", "comcast", "verizon"],

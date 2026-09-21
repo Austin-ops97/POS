@@ -27,12 +27,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatOrderStatus, getOrderStatusVariant } from "@/lib/status-utils";
 import { hasPermission } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/permissions";
+import { canPublishSocial } from "@/lib/social/access";
+import { getEmployeeModuleAccess } from "@/lib/access-control";
+import { NewProjectButton } from "@/components/dashboard/new-project-button";
+import { db } from "@/lib/db";
+import { celebrationSentence, upcomingCelebrations } from "@/lib/workforce/hr-dates";
 
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const ctx = await requireAuth();
+  const moduleAccess = await getEmployeeModuleAccess(ctx);
+  const canCreateProject = moduleAccess.OFFICE && hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  const canSell = moduleAccess.POS && hasPermission(ctx, PERMISSIONS.OPEN_REGISTER);
+  const canExpense = moduleAccess.EXPENSES && hasPermission(ctx, PERMISSIONS.CREATE_EXPENSE);
+  const canAddCustomer = moduleAccess.CUSTOMERS && hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS);
+  const canPostSocial = canPublishSocial(ctx);
+  const canSeeReports = moduleAccess.REPORTS && hasPermission(ctx, PERMISSIONS.VIEW_REPORTS);
+  const canSeeSales = canSeeReports || canSell || hasPermission(ctx, PERMISSIONS.PROCESS_SALE);
+  const canSeePayouts = hasPermission(ctx, PERMISSIONS.MANAGE_STRIPE) || canSeeReports;
+  const canSeeAnniversaries = moduleAccess.WORKFORCE && hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
+  const anniversaries = canSeeAnniversaries
+    ? upcomingCelebrations(
+        await db.employeeProfile.findMany({
+          where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE" },
+          select: { id: true, name: true, hireDate: true, startDate: true },
+          orderBy: { name: "asc" },
+          take: 500,
+        }),
+        new Date(),
+        14
+      ).filter((item) => item.kind === "anniversary")
+    : [];
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
 
@@ -61,28 +88,66 @@ export default async function DashboardPage() {
             {ctx.business.name} · {ctx.location?.name ?? "All locations"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/register">
-            <Button>
-              <Plus className="h-4 w-4" />
-              New Sale
-            </Button>
-          </Link>
-          <Link href="/reports">
-            <Button variant="outline">
-              <BarChart3 className="h-4 w-4" />
-              Reports
-            </Button>
-          </Link>
+        <div className="flex flex-wrap gap-2">
+          {canSell ? (
+            <Link href="/register">
+              <Button>
+                <Plus className="h-4 w-4" />
+                New Sale
+              </Button>
+            </Link>
+          ) : null}
+          {canCreateProject ? <NewProjectButton /> : null}
+          {canExpense ? (
+            <Link href="/finance/expenses/new?scan=1">
+              <Button variant="outline">Scan Receipt</Button>
+            </Link>
+          ) : null}
+          {canExpense ? (
+            <Link href="/finance/expenses/new">
+              <Button variant="outline">Add Expense</Button>
+            </Link>
+          ) : null}
+          {canAddCustomer ? (
+            <Link href="/customers/new">
+              <Button variant="outline">Add Customer</Button>
+            </Link>
+          ) : null}
+          {canPostSocial ? (
+            <Link href="/settings/integrations/social/compose">
+              <Button variant="outline">Create Social Post</Button>
+            </Link>
+          ) : null}
+          {canSeeReports ? (
+            <Link href="/reports">
+              <Button variant="outline">
+                <BarChart3 className="h-4 w-4" />
+                Reports
+              </Button>
+            </Link>
+          ) : null}
         </div>
       </div>
+
+      {anniversaries.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Work anniversaries</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm text-slate-700">
+            {anniversaries.map((item) => (
+              <p key={item.employeeId}>{celebrationSentence(item)}</p>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <SetupChecklist
         status={setup}
         canSeedDemo={hasPermission(ctx, PERMISSIONS.MANAGE_PRODUCTS)}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {canSeeSales ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Today's Sales"
           value={formatCurrency(stats.todaySales)}
@@ -111,9 +176,9 @@ export default async function DashboardPage() {
           subtitle="Month to date"
           icon={TrendingUp}
         />
-      </div>
+      </div> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {canSeeSales ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Average Ticket"
           value={formatCurrency(stats.aov)}
@@ -124,25 +189,29 @@ export default async function DashboardPage() {
           value={String(stats.transactionCount)}
           subtitle="Completed today"
         />
-        <StatCard
-          title="Available Balance"
-          value={formatCurrency(stripe.available)}
-          subtitle={stripe.connected ? "Stripe Connect" : "Connect Stripe"}
-          icon={Wallet}
-        />
-        <StatCard
-          title="Pending Payout"
-          value={formatCurrency(stripe.pending)}
-          subtitle={
-            stripe.upcomingDeposit?.arrivalDate
-              ? `Deposit ${formatDisplayDate(stripe.upcomingDeposit.arrivalDate, ctx)}`
-              : "Awaiting transfer"
-          }
+        {canSeePayouts ? (
+          <StatCard
+            title="Available Balance"
+            value={formatCurrency(stripe.available)}
+            subtitle={stripe.connected ? "Stripe Connect" : "Connect Stripe"}
+            icon={Wallet}
+          />
+        ) : null}
+        {canSeePayouts ? (
+          <StatCard
+            title="Pending Payout"
+            value={formatCurrency(stripe.pending)}
+            subtitle={
+              stripe.upcomingDeposit?.arrivalDate
+                ? `Deposit ${formatDisplayDate(stripe.upcomingDeposit.arrivalDate, ctx)}`
+                : "Awaiting transfer"
+            }
           icon={CreditCard}
         />
-      </div>
+        ) : null}
+      </div> : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {canSeeSales ? <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -158,8 +227,8 @@ export default async function DashboardPage() {
                 icon={BarChart3}
                 title="No sales yet"
                 description="Complete your first sale to see trends here."
-                actionLabel="Open Register"
-                actionHref="/register"
+                actionLabel={canSell ? "Open Register" : undefined}
+                actionHref={canSell ? "/register" : undefined}
               />
             )}
           </CardContent>
@@ -197,7 +266,7 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </div> : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -246,8 +315,8 @@ export default async function DashboardPage() {
                 icon={ShoppingBag}
                 title="No orders yet"
                 description="Start selling to see orders here."
-                actionLabel="Open Register"
-                actionHref="/register"
+                actionLabel={canSell ? "Open Register" : undefined}
+                actionHref={canSell ? "/register" : undefined}
               />
             ) : (
               <ul className="space-y-3">

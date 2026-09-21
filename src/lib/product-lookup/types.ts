@@ -48,7 +48,7 @@ export function getProductLookupConfig(): ProductLookupConfig {
     (process.env.PRODUCT_LOOKUP_ENABLED ?? "true").toLowerCase() !== "false";
   const userAgent =
     process.env.PRODUCT_LOOKUP_USER_AGENT?.trim() ||
-    "NexaPOS/0.1.0 (configure PRODUCT_LOOKUP_USER_AGENT)";
+    "EmeraldOne/0.1.0 (configure PRODUCT_LOOKUP_USER_AGENT)";
   const cacheDays = Math.max(
     1,
     Number.parseInt(process.env.PRODUCT_LOOKUP_CACHE_DAYS || "30", 10) || 30

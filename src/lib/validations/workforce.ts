@@ -1,12 +1,89 @@
 import { z } from "zod";
 
-export const workforceSettingsSchema = z.object({
-  payPeriodType: z.enum(["WEEKLY", "BIWEEKLY", "SEMIMONTHLY", "MONTHLY"]),
-  weekStartDay: z.number().int().min(0).max(6),
-  overtimeThresholdHours: z.number().min(0).max(168),
-  defaultPtoAnnualHours: z.number().min(0).max(1000),
-  defaultPtoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]),
-  paidBreaks: z.boolean(),
+export const workforceSettingsSchema = z
+  .object({
+    payPeriodType: z.enum(["WEEKLY", "BIWEEKLY", "SEMIMONTHLY", "MONTHLY"]),
+    weekStartDay: z.number().int().min(0).max(6),
+    overtimeThresholdHours: z.number().min(0).max(168),
+    overtimeMultiplier: z.number().min(1).max(3),
+    dailyOvertimeThresholdHours: z.number().min(0).max(24).nullable(),
+    doubleTimeDailyThresholdHours: z.number().min(0).max(24).nullable(),
+    doubleTimeMultiplier: z.number().min(1).max(3),
+    laborCostAlertAmount: z.number().min(0).nullable(),
+    defaultPtoAnnualHours: z.number().min(0).max(1000),
+    defaultPtoAccrualPolicy: z.enum(["ANNUAL_GRANT", "PER_PAY_PERIOD", "MONTHLY", "NONE"]),
+    paidBreaks: z.boolean(),
+    employerReference: z.string().trim().max(40),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.dailyOvertimeThresholdHours != null &&
+      data.doubleTimeDailyThresholdHours != null &&
+      data.doubleTimeDailyThresholdHours <= data.dailyOvertimeThresholdHours
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Double time must start after daily overtime",
+        path: ["doubleTimeDailyThresholdHours"],
+      });
+    }
+  });
+
+const minuteOfDay = z.number().int().min(0).max(24 * 60);
+
+export const availabilitySaveSchema = z.object({
+  employeeId: z.string().min(1),
+  maxWeeklyHours: z.number().min(0).max(168).nullable(),
+  preferredWeeklyHours: z.number().min(0).max(168).nullable(),
+  windows: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        startMinute: minuteOfDay,
+        endMinute: minuteOfDay,
+      })
+    )
+    .max(14),
+});
+
+export const availabilityExceptionSchema = z.object({
+  employeeId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  available: z.boolean(),
+  startMinute: minuteOfDay.nullable(),
+  endMinute: minuteOfDay.nullable(),
+  note: z.string().max(300).optional().nullable(),
+});
+
+export const scheduleSuggestSchema = z.object({
+  locationId: z.string().min(1).nullable().optional(),
+  slots: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        headcount: z.number().int().min(1).max(20),
+        requiredRole: z.string().max(80).optional().nullable(),
+        projectTitle: z.string().max(180).optional().nullable(),
+      })
+    )
+    .min(1)
+    .max(40),
+});
+
+export const schedulePublishSchema = z.object({
+  assignments: z
+    .array(
+      z.object({
+        employeeId: z.string().min(1),
+        locationId: z.string().nullable().optional(),
+        startAt: z.string().min(1),
+        endAt: z.string().min(1),
+      })
+    )
+    .min(1)
+    .max(80),
 });
 
 export const timeClockActionSchema = z.object({
@@ -173,6 +250,84 @@ export const employeeUpdateSchema = employeePersonnelSchema.extend({
   emergencyContacts: z.array(emergencyContactSchema).optional(),
   ptoAdjustment: ptoAdjustmentSchema.optional(),
 });
+
+const payrollDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const payrollRateRule = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .transform((value) => value.toUpperCase()),
+    name: z.string().trim().min(1).max(80),
+    basis: z.enum(["PERCENT_OF_GROSS", "PERCENT_OF_TAXABLE", "FLAT"]),
+    rate: z.number().min(0),
+    effectiveFrom: payrollDate,
+    effectiveTo: payrollDate.nullable().optional(),
+    sortOrder: z.number().int().min(0).max(1000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.basis !== "FLAT" && data.rate > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Percent rates are decimals from 0 to 1 (0.062 is 6.2%)",
+        path: ["rate"],
+      });
+    }
+    if (data.effectiveTo && data.effectiveTo < data.effectiveFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Effective end must be on or after the start date",
+        path: ["effectiveTo"],
+      });
+    }
+  });
+
+export const payrollTaxConfigSchema = payrollRateRule.and(
+  z.object({
+    side: z.enum(["EMPLOYEE", "EMPLOYER"]),
+    wageBase: z.number().min(0).nullable().optional(),
+  })
+);
+
+export const payrollDeductionConfigSchema = payrollRateRule.and(
+  z.object({
+    timing: z.enum(["PRE_TAX", "POST_TAX"]),
+  })
+);
+
+export const payrollConfigEndSchema = z.object({
+  effectiveTo: payrollDate,
+});
+
+export const payrollProcessSchema = z
+  .object({
+    periodStart: payrollDate,
+    periodEnd: payrollDate,
+    payDate: payrollDate,
+    adjustments: z
+      .array(
+        z.object({
+          employeeId: z.string().min(1),
+          commission: z.number().min(0).default(0),
+          other: z.number().min(0).default(0),
+        })
+      )
+      .max(500)
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.periodEnd < data.periodStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Period end must be on or after the start date",
+        path: ["periodEnd"],
+      });
+    }
+  });
 
 export const employeeCreatePersonnelSchema = employeePersonnelSchema.extend({
   name: z.string().min(1),

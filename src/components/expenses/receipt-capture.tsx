@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, FileUp, RotateCw, Crop, Check, X, Sparkles } from "lucide-react";
+import { Camera, ImagePlus, FileUp, Check, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { detectDocumentCorners, warpDocument } from "@/lib/receipts/document-scanner";
 import { toast } from "sonner";
+import { CornerEditor, type ScanEditResult } from "@/components/scanner/corner-editor";
 
 export type CapturedReceipt = {
   fileName: string;
@@ -16,6 +16,7 @@ export type CapturedReceipt = {
   height?: number;
   enhanced?: boolean;
   kind: "IMAGE" | "PDF";
+  role?: "ORIGINAL" | "PROCESSED";
   ocrText?: string;
 };
 
@@ -26,72 +27,22 @@ type ReceiptCaptureProps = {
   initialAction?: "scan" | "upload";
 };
 
-async function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
+type ScanPage = ScanEditResult & { id: string };
+
+const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
+
+function readFile(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 
-const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
-
-/** Detect the paper boundary, correct perspective, and improve legibility. */
-async function enhanceImage(dataUrl: string): Promise<{
-  dataUrl: string;
-  width: number;
-  height: number;
-  detected: boolean;
-}> {
-  const img = await loadImage(dataUrl);
-  const analysis = document.createElement("canvas");
-  const scale = Math.min(1, 900 / Math.max(img.width, img.height));
-  analysis.width = Math.max(1, Math.round(img.width * scale));
-  analysis.height = Math.max(1, Math.round(img.height * scale));
-  const analysisContext = analysis.getContext("2d");
-  if (!analysisContext) return { dataUrl, width: img.width, height: img.height, detected: false };
-  analysisContext.drawImage(img, 0, 0, analysis.width, analysis.height);
-  const detectedCorners = detectDocumentCorners(
-    analysisContext.getImageData(0, 0, analysis.width, analysis.height)
-  );
-  const corners = detectedCorners?.map((point) => ({ x: point.x / scale, y: point.y / scale }));
-  const scan = corners ? warpDocument(img, corners) : null;
-  const canvas = scan?.canvas ?? document.createElement("canvas");
-  if (!scan) {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const fallbackContext = canvas.getContext("2d");
-    fallbackContext?.drawImage(img, 0, 0);
-  }
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { dataUrl, width: img.width, height: img.height, detected: false };
-  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  for (let i = 0; i < pixels.data.length; i += 4) {
-    pixels.data[i] = Math.min(255, Math.max(0, (pixels.data[i] - 128) * 1.14 + 128 + 3));
-    pixels.data[i + 1] = Math.min(255, Math.max(0, (pixels.data[i + 1] - 128) * 1.14 + 128 + 3));
-    pixels.data[i + 2] = Math.min(255, Math.max(0, (pixels.data[i + 2] - 128) * 1.14 + 128 + 3));
-  }
-  ctx.putImageData(pixels, 0, 0);
-  return {
-    dataUrl: canvas.toDataURL("image/jpeg", 0.94),
-    width: canvas.width,
-    height: canvas.height,
-    detected: Boolean(scan),
-  };
-}
-
-async function rotateImage(dataUrl: string): Promise<string> {
-  const img = await loadImage(dataUrl);
-  const canvas = document.createElement("canvas");
-  canvas.width = img.height;
-  canvas.height = img.width;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate(Math.PI / 2);
-  ctx.drawImage(img, -img.width / 2, -img.height / 2);
-  return canvas.toDataURL("image/jpeg", 0.92);
+function bytesOfDataUrl(value: string) {
+  const index = value.indexOf(",");
+  return index === -1 ? value.length : Math.round(((value.length - index - 1) * 3) / 4);
 }
 
 export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction }: ReceiptCaptureProps) {
@@ -102,14 +53,16 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
   const nativeCameraRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [queue, setQueue] = useState<string[]>([]);
+  const [pages, setPages] = useState<ScanPage[]>([]);
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setStream(null);
     setCameraOpen(false);
@@ -128,15 +81,19 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
       void video.play().then(() => setVideoReady(true)).catch(() => setVideoReady(false));
     };
     video.addEventListener("loadedmetadata", play, { once: true });
-    video.addEventListener("canplay", play, { once: true });
     play();
     return () => {
       video.removeEventListener("loadedmetadata", play);
-      video.removeEventListener("canplay", play);
       video.pause();
       video.srcObject = null;
     };
   }, [cameraOpen, stream]);
+
+  function openEditor(dataUrl: string, rest: string[] = []) {
+    setEditing(dataUrl);
+    setQueue(rest);
+    stopCamera();
+  }
 
   async function startCamera() {
     if (cameraStarting || cameraOpen) return;
@@ -145,7 +102,6 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
       return;
     }
     setCameraStarting(true);
-    setVideoReady(false);
     try {
       let media: MediaStream;
       try {
@@ -160,7 +116,6 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
           throw error;
         }
       }
-      if (!media.getVideoTracks().length) throw new Error("No camera track returned");
       streamRef.current = media;
       setStream(media);
       setCameraOpen(true);
@@ -168,7 +123,7 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
       const name = error instanceof DOMException ? error.name : "";
       toast.error(
         name === "NotAllowedError" || name === "SecurityError"
-          ? "Camera access was blocked. Allow camera access in your browser settings, then try again."
+          ? "Camera access was blocked. Allow camera access, then try again."
           : "The camera could not be opened. You can upload a receipt instead."
       );
       nativeCameraRef.current?.click();
@@ -182,274 +137,209 @@ export function ReceiptCapture({ onCaptured, onOcrText, className, initialAction
     if (!list.length) return;
     setBusy(true);
     try {
+      const images: string[] = [];
       for (const file of list) {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
         const isImage = file.type.startsWith("image/");
         if ((!isPdf && !isImage) || file.size > MAX_RECEIPT_BYTES) {
           toast.error(
             file.size > MAX_RECEIPT_BYTES
-              ? `${file.name} is larger than the 10 MB receipt limit.`
+              ? `${file.name} is larger than 8 MB.`
               : `${file.name} is not a supported receipt image or PDF.`
           );
           continue;
         }
-        const storageUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
+        const storageUrl = await readFile(file);
         if (isPdf) {
           onCaptured({
             fileName: file.name,
-            mimeType: file.type || "application/pdf",
+            mimeType: "application/pdf",
             sizeBytes: file.size,
             storageUrl,
             kind: "PDF",
+            role: "ORIGINAL",
           });
           continue;
         }
-
-        const enhanced = await enhanceImage(storageUrl);
-        setPreview(enhanced.dataUrl);
-        if (!enhanced.detected) {
-          toast.message("Receipt edges were not clear", {
-            description: "The image was enhanced without cropping. You can retake it with the receipt fully visible.",
-          });
-        }
-        onCaptured({
-          fileName: file.name,
-          mimeType: "image/jpeg",
-          sizeBytes: Math.round((enhanced.dataUrl.length * 3) / 4),
-          storageUrl: enhanced.dataUrl,
-          width: enhanced.width,
-          height: enhanced.height,
-          enhanced: true,
-          kind: "IMAGE",
-        });
+        images.push(storageUrl);
       }
+      if (images.length) openEditor(images[0]!, images.slice(1));
     } catch {
-      toast.error("We couldn’t process that receipt. Try a smaller image or PDF.");
+      toast.error("We couldn’t read that receipt. Try a smaller image or PDF.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function captureFrame() {
+  function captureFrame() {
     const video = videoRef.current;
-    if (!video || !videoReady || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    if (!video || !videoReady) return;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const raw = canvas.toDataURL("image/jpeg", 0.92);
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    openEditor(canvas.toDataURL("image/jpeg", 0.9));
+  }
+
+  function acceptPage(result: ScanEditResult) {
+    setPages((current) => [...current, { ...result, id: crypto.randomUUID() }]);
+    if (queue.length) {
+      setEditing(queue[0]!);
+      setQueue((current) => current.slice(1));
+      return;
+    }
+    setEditing(null);
+  }
+
+  async function finishPages() {
+    if (!pages.length) return;
     setBusy(true);
     try {
-      const enhanced = await enhanceImage(raw);
-      setPreview(enhanced.dataUrl);
-      stopCamera();
-      if (!enhanced.detected) {
-        toast.message("Receipt edges were not clear", {
-          description: "The image was enhanced without cropping. Try moving closer and placing the receipt on a contrasting surface.",
+      pages.forEach((page, index) => {
+        onCaptured({
+          fileName: `receipt-original-${index + 1}.jpg`,
+          mimeType: "image/jpeg",
+          sizeBytes: bytesOfDataUrl(page.originalDataUrl),
+          storageUrl: page.originalDataUrl,
+          kind: "IMAGE",
+          role: "ORIGINAL",
         });
+      });
+      const response = await fetch("/api/expenses/receipts/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pages: pages.map((page) => ({
+            dataUrl: page.processedDataUrl,
+            width: page.width,
+            height: page.height,
+          })),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(payload.error ?? "The cleaned PDF could not be created. Original photos are still attached.");
+        return;
       }
       onCaptured({
-        fileName: `receipt-${Date.now()}.jpg`,
-        mimeType: "image/jpeg",
-        sizeBytes: Math.round((enhanced.dataUrl.length * 3) / 4),
-        storageUrl: enhanced.dataUrl,
-        width: enhanced.width,
-        height: enhanced.height,
+        fileName: payload.fileName,
+        mimeType: "application/pdf",
+        sizeBytes: payload.sizeBytes,
+        storageUrl: payload.storageUrl,
+        kind: "PDF",
+        role: "PROCESSED",
         enhanced: true,
-        kind: "IMAGE",
       });
+      toast.success(pages.length > 1 ? "Pages combined into one PDF" : "Cleaned receipt PDF is ready");
+      setPages([]);
     } catch {
-      toast.error("We couldn’t process the scan. Please try again.");
+      toast.error("The cleaned PDF could not be created.");
     } finally {
       setBusy(false);
     }
-  }
-
-  async function rotatePreview() {
-    if (!preview) return;
-    const rotated = await rotateImage(preview);
-    setPreview(rotated);
-    onCaptured({
-      fileName: `receipt-${Date.now()}.jpg`,
-      mimeType: "image/jpeg",
-      sizeBytes: Math.round((rotated.length * 3) / 4),
-      storageUrl: rotated,
-      enhanced: true,
-      kind: "IMAGE",
-    });
   }
 
   return (
     <div className={cn("space-y-3", className)}>
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-gradient-to-b from-slate-50 to-white p-4 transition-all",
+          "relative overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-gradient-to-b from-slate-50 to-white p-4",
           dragOver && "border-slate-900 bg-slate-100"
         )}
-        onDragOver={(e) => {
-          e.preventDefault();
+        onDragOver={(event) => {
+          event.preventDefault();
           setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
+        onDrop={(event) => {
+          event.preventDefault();
           setDragOver(false);
-          if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
+          if (event.dataTransfer.files?.length) void handleFiles(event.dataTransfer.files);
         }}
       >
-        {cameraOpen ? (
+        {editing ? (
+          <CornerEditor imageSrc={editing} onCancel={() => setEditing(null)} onApply={acceptPage} />
+        ) : cameraOpen ? (
           <div className="relative aspect-[3/4] max-h-[420px] overflow-hidden rounded-xl bg-black sm:aspect-video">
-            <video
-              ref={videoRef}
-              className="h-full w-full object-cover"
-              playsInline
-              muted
-              autoPlay
-              onLoadedMetadata={() => setVideoReady(true)}
-              onCanPlay={() => setVideoReady(true)}
-            />
-            {!videoReady ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center text-sm font-medium text-white">
-                <span>Starting camera…</span>
-                <Button type="button" variant="secondary" onClick={() => nativeCameraRef.current?.click()}>
-                  Use device camera instead
-                </Button>
-              </div>
-            ) : null}
-            <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent p-4">
+            <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay onCanPlay={() => setVideoReady(true)} />
+            <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-3 bg-gradient-to-t from-black/70 p-4">
               <Button type="button" variant="secondary" size="icon" onClick={stopCamera} aria-label="Close camera">
                 <X className="h-5 w-5" />
               </Button>
               <button
                 type="button"
-                onClick={() => void captureFrame()}
-                disabled={!videoReady || busy}
-                className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-white/90 shadow-lg transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={captureFrame}
+                disabled={!videoReady}
+                className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-white/90"
                 aria-label="Capture receipt"
               >
                 <span className="h-12 w-12 rounded-full bg-slate-900" />
               </button>
-              <Button type="button" variant="secondary" size="icon" disabled aria-label="Auto edge detect active">
-                <Crop className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-        ) : preview ? (
-          <div className="space-y-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={preview}
-              alt="Receipt preview"
-              className="mx-auto max-h-72 rounded-xl object-contain shadow-sm"
-            />
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => void rotatePreview()}>
-                <RotateCw className="h-4 w-4" />
-                Rotate
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setPreview(null)}>
-                Retake
-              </Button>
-              <Button type="button" size="sm" onClick={() => toast.success("Receipt ready to save")}>
-                <Check className="h-4 w-4" />
-                Use photo
-              </Button>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-md">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
               <p className="text-base font-semibold text-slate-900">
-                {initialAction === "scan" ? "Scan a receipt" : initialAction === "upload" ? "Upload a receipt" : "Scan or upload a receipt"}
+                {initialAction === "scan" ? "Scan a receipt" : "Scan or upload a receipt"}
               </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Camera, drag & drop, images, or multi-page PDFs
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Adjust corners, then save a cleaned PDF and the original photo.</p>
             </div>
-            <div className="flex flex-wrap justify-center gap-2 pt-1">
-              <Button type="button" onClick={() => void startCamera()} className="min-h-11" autoFocus={initialAction === "scan"}>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" className="min-h-11" onClick={() => void startCamera()}>
                 <Camera className="h-4 w-4" />
                 Take photo
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11"
-                onClick={() => imageRef.current?.click()}
-                disabled={busy}
-                autoFocus={initialAction === "upload"}
-              >
+              <Button type="button" variant="outline" className="min-h-11" onClick={() => imageRef.current?.click()} disabled={busy}>
                 <ImagePlus className="h-4 w-4" />
                 Upload image
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11"
-                onClick={() => pdfRef.current?.click()}
-                disabled={busy}
-              >
+              <Button type="button" variant="outline" className="min-h-11" onClick={() => pdfRef.current?.click()} disabled={busy}>
                 <FileUp className="h-4 w-4" />
                 Upload PDF
               </Button>
             </div>
           </div>
         )}
-        <input
-          ref={imageRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            e.currentTarget.value = "";
-          }}
-        />
-        <input
-          ref={pdfRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            e.currentTarget.value = "";
-          }}
-        />
-        <input
-          ref={nativeCameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            e.currentTarget.value = "";
-          }}
-        />
+        <input ref={imageRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { if (event.target.files) void handleFiles(event.target.files); event.currentTarget.value = ""; }} />
+        <input ref={pdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => { if (event.target.files) void handleFiles(event.target.files); event.currentTarget.value = ""; }} />
+        <input ref={nativeCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { if (event.target.files) void handleFiles(event.target.files); event.currentTarget.value = ""; }} />
       </div>
+      {pages.length > 0 ? (
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-sm font-medium text-slate-800">{pages.length} page{pages.length === 1 ? "" : "s"} ready</p>
+          <div className="flex gap-2 overflow-x-auto">
+            {pages.map((page, index) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={page.id} src={page.processedDataUrl} alt={`Page ${index + 1}`} className="h-20 w-16 rounded-md object-cover" />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" disabled={busy} onClick={() => void finishPages()}>
+              <Check className="h-4 w-4" />
+              {busy ? "Building PDF…" : "Attach original and PDF"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => void startCamera()}>
+              Add page
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setPages([])}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-slate-500">
-          Paste OCR / receipt text (optional — auto-fills the form)
+          Paste receipt text to extract fields. Nothing is applied until you confirm it.
         </span>
         <textarea
           className="min-h-20 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-slate-900/10 focus:ring-2"
-          placeholder="Paste receipt text to auto-detect merchant, date, total…"
-          onBlur={(e) => {
-            if (e.target.value.trim()) onOcrText?.(e.target.value);
+          placeholder="Merchant, date, totals, and line items…"
+          onBlur={(event) => {
+            if (event.target.value.trim()) onOcrText?.(event.target.value);
           }}
         />
       </label>

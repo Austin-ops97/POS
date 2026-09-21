@@ -5,6 +5,8 @@ const DEFAULT_SETTINGS = {
   payPeriodType: "BIWEEKLY" as const,
   weekStartDay: 0,
   overtimeThresholdHours: 40,
+  overtimeMultiplier: 1.5,
+  doubleTimeMultiplier: 2,
   defaultPtoAnnualHours: 80,
   defaultPtoAccrualPolicy: "ANNUAL_GRANT" as const,
   paidBreaks: false,

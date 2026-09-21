@@ -1,6 +1,6 @@
-# NexaPOS
+# EmeraldOne
 
-An authenticated, multi-tenant POS platform for retail checkout, inventory, workforce, expenses, and office operations.
+An authenticated, multi-tenant business platform for retail checkout, inventory, workforce, expenses, and office operations. The npm package name remains `nexapos`.
 
 The service owner has a platform control plane at `/admin`. Each customer business receives only its licensed modules, and business owners can further restrict each employee's visible app areas and role permissions.
 

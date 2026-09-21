@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { EmeraldWordmark } from "@/components/brand/emerald-mark";
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
 
 export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-6 py-16 text-center">
-      <EmeraldWordmark size="md" />
+      <BrandWordmark size="md" />
       <p className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">404</p>
       <h1 className="mt-2 text-3xl font-bold text-slate-900">Page not found</h1>
       <p className="mt-3 max-w-md text-slate-600">

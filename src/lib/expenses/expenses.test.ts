@@ -5,6 +5,8 @@ import { detectFraudSignals } from "./fraud-detection";
 import { slugifyCategory, normalizeVendorName, DEFAULT_EXPENSE_CATEGORIES } from "./constants";
 import { hashContent } from "./hash";
 import { reportToCsv } from "./report-service";
+import { lineAmount, receiptDownloadName, reconcileItemizedExpense } from "./reconciliation";
+import { preferredReceipt, receiptIndexCsv, receiptLibraryWhere } from "./receipt-query";
 
 describe("expense categories", () => {
   it("includes expected default categories", () => {
@@ -46,9 +48,35 @@ Thank you!
     assert.equal(result.tax, 0.7);
     assert.equal(result.tip, 1.5);
     assert.equal(result.cardLast4, "4242");
+    assert.equal(result.paymentHint, "card");
+    assert.match(result.address ?? "", /123 Market St/);
     assert.ok((result.confidence ?? 0) >= 60);
     assert.ok(result.items.length >= 1);
     assert.equal(result.categorySuggestion, "Meals");
+  });
+
+  it("extracts address, time, receipt number, and quantity lines", () => {
+    const text = `
+HOME DEPOT
+456 Oak Ave
+Springfield IL 62701
+09/15/2026 2:14 PM
+Receipt # A-10092
+2 x Pine Board     4.00    8.00
+Subtotal               $8.00
+Tax                    $0.64
+Total                  $8.64
+Visa ending 1881
+`;
+    const result = parseReceiptText(text);
+    assert.equal(result.merchant, "HOME DEPOT");
+    assert.match(result.address ?? "", /456 Oak Ave/);
+    assert.equal(result.time, "14:14");
+    assert.equal(result.receiptNumber, "A-10092");
+    assert.equal(result.paymentHint, "card");
+    assert.equal(result.items[0]?.quantity, 2);
+    assert.equal(result.items[0]?.unitPrice, 4);
+    assert.equal(result.items[0]?.amount, 8);
   });
 
   it("handles empty text safely", () => {
@@ -121,6 +149,115 @@ describe("report csv", () => {
     assert.ok(csv.includes("Meals"));
     assert.ok(csv.includes("Grand Total"));
     assert.ok(csv.includes("52.50"));
+  });
+});
+
+describe("itemized reconciliation", () => {
+  it("matches when lines, tax, and tip equal the receipt total", () => {
+    const result = reconcileItemizedExpense({
+      lines: [{ amount: 5.45 }, { amount: 3.25 }],
+      tax: 0.7,
+      tip: 1.5,
+      receiptTotal: 10.9,
+    });
+    assert.equal(result.matches, true);
+    assert.equal(result.difference, 0);
+    assert.equal(result.lineSum, 8.7);
+    assert.equal(result.expectedTotal, 10.9);
+  });
+
+  it("treats a one-cent difference as a match and prices lines in cents", () => {
+    const result = reconcileItemizedExpense({
+      lines: [{ amount: lineAmount(3, 1.1) }],
+      tax: 0.01,
+      tip: 0,
+      receiptTotal: 3.32,
+    });
+    assert.equal(lineAmount(3, 1.1), 3.3);
+    assert.equal(result.expectedTotal, 3.31);
+    assert.equal(result.matches, true);
+    assert.equal(result.difference, 0.01);
+  });
+
+  it("reports how far the receipt total is from the lines", () => {
+    const result = reconcileItemizedExpense({
+      lines: [{ amount: 10 }],
+      tax: 1,
+      tip: 0,
+      receiptTotal: 12.5,
+    });
+    assert.equal(result.matches, false);
+    assert.equal(result.expectedTotal, 11);
+    assert.equal(result.difference, 1.5);
+  });
+});
+
+describe("receipt download names", () => {
+  it("uses date, merchant, and amount, and suffixes collisions", () => {
+    const used = new Set<string>();
+    const first = receiptDownloadName({
+      date: "2026-09-15",
+      merchant: "Home Depot",
+      amount: 147.82,
+      extension: "pdf",
+      used,
+    });
+    const second = receiptDownloadName({
+      date: "2026-09-15",
+      merchant: "Home Depot",
+      amount: 147.82,
+      extension: "pdf",
+      used,
+    });
+    assert.equal(first, "2026-09-15_Home-Depot_147.82.pdf");
+    assert.equal(second, "2026-09-15_Home-Depot_147.82-2.pdf");
+  });
+});
+
+describe("receipt library tenant scope", () => {
+  it("pins the employee when the caller cannot view the team", () => {
+    const where = receiptLibraryWhere({
+      businessId: "biz-a",
+      employeeId: "emp-me",
+      viewAll: false,
+      filters: { employeeId: "emp-other", merchant: "Home", q: "oak" },
+    });
+    assert.equal(where.businessId, "biz-a");
+    assert.equal(where.employeeId, "emp-me");
+    assert.equal(where.deletedAt, null);
+  });
+
+  it("honors an employee filter only when the caller can view the team", () => {
+    const where = receiptLibraryWhere({
+      businessId: "biz-a",
+      employeeId: "emp-me",
+      viewAll: true,
+      filters: { employeeId: "emp-other" },
+    });
+    assert.equal(where.businessId, "biz-a");
+    assert.equal(where.employeeId, "emp-other");
+  });
+
+  it("prefers the processed PDF and writes a CSV index", () => {
+    const chosen = preferredReceipt([
+      { role: "ORIGINAL", kind: "IMAGE", deletedAt: null, id: "orig" },
+      { role: "PROCESSED", kind: "PDF", deletedAt: null, id: "pdf" },
+      { role: "PROCESSED", kind: "PDF", deletedAt: new Date(), id: "gone" },
+    ]);
+    assert.equal(chosen?.id, "pdf");
+    const csv = receiptIndexCsv([
+      {
+        filename: "2026-09-15_Home-Depot_147.82.pdf",
+        date: "2026-09-15",
+        vendor: "Home Depot",
+        amount: "147.82",
+        category: "Supplies",
+        employee: "Ada",
+        project: "Store, North",
+      },
+    ]);
+    assert.match(csv, /^filename,date,vendor,amount,category,employee,project/);
+    assert.match(csv, /"Store, North"/);
   });
 });
 

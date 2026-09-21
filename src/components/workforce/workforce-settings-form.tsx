@@ -131,6 +131,26 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="overtimeMultiplier">OT multiplier</Label>
+              <Input id="overtimeMultiplier" type="number" step="0.1" min="1" max="3" {...register("overtimeMultiplier", { valueAsNumber: true })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dailyOvertimeThresholdHours">Daily OT after (hours, optional)</Label>
+              <Input id="dailyOvertimeThresholdHours" type="number" step="0.5" min="0" {...register("dailyOvertimeThresholdHours", { setValueAs: (value) => (value === "" || value == null ? null : Number(value)) })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="doubleTimeDailyThresholdHours">Double time after (hours/day, optional)</Label>
+              <Input id="doubleTimeDailyThresholdHours" type="number" step="0.5" min="0" {...register("doubleTimeDailyThresholdHours", { setValueAs: (value) => (value === "" || value == null ? null : Number(value)) })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="doubleTimeMultiplier">Double-time multiplier</Label>
+              <Input id="doubleTimeMultiplier" type="number" step="0.1" min="1" max="3" {...register("doubleTimeMultiplier", { valueAsNumber: true })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="laborCostAlertAmount">Weekly labor-cost alert ($)</Label>
+              <Input id="laborCostAlertAmount" type="number" step="1" min="0" {...register("laborCostAlertAmount", { setValueAs: (value) => (value === "" || value == null ? null : Number(value)) })} />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="defaultPtoAnnualHours">Default annual PTO (hours)</Label>
               <Input
                 id="defaultPtoAnnualHours"
@@ -162,6 +182,13 @@ export function WorkforceSettingsForm({ defaultValues }: WorkforceSettingsFormPr
             <p className="text-xs text-slate-500">
               Recurring policies grant a portion of the annual hours on the daily accrual job.
               Annual grants run on January 1, or the hire-date anniversary when a hire date is set.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="employerReference">Employer ID or EIN</Label>
+            <Input id="employerReference" maxLength={40} autoComplete="off" {...register("employerReference")} />
+            <p className="text-xs text-slate-500">
+              Printed on pay stubs. A Social Security number is stored and shown masked. This value is left out of the audit log.
             </p>
           </div>
         </CardContent>

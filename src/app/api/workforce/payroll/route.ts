@@ -4,6 +4,7 @@ import { payrollBonusSchema } from "@/lib/validations/workforce";
 import { PERMISSIONS } from "@/lib/permissions";
 import { ensureWorkforceSettings } from "@/lib/workforce/settings";
 import { computePayrollSummary, payrollToCsv } from "@/lib/workforce/payroll-service";
+import { saveOvertimeCalculations } from "@/lib/workforce/overtime-store";
 import { parseDateOnly } from "@/lib/workforce/pto-service";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
 
     const settings = await ensureWorkforceSettings(ctx.business.id);
     const start = parseDateOnly(periodStart);
+    const periodEndDate = parseDateOnly(periodEnd);
     const end = parseDateOnly(periodEnd);
     end.setHours(23, 59, 59, 999);
     const selectedPayDate = parseDateOnly(payDate!);
@@ -40,9 +42,21 @@ export async function GET(request: Request) {
       periodStart: start,
       periodEnd: end,
       overtimeThreshold: Number(settings.overtimeThresholdHours),
+      overtimeMultiplier: Number(settings.overtimeMultiplier),
+      dailyOvertimeThresholdHours:
+        settings.dailyOvertimeThresholdHours != null ? Number(settings.dailyOvertimeThresholdHours) : null,
+      doubleTimeDailyThresholdHours:
+        settings.doubleTimeDailyThresholdHours != null ? Number(settings.doubleTimeDailyThresholdHours) : null,
+      doubleTimeMultiplier: Number(settings.doubleTimeMultiplier),
       weekStartDay: settings.weekStartDay,
       payPeriodType: settings.payPeriodType,
       paidBreaks: settings.paidBreaks,
+    });
+    await saveOvertimeCalculations({
+      businessId: ctx.business.id,
+      periodStart: start,
+      periodEnd: periodEndDate,
+      rows,
     });
 
     if (format === "csv") {

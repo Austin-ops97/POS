@@ -1,4 +1,6 @@
-# NexaPOS Implementation Plan
+# EmeraldOne Implementation Plan
+
+> Historical engineering notes. The product name is EmeraldOne. The current audit and phase plan live in [docs/emeraldone-implementation-map.md](docs/emeraldone-implementation-map.md).
 
 ## Folder Structure
 

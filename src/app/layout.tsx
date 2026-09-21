@@ -3,6 +3,7 @@ import { Outfit, Fraunces } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { isClerkConfigured } from "@/lib/clerk-config";
+import { PRODUCT_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -17,16 +18,16 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "EmeraldPOS",
-    template: "%s · EmeraldPOS",
+    default: PRODUCT_NAME,
+    template: `%s · ${PRODUCT_NAME}`,
   },
   description:
     "Point of sale, inventory, payments, customers, employees, and reports.",
-  applicationName: "EmeraldPOS",
+  applicationName: PRODUCT_NAME,
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "EmeraldPOS",
+    title: PRODUCT_NAME,
   },
   formatDetection: {
     telephone: false,

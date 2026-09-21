@@ -22,7 +22,10 @@ import {
   ArrowRight,
   ClipboardList,
   AlertTriangle,
+  CalendarClock,
 } from "lucide-react";
+import { db } from "@/lib/db";
+import { celebrationSentence, upcomingCelebrations } from "@/lib/workforce/hr-dates";
 
 export default async function WorkforcePage() {
   const ctx = await requireAuth();
@@ -33,6 +36,13 @@ export default async function WorkforcePage() {
   const canViewSchedule =
     canManage || hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
   const longShiftOpen = overview.clockedIn.filter((entry) => isLongShift(entry));
+  const people = canViewSchedule
+    ? await db.employeeProfile.findMany({
+        where: { businessId: ctx.business.id, deletedAt: null, status: "ACTIVE" },
+        select: { id: true, name: true, dateOfBirth: true, hireDate: true, startDate: true },
+      })
+    : [];
+  const celebrations = upcomingCelebrations(people, new Date(), 14);
 
 
   return (
@@ -57,6 +67,12 @@ export default async function WorkforcePage() {
               Timesheets
             </Link>
           </Button>
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href="/workforce/availability">
+              <CalendarClock className="h-4 w-4" />
+              Availability
+            </Link>
+          </Button>
           {canManage && (
             <Button asChild variant="outline" className="col-span-2 w-full sm:col-auto sm:w-auto">
               <Link href="/workforce/settings">
@@ -74,6 +90,19 @@ export default async function WorkforcePage() {
         <StatCard title="Shifts Today" value={String(overview.todayShifts.length)} />
         <StatCard title="Pending Time Off" value={String(overview.pendingTimeOff.length)} />
       </div>
+
+      {celebrations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Coming up</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-slate-700">
+            {celebrations.map((item) => (
+              <p key={`${item.employeeId}-${item.kind}`}>{celebrationSentence(item)}</p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {longShiftOpen.length > 0 && (
         <Card className="border-amber-200 bg-amber-50">
@@ -294,7 +323,7 @@ export default async function WorkforcePage() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-900">Payroll</p>
-                  <p className="truncate text-xs text-slate-500">Audit & bonuses</p>
+                  <p className="truncate text-xs text-slate-500">Stubs & taxes</p>
                 </div>
               </CardContent>
             </Card>

@@ -49,7 +49,7 @@ async function sendTaskEmail(input: {
     `Due: ${due}`,
     input.notes ? `Notes: ${input.notes}` : "",
     "",
-    `Open it in EmeraldPOS: ${taskAssignmentsUrl()}`,
+    `Open it in EmeraldOne: ${taskAssignmentsUrl()}`,
   ]
     .filter((line) => line !== "")
     .join("\n");

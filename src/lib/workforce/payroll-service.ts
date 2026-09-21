@@ -3,6 +3,7 @@ import { getBreakMinutes, getWorkedMinutes } from "./time-clock-service";
 import { getEffectiveCompensation, resolveDisplayName } from "./employee-service";
 import { getWeekStart } from "./pay-period";
 import { collectTimeEntryFlags, isLongShift } from "./timesheet-flags";
+import { computeOvertime, type OvertimeRules } from "./overtime";
 import type { TimeEntry, TimeBreak, Shift, PayrollBonus } from "@prisma/client";
 
 type TimeEntryWithBreaks = TimeEntry & { breaks: TimeBreak[] };
@@ -22,11 +23,16 @@ export type PayrollEmployeeRow = {
   unpaidHours?: number;
   regularHours: number;
   overtimeHours: number;
+  doubleTimeHours: number;
+  totalHours: number;
   regularPay: number;
   overtimePay: number;
+  doubleTimePay: number;
+  grossPay: number;
   bonusTotal: number;
   totalPay: number;
   flags: string[];
+  overtimeRules: OvertimeRules;
 };
 
 function hoursFromMs(ms: number): number {
@@ -88,14 +94,37 @@ export async function computePayrollSummary(params: {
   periodStart: Date;
   periodEnd: Date;
   overtimeThreshold: number;
+  overtimeMultiplier?: number;
+  dailyOvertimeThresholdHours?: number | null;
+  doubleTimeDailyThresholdHours?: number | null;
+  doubleTimeMultiplier?: number;
   weekStartDay?: number;
   payPeriodType?: "WEEKLY" | "BIWEEKLY" | "SEMIMONTHLY" | "MONTHLY";
   paidBreaks?: boolean;
+  employeeIds?: string[];
 }): Promise<PayrollEmployeeRow[]> {
-  const { businessId, periodStart, periodEnd, overtimeThreshold, weekStartDay = 0, payPeriodType = "BIWEEKLY", paidBreaks = false } = params;
+  const {
+    businessId,
+    periodStart,
+    periodEnd,
+    overtimeThreshold,
+    overtimeMultiplier = 1.5,
+    dailyOvertimeThresholdHours = null,
+    doubleTimeDailyThresholdHours = null,
+    doubleTimeMultiplier = 2,
+    weekStartDay = 0,
+    payPeriodType = "BIWEEKLY",
+    paidBreaks = false,
+    employeeIds,
+  } = params;
 
   const employees = await db.employeeProfile.findMany({
-    where: { businessId, deletedAt: null, status: "ACTIVE" },
+    where: {
+      businessId,
+      deletedAt: null,
+      status: "ACTIVE",
+      ...(employeeIds ? { id: { in: employeeIds } } : {}),
+    },
     orderBy: { name: "asc" },
   });
 
@@ -219,28 +248,48 @@ export async function computePayrollSummary(params: {
     const compensation = await getEffectiveCompensation(emp.id, periodEnd);
     const payType = compensation?.payType ?? (emp.hourlyWage ? "HOURLY" : "HOURLY");
     const hourlyWage = Number(compensation?.hourlyRate ?? emp.hourlyWage ?? 0);
-    const otMultiplier = Number(compensation?.overtimeMultiplier ?? 1.5);
     const otEligible = compensation?.overtimeEligible ?? true;
+    const overtimeRules: OvertimeRules = {
+      weekStartDay,
+      weeklyThresholdHours: overtimeThreshold,
+      overtimeMultiplier: Number(compensation?.overtimeMultiplier ?? overtimeMultiplier),
+      dailyOvertimeThresholdHours,
+      doubleTimeDailyThresholdHours,
+      doubleTimeMultiplier,
+      exempt: !otEligible || payType === "SALARY",
+    };
+    const slices = empEntries.flatMap((entry) => {
+      if (entry.status === "ACTIVE" || !entry.clockOut) return [];
+      const worked = computeEntryHours(entry);
+      const hours = paidBreaks ? worked.actualHours + worked.breakHours : worked.actualHours;
+      return hours > 0 ? [{ at: entry.clockIn, hours }] : [];
+    });
+    const ot = computeOvertime(slices, overtimeRules, payType === "SALARY" ? 0 : hourlyWage);
 
-    let regularHours = 0;
-    let overtimeHours = 0;
-    let regularPay = 0;
-    let overtimePay = 0;
-    let totalPay = 0;
+    const regularHours = ot.regularHours;
+    const overtimeHours = ot.overtimeHours;
+    const doubleTimeHours = ot.doubleTimeHours;
+    const totalHours = ot.totalHours;
+    let regularPay = ot.regularPay;
+    let overtimePay = ot.overtimePay;
+    let doubleTimePay = ot.doubleTimePay;
+    let grossPay = ot.grossPay;
+    let totalPay = grossPay;
 
     if (payType === "SALARY") {
       const annual = Number(compensation?.annualSalary ?? 0);
       const periodsPerYear = { WEEKLY: 52, BIWEEKLY: 26, SEMIMONTHLY: 24, MONTHLY: 12 }[payPeriodType];
-      totalPay = annual / periodsPerYear;
-      regularHours = actualHours;
+      regularPay = Math.round((annual / periodsPerYear) * 100) / 100;
+      overtimePay = 0;
+      doubleTimePay = 0;
+      grossPay = regularPay;
+      totalPay = grossPay;
       flags.push("Salary employee");
     } else {
-      const ot = computeWeeklyOvertimeHours(empEntries, weekStartDay, overtimeThreshold, paidBreaks);
-      regularHours = ot.regularHours + paidLeaveHours;
-      overtimeHours = otEligible ? ot.overtimeHours : 0;
-      regularPay = regularHours * hourlyWage;
-      overtimePay = overtimeHours * hourlyWage * otMultiplier;
-      totalPay = regularPay + overtimePay;
+      const leavePay = Math.round(paidLeaveHours * hourlyWage * 100) / 100;
+      regularPay = Math.round((regularPay + leavePay) * 100) / 100;
+      grossPay = Math.round((regularPay + overtimePay + doubleTimePay) * 100) / 100;
+      totalPay = grossPay;
     }
 
     const bonusTotal = empBonuses.reduce((sum, b) => sum + Number(b.amount), 0);
@@ -261,11 +310,16 @@ export async function computePayrollSummary(params: {
       unpaidHours: Math.round(unpaidHours * 100) / 100,
       regularHours: Math.round(regularHours * 100) / 100,
       overtimeHours: Math.round(overtimeHours * 100) / 100,
+      doubleTimeHours: Math.round(doubleTimeHours * 100) / 100,
+      totalHours: Math.round(totalHours * 100) / 100,
       regularPay: Math.round(regularPay * 100) / 100,
       overtimePay: Math.round(overtimePay * 100) / 100,
+      doubleTimePay: Math.round(doubleTimePay * 100) / 100,
+      grossPay: Math.round(grossPay * 100) / 100,
       bonusTotal: Math.round(bonusTotal * 100) / 100,
       totalPay: Math.round(totalPay * 100) / 100,
       flags,
+      overtimeRules,
     });
   }
 
@@ -281,6 +335,8 @@ export function payrollToCsv(rows: PayrollEmployeeRow[], period = { start: "", e
     "Hourly Wage",
     "Regular Hrs",
     "OT Hrs",
+    "Double Time Hrs",
+    "Total Hrs",
     "PTO Hrs",
     "Sick Hrs",
     "Vacation Hrs",
@@ -288,6 +344,8 @@ export function payrollToCsv(rows: PayrollEmployeeRow[], period = { start: "", e
     "Unpaid Hrs",
     "Regular Pay",
     "OT Pay",
+    "Double Time Pay",
+    "Gross Pay",
     "Bonuses",
     "Total Pay",
     "Flags",
@@ -301,6 +359,8 @@ export function payrollToCsv(rows: PayrollEmployeeRow[], period = { start: "", e
       r.hourlyWage.toFixed(2),
       r.regularHours.toFixed(2),
       r.overtimeHours.toFixed(2),
+      r.doubleTimeHours.toFixed(2),
+      r.totalHours.toFixed(2),
       (r.ptoHours ?? 0).toFixed(2),
       (r.sickHours ?? 0).toFixed(2),
       (r.vacationHours ?? 0).toFixed(2),
@@ -308,6 +368,8 @@ export function payrollToCsv(rows: PayrollEmployeeRow[], period = { start: "", e
       (r.unpaidHours ?? 0).toFixed(2),
       r.regularPay.toFixed(2),
       r.overtimePay.toFixed(2),
+      r.doubleTimePay.toFixed(2),
+      r.grossPay.toFixed(2),
       r.bonusTotal.toFixed(2),
       r.totalPay.toFixed(2),
       escapeCsvValue(r.flags.join("; ")),
