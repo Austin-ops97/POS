@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { db } from "./db";
 import { isClerkConfigured } from "./clerk-config";
 import { ensureRolesAndPermissionsOnce } from "./roles-permissions";
+import { enforceBusinessModule } from "./module-entitlement";
 import type { EmployeeProfile, Business, Location } from "@prisma/client";
 
 export { isClerkConfigured };
@@ -198,7 +199,8 @@ export async function requireAuth(businessId?: string): Promise<AuthContext> {
         select: { enabled: true },
       }),
     ]);
-    if (businessSetting?.enabled === false || employeeSetting?.enabled === false) {
+    enforceBusinessModule(businessSetting, requestedModule);
+    if (employeeSetting?.enabled === false) {
       throw new Error(`Module disabled: ${requestedModule}`);
     }
   }

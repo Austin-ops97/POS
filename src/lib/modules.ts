@@ -19,6 +19,14 @@ export const CUSTOMER_CONFIGURABLE_MODULES = [
   { key: "PROJECT_REMINDERS", name: "Project reminders", description: "Scheduled project reminder emails" },
   { key: "PROJECT_COMPLETION", name: "Project completion", description: "Completion photos and supervisor approval" },
   { key: "VIDEO_CALLING", name: "Video calling", description: "Audio and video calls in Connections" },
+  { key: "SCHEDULING", name: "Scheduling", description: "Shifts, availability, and the published schedule" },
+  { key: "PAYROLL", name: "Payroll", description: "Pay runs, stubs, and payroll tax" },
+  { key: "PROJECTS", name: "Projects", description: "Office projects, separate from the document library" },
+  { key: "IMPORT", name: "Data import", description: "CSV, Excel, and file import" },
+  { key: "QUICKBOOKS", name: "QuickBooks", description: "Intuit connection and one-way pull" },
+  { key: "BANKING", name: "Banking", description: "Plaid-linked accounts and bank transactions" },
+  { key: "ACCOUNTING", name: "Accounting reports", description: "Profit and loss and tax summary" },
+  { key: "SOCIAL", name: "Social publishing", description: "Facebook, Instagram, and LinkedIn" },
 ] as const;
 
 export type AppModuleKey = (typeof CUSTOMER_CONFIGURABLE_MODULES)[number]["key"];
@@ -67,6 +75,23 @@ export function normalizeModuleKey(key: string): string {
     project_completion: "PROJECT_COMPLETION",
     video_calling: "VIDEO_CALLING",
     video: "VIDEO_CALLING",
+    scheduling: "SCHEDULING",
+    schedule: "SCHEDULING",
+    payroll: "PAYROLL",
+    hr_workforce: "WORKFORCE",
+    projects: "PROJECTS",
+    data_import: "IMPORT",
+    import: "IMPORT",
+    quickbooks: "QUICKBOOKS",
+    banking: "BANKING",
+    banking_plaid: "BANKING",
+    plaid: "BANKING",
+    accounting: "ACCOUNTING",
+    accounting_reports: "ACCOUNTING",
+    social: "SOCIAL",
+    social_publishing: "SOCIAL",
+    expenses_receipts: "EXPENSES",
+    documents_office: "OFFICE",
   };
   const lower = key.toLowerCase();
   if (aliases[lower]) return aliases[lower];

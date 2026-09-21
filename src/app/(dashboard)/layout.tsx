@@ -63,16 +63,17 @@ export default async function DashboardLayout({
       ? [
           "/office",
           "/office/documents",
-          "/office/apps/projects",
+          ...(access.PROJECTS ? ["/office/apps/projects"] : []),
           "/office/apps/task-assignments",
           "/office/apps/forms-approvals",
           "/office/apps/automations-ai",
-          ...(hasPermission(ctx, PERMISSIONS.MANAGE_PROJECT_REMINDERS) ? ["/office/reminders"] : []),
-          ...(hasPermission(ctx, PERMISSIONS.APPROVE_PROJECT_COMPLETION) ? ["/office/approvals"] : []),
+          ...(access.PROJECT_REMINDERS && hasPermission(ctx, PERMISSIONS.MANAGE_PROJECT_REMINDERS) ? ["/office/reminders"] : []),
+          ...(access.PROJECT_COMPLETION && hasPermission(ctx, PERMISSIONS.APPROVE_PROJECT_COMPLETION) ? ["/office/approvals"] : []),
         ]
       : []),
-    ...(access.EXPENSES && hasAnyPermission(ctx, [PERMISSIONS.CREATE_EXPENSE, PERMISSIONS.VIEW_OWN_EXPENSES, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]) ? ["/finance/expenses", "/finance/receipts", "/finance/statements", "/finance/transactions", "/finance/cards", "/finance/reimbursements", "/finance/reports", "/finance/reports/profit-loss", "/finance/reports/tax", "/finance/budgets"] : []),
-    ...(hasPermission(ctx, PERMISSIONS.VIEW_REPORTS) ? ["/finance/reports/profit-loss", "/finance/reports/tax"] : []),
+    ...(access.EXPENSES && hasAnyPermission(ctx, [PERMISSIONS.CREATE_EXPENSE, PERMISSIONS.VIEW_OWN_EXPENSES, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.VIEW_EXPENSE_REPORTS]) ? ["/finance/expenses", "/finance/receipts", "/finance/cards", "/finance/reimbursements", "/finance/reports", "/finance/budgets"] : []),
+    ...(access.BANKING && hasAnyPermission(ctx, [PERMISSIONS.VIEW_EXPENSE_REPORTS, PERMISSIONS.VIEW_TEAM_EXPENSES, PERMISSIONS.APPROVE_EXPENSES, PERMISSIONS.MANAGE_EXPENSE_SETTINGS, PERMISSIONS.MANAGE_BANK]) ? ["/finance/statements", "/finance/transactions"] : []),
+    ...(access.ACCOUNTING && hasAnyPermission(ctx, [PERMISSIONS.VIEW_EXPENSE_REPORTS, PERMISSIONS.VIEW_REPORTS]) ? ["/finance/reports/profit-loss", "/finance/reports/tax"] : []),
     ...(isOwner || hasAnyPermission(ctx, [PERMISSIONS.MANAGE_EMPLOYEES, PERMISSIONS.MANAGE_LOCATIONS, PERMISSIONS.MANAGE_STRIPE, PERMISSIONS.MANAGE_BANK, PERMISSIONS.IMPORT_DATA, PERMISSIONS.MANAGE_SOCIAL, PERMISSIONS.PUBLISH_SOCIAL]) ? ["/settings"] : []),
   ];
 

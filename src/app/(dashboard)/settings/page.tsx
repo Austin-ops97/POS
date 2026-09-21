@@ -18,6 +18,9 @@ import {
   Layers,
   CalendarClock,
 } from "lucide-react";
+import { requireAuth } from "@/lib/auth";
+import { getEmployeeModuleAccess } from "@/lib/access-control";
+import type { AppModuleKey } from "@/lib/modules";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const settingsSections = [
@@ -145,7 +148,20 @@ const settingsSections = [
   },
 ];
 
-export default function SettingsPage() {
+const HREF_MODULE: Partial<Record<string, AppModuleKey>> = {
+  "/employees": "WORKFORCE",
+  "/workforce": "WORKFORCE",
+  "/products": "CATALOG",
+  "/customers": "CUSTOMERS",
+  "/inventory": "INVENTORY",
+  "/payments": "PAYMENTS",
+  "/settings/import": "IMPORT",
+};
+
+export default async function SettingsPage() {
+  const ctx = await requireAuth();
+  const access = await getEmployeeModuleAccess(ctx);
+
   return (
     <div className="space-y-8">
       <div>
@@ -155,13 +171,19 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {settingsSections.map((section) => (
+      {settingsSections.map((section) => {
+        const items = section.items.filter((item) => {
+          const moduleKey = HREF_MODULE[item.href];
+          return !moduleKey || access[moduleKey];
+        });
+        if (items.length === 0) return null;
+        return (
         <div key={section.group} className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
             {section.group}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {section.items.map((item) => (
+            {items.map((item) => (
               <Link key={item.href} href={item.href}>
                 <Card className="h-full transition-colors hover:bg-slate-50">
                   <CardHeader className="flex flex-row items-center gap-4">
@@ -181,7 +203,8 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

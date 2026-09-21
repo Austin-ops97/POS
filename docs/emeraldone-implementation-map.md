@@ -38,7 +38,7 @@ The npm package name stays `nexapos`. Cookies, localStorage keys, and the `x-nex
 3. Almost every business row carries `businessId`. Services take `AuthContext` and filter by `ctx.business.id`. Location access is a second filter for some register and inventory flows.
 4. Permissions live on global `Role` / `Permission` rows (`Role.name` is globally unique, not per business). `hasPermission` grants every permission to the `Owner` role. New capabilities should be new permission keys in `src/lib/permissions.ts`, seeded through `ensureRolesAndPermissions`, and checked on the server.
 5. Module licensing is `ModuleSetting` (business) plus `EmployeeModuleAccess` (employee). Middleware stamps `x-nexapos-module`; `requireAuth` rejects a disabled module. Nav hiding is not the security boundary.
-6. Platform admins are Clerk emails in `PLATFORM_ADMIN_EMAILS` (`User.platformRole = ADMIN`) and use `/admin`. That plane lists businesses; it is not a tenant bypass for day-to-day APIs.
+6. Platform admins are Clerk emails in `PLATFORM_ADMIN_EMAILS` (`User.platformRole = ADMIN`) and use `/admin`. Feature plans, a la carte overrides, connection status, and new-business onboarding are in `/admin/builder`, which also requires `BUILDER_UNLOCK_SECRET`. That plane is not a tenant bypass for day-to-day APIs. See `docs/emeraldone-builder.md`.
 
 Money fields already use Prisma `Decimal` (`Decimal(12, 2)` on expenses and payments, `Decimal(10, 2)` on wages). Keep that. Do not introduce floats for stored money.
 

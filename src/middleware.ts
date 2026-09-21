@@ -1,24 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { isClerkConfigured } from "@/lib/clerk-config";
-
-function moduleForPath(pathname: string): string | null {
-  const routes: Array<[string, string]> = [
-    ["/api/checkout", "POS"], ["/register", "POS"],
-    ["/api/stripe", "PAYMENTS"], ["/payments", "PAYMENTS"],
-    ["/api/products", "CATALOG"], ["/products", "CATALOG"],
-    ["/api/inventory", "INVENTORY"], ["/inventory", "INVENTORY"],
-    ["/api/orders", "ORDERS"], ["/orders", "ORDERS"],
-    ["/api/customers", "CUSTOMERS"], ["/customers", "CUSTOMERS"],
-    ["/api/reports", "REPORTS"], ["/reports", "REPORTS"],
-    ["/api/employees", "WORKFORCE"], ["/api/workforce", "WORKFORCE"],
-    ["/employees", "WORKFORCE"], ["/workforce", "WORKFORCE"],
-    ["/api/connections", "CONNECTIONS"], ["/connections", "CONNECTIONS"],
-    ["/api/expenses", "EXPENSES"], ["/finance", "EXPENSES"],
-    ["/api/office", "OFFICE"], ["/office", "OFFICE"],
-  ];
-  return routes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] || null;
-}
+import { moduleForPath } from "@/lib/module-routes";
 
 function forwardedRequest(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);

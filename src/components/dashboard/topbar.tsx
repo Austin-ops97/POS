@@ -59,6 +59,7 @@ export function Topbar({
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {notificationSlot}
         {isPlatformAdmin ? <Button asChild variant="outline" size="sm" className="hidden md:inline-flex"><Link href="/admin"><Shield className="h-4 w-4" />Platform</Link></Button> : null}
+        {isPlatformAdmin ? <Button asChild variant="outline" size="sm" className="hidden lg:inline-flex"><Link href="/admin/builder">Builder</Link></Button> : null}
         {canOpenRegister ? <><Button asChild size="default" className="hidden sm:inline-flex">
           <Link href="/register">
             <Plus className="h-4 w-4" aria-hidden="true" />
