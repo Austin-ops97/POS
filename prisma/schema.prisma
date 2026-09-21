@@ -424,6 +424,13 @@ model Business {
   importExternalIds         ImportExternalId[]
   quickBooksConnection      QuickBooksConnection?
   quickBooksSyncLogs        QuickBooksSyncLog[]
+  bankConnection            BankConnection?
+  bankAccounts              BankAccount[]
+  bankTransactions          BankTransaction[]
+  bankTransactionSplits     BankTransactionSplit[]
+  expenseCategoryRules      ExpenseCategoryRule[]
+  taxCategoryMappings       TaxCategoryMapping[]
+  recordAssociations        RecordAssociation[]
 
   @@index([createdAt])
 }
@@ -636,6 +643,9 @@ model EmployeeProfile {
   communicationCallsStarted      CommunicationCall[]            @relation("CommunicationCallStartedBy")
   callParticipations             CallParticipant[]
   bankStatementsUploaded         BankStatement[]                @relation("BankStatementUploadedBy")
+  categoryRulesCreated           ExpenseCategoryRule[]          @relation("ExpenseCategoryRuleCreatedBy")
+  recordAssociationsCreated      RecordAssociation[]            @relation("RecordAssociationCreatedBy")
+  recordAssociationsAbout        RecordAssociation[]            @relation("RecordAssociationEmployee")
   availabilityWindows            EmployeeAvailabilityWindow[]
   availabilityExceptions         EmployeeAvailabilityException[]
   overtimeCalculations           OvertimeCalculation[]
@@ -1148,6 +1158,8 @@ model Customer {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   orders   Order[]
   signatures Signature[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId])
   @@index([businessId, deletedAt])
@@ -2200,6 +2212,10 @@ model ExpenseCategory {
   budgets        ExpenseBudget[]
   vendors        ExpenseVendor[]
   allowedOnCards CompanyCardAllowedCategory[]
+  categoryRules  ExpenseCategoryRule[]
+  taxMapping     TaxCategoryMapping?
+  bankTransactions BankTransaction[]
+  bankSplits     BankTransactionSplit[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -2227,6 +2243,8 @@ model ExpenseVendor {
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   expenses Expense[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@unique([businessId, normalizedName])
   @@index([businessId])
@@ -2367,6 +2385,8 @@ model Expense {
   approvalEvents     ExpenseApprovalEvent[]
   flags              ExpenseFlag[]
   matchedTransaction CompanyCardTransaction?
+  bankTransactions   BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId])
   @@index([businessId, status])
@@ -2405,6 +2425,7 @@ model ExpenseReceipt {
   deletedAt   DateTime?
 
   expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  associations RecordAssociation[]
 
   @@index([expenseId])
   @@index([contentHash])
@@ -2608,9 +2629,208 @@ model BankStatement {
 
   business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   uploadedBy EmployeeProfile @relation("BankStatementUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  transactions BankTransaction[]
 
   @@index([businessId, deletedAt, createdAt])
   @@index([uploadedById])
+}
+
+enum BankConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum BankAccountKind {
+  CHECKING
+  SAVINGS
+  CREDIT
+  OTHER
+}
+
+enum BankTxnSource {
+  PLAID
+  STATEMENT
+}
+
+enum BankReconciliationStatus {
+  UNREVIEWED
+  CATEGORIZED
+  MATCHED
+  EXCLUDED
+}
+
+model BankConnection {
+  id                 String               @id @default(cuid())
+  businessId         String               @unique
+  provider           String               @default("PLAID")
+  status             BankConnectionStatus @default(DISCONNECTED)
+  institutionId      String?
+  institutionName    String?
+  itemId             String?
+  accessTokenCipher  String?              @db.Text
+  syncCursor         String?
+  environment        String?
+  lastSyncAt         DateTime?
+  lastSyncStatus     String?
+  lastSyncError      String?
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accounts BankAccount[]
+
+  @@index([businessId, status])
+}
+
+model BankAccount {
+  id               String          @id @default(cuid())
+  businessId       String
+  connectionId     String?
+  externalId       String?
+  name             String
+  officialName     String?
+  mask             String?
+  kind             BankAccountKind @default(CHECKING)
+  currency         String          @default("USD")
+  currentBalance   Decimal?        @db.Decimal(14, 2)
+  availableBalance Decimal?        @db.Decimal(14, 2)
+  lastSyncedAt     DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connection   BankConnection?  @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  transactions BankTransaction[]
+
+  @@unique([businessId, externalId])
+  @@index([businessId])
+  @@index([connectionId])
+}
+
+model BankTransaction {
+  id                   String                    @id @default(cuid())
+  businessId           String
+  accountId            String
+  source               BankTxnSource
+  externalId           String?
+  statementId          String?
+  postedOn             DateTime                  @db.Date
+  rawDescription       String
+  rawMerchant          String?
+  amount               Decimal                   @db.Decimal(14, 2)
+  rawBalance           Decimal?                  @db.Decimal(14, 2)
+  currency             String                    @default("USD")
+  categoryId           String?
+  suggestedCategoryId  String?
+  suggestionReason     String?
+  projectId            String?
+  vendorId             String?
+  customerId           String?
+  notes                String?
+  personal             Boolean                   @default(false)
+  reconciliation       BankReconciliationStatus  @default(UNREVIEWED)
+  matchedExpenseId     String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  account     BankAccount               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  statement   BankStatement?            @relation(fields: [statementId], references: [id], onDelete: SetNull)
+  category    ExpenseCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project     OfficeWorkspaceRecord?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  vendor      ExpenseVendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  customer    Customer?                 @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  expense     Expense?                  @relation(fields: [matchedExpenseId], references: [id], onDelete: SetNull)
+  splits      BankTransactionSplit[]
+  associations RecordAssociation[]
+
+  @@unique([businessId, source, externalId])
+  @@index([businessId, postedOn])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([statementId])
+}
+
+model BankTransactionSplit {
+  id             String   @id @default(cuid())
+  businessId     String
+  transactionId  String
+  categoryId     String?
+  projectId      String?
+  vendorId       String?
+  amount         Decimal  @db.Decimal(14, 2)
+  notes          String?
+  sortOrder      Int      @default(0)
+
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transaction BankTransaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, transactionId])
+}
+
+model ExpenseCategoryRule {
+  id          String   @id @default(cuid())
+  businessId  String
+  categoryId  String
+  pattern     String
+  createdById String
+  createdAt   DateTime @default(now())
+
+  business  Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdBy EmployeeProfile  @relation("ExpenseCategoryRuleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, pattern])
+  @@index([businessId])
+}
+
+model TaxCategoryMapping {
+  id         String   @id @default(cuid())
+  businessId String
+  categoryId String   @unique
+  taxLabel   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model RecordAssociation {
+  id                String   @id @default(cuid())
+  businessId        String
+  receiptId         String?
+  documentId        String?
+  expenseId         String?
+  bankTransactionId String?
+  projectId         String?
+  vendorId          String?
+  employeeId        String?
+  customerId        String?
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  business        Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  receipt         ExpenseReceipt?        @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  document        OfficeDocument?        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  expense         Expense?               @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  bankTransaction BankTransaction?       @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  project         OfficeWorkspaceRecord? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendor          ExpenseVendor?         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  employee        EmployeeProfile?       @relation("RecordAssociationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  customer        Customer?              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy       EmployeeProfile        @relation("RecordAssociationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, bankTransactionId])
+  @@index([businessId, expenseId])
+  @@index([receiptId])
+  @@index([documentId])
 }
 
 // ─── Office / Document Workspace ────────────────────────────────────────────
@@ -2665,6 +2885,7 @@ model OfficeDocument {
   files       OfficeDocumentFile[]
   tags        OfficeDocumentTag[]
   favorites   OfficeDocumentFavorite[]
+  associations RecordAssociation[]
   auditEvents OfficeAuditEvent[]
 
   @@index([businessId, deletedAt, updatedAt])
@@ -2798,6 +3019,8 @@ model OfficeWorkspaceRecord {
   attachments ProjectAttachment[]
   submissions ProjectSubmission[]
   approvalEvents ProjectApprovalEvent[]
+  bankTransactions BankTransaction[]
+  recordAssociations RecordAssociation[]
 
   @@index([businessId, workspace, archivedAt, updatedAt])
   @@index([businessId, status, dueAt])

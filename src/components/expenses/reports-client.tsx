@@ -59,6 +59,10 @@ export function ExpenseReportsClient({ canExport }: { canExport: boolean }) {
         <p className="mt-1 text-sm text-slate-500">
           Slice spend by employee, location, vendor, card, project, and more.
         </p>
+        <p className="mt-2 flex flex-col gap-1 text-sm sm:flex-row sm:gap-4">
+          <a className="text-emerald-700 underline" href="/finance/reports/profit-loss">Profit and loss</a>
+          <a className="text-emerald-700 underline" href="/finance/reports/tax">Tax summary</a>
+        </p>
       </div>
 
       <Card className="rounded-2xl">

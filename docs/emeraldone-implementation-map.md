@@ -125,12 +125,12 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 16. Bank connection | Missing | `CardTransactionSource.PLAID` is only an enum value. Add a tokenized link (Plaid or equivalent). Never store bank passwords |
-| 17. Transaction center | Partial | Categorize and split on top of `CompanyCardTransaction` or a sibling bank-transaction row that can point at `Expense`, `ExpenseReceipt`, project, and vendor. Do not duplicate `Expense` |
-| 18–20. P&L, charts, tax-ready expenses | Partial | Sales and expense reports/charts exist separately. A P&L should compose paid orders and approved expenses. Tax-ready export should reuse expense categories and receipt files |
-| 21. Statement import fallback | Partial | `BankStatement` already stores the file. Parsing into transactions is new and must stay optional next to a live bank link |
-| 22. Categorization | Partial | `src/lib/expenses/constants.ts` keyword map and fraud flags. Extend that; do not add a second rules engine |
-| 23. Document associations | Partial | Office files and expense receipts are separate. Association should be a link table, not a copy of `OfficeDocument` or `ExpenseReceipt` |
+| 16. Bank connection | Done for Plaid scaffolding | Settings → Integrations → Banking. Plaid Link only when `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_TOKEN_ENCRYPTION_KEY` exist. Otherwise the page stays Not connected. Tokens are encrypted. No bank passwords |
+| 17. Transaction center | Done | `BankTransaction` keeps the imported row and stores category, project, vendor, customer, notes, personal flag, and splits beside it. Company card feeds stay on `CompanyCardTransaction` |
+| 18–20. P&L, charts, tax-ready expenses | Done | Profit and loss composes paid orders, approved expenses, and unmatched business bank withdrawals. Charts are income vs expenses plus an expense donut. Tax summary uses business-defined labels and exports CSV, Excel, PDF, and a receipt zip |
+| 21. Statement import fallback | Done | CSV and Excel imports create `BankStatement` plus `BankTransaction` rows. PDF uploads stay unparsed files |
+| 22. Categorization | Done | Saved `ExpenseCategoryRule` rows apply on future imports. Keyword matches in `src/lib/expenses/constants.ts` stay suggestions |
+| 23. Document associations | Done | `RecordAssociation` links an existing receipt or office document to an expense, bank transaction, project, vendor, employee, or customer |
 
 ### Phase 7 — Social
 
@@ -149,7 +149,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - Phase 3 added availability windows and exceptions, overtime rule columns, max/preferred hours, and `OvertimeCalculation` snapshots. Suggestions are not stored; published shifts are normal `Shift` rows.
 - Phase 4 added `PayrollRun`, `PayStub`, `PayStubLine`, `PayrollTaxConfig`, and `PayrollDeductionConfig`, plus `WorkforceSettings.employerReference`. One processed run per business and period is enforced with a partial unique index. Voided runs remain in the table. Stubs do not reuse mutable `PayrollBonus` rows; bonuses are copied into the snapshot at process time.
 - Phase 5 added `ImportBatch`, `ImportBatchRow`, and `ImportExternalId` for provenance and rollback, plus `QuickBooksConnection` and `QuickBooksSyncLog`. Imported customers, vendors, products, and expenses stay on those tables. QuickBooks tokens are ciphertext columns, not audit details.
-- Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
+- Phase 6 added `BankConnection`, `BankAccount`, `BankTransaction`, `BankTransactionSplit`, `ExpenseCategoryRule`, `TaxCategoryMapping`, and `RecordAssociation`. Bank rows reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id. Plaid access tokens are ciphertext and are omitted from audit details.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
 - Backfill nothing that rewrites historical pay or posted expenses.
 
@@ -173,7 +173,7 @@ Phase 1 does not block on these. Do not invent buttons that pretend they are con
 | Later phase | What the user must provide |
 | --- | --- |
 | QuickBooks | `INTUIT_CLIENT_ID`, `INTUIT_CLIENT_SECRET`, `INTUIT_REDIRECT_URI` (must match the Intuit app and end in `/api/integrations/quickbooks/callback`), `INTUIT_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `INTUIT_ENVIRONMENT` (`sandbox` or `production`). Official OAuth only. The realm id comes back from Intuit when the user connects |
-| Bank link | Plaid (or the chosen provider) client id, secret, and environment (sandbox vs production). No bank passwords in EmeraldOne |
+| Bank link | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `PLAID_ENV` (`sandbox`, `development`, or `production`; default `sandbox`). No bank passwords in EmeraldOne |
 | Social | Meta app id/secret for Facebook and Instagram, LinkedIn client id/secret, and the OAuth redirect URLs for each |
 
 Already required for the current app, unchanged by this phase: `DATABASE_URL`, `DIRECT_URL`, Clerk keys, Stripe keys, `PLATFORM_ADMIN_EMAILS`. Optional and already wired: Resend, LiveKit, Vercel Blob, Sentry, Upstash Redis, cron secret.

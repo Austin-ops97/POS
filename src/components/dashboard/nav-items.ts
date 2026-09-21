@@ -77,9 +77,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/finance/expenses", label: "Expenses", icon: Wallet },
       { href: "/finance/receipts", label: "Receipts", icon: Receipt },
       { href: "/finance/statements", label: "Bank statements", icon: Landmark },
+      { href: "/finance/transactions", label: "Bank transactions", icon: Landmark },
       { href: "/finance/cards", label: "Company Cards", icon: CreditCard },
       { href: "/finance/reimbursements", label: "Reimbursements", icon: Receipt },
       { href: "/finance/reports", label: "Expense Reports", icon: LineChart },
+      { href: "/finance/reports/profit-loss", label: "Profit and loss", icon: LineChart },
+      { href: "/finance/reports/tax", label: "Tax summary", icon: LineChart },
       { href: "/finance/budgets", label: "Budgets", icon: PiggyBank },
     ],
   },
@@ -108,8 +111,15 @@ export function isNavItemActive(pathname: string, href: string): boolean {
   if (href === "/finance/statements") {
     return pathname === "/finance/statements" || pathname.startsWith("/finance/statements/");
   }
-  if (href === "/finance/reports") {
-    return pathname === "/finance/reports" || pathname.startsWith("/finance/reports/");
+  if (href === "/finance/reports") return pathname === "/finance/reports";
+  if (href === "/finance/transactions") {
+    return pathname === "/finance/transactions" || pathname.startsWith("/finance/transactions/");
+  }
+  if (href === "/finance/reports/profit-loss") {
+    return pathname === "/finance/reports/profit-loss" || pathname.startsWith("/finance/reports/profit-loss/");
+  }
+  if (href === "/finance/reports/tax") {
+    return pathname === "/finance/reports/tax" || pathname.startsWith("/finance/reports/tax/");
   }
   return pathname.startsWith(href);
 }
