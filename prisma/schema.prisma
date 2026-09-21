@@ -431,6 +431,9 @@ model Business {
   expenseCategoryRules      ExpenseCategoryRule[]
   taxCategoryMappings       TaxCategoryMapping[]
   recordAssociations        RecordAssociation[]
+  socialConnections         SocialConnection[]
+  socialPosts               SocialPost[]
+  socialDeliveries          SocialDelivery[]
 
   @@index([createdAt])
 }
@@ -652,6 +655,7 @@ model EmployeeProfile {
   payStubs                       PayStub[]
   payrollRunsProcessed          PayrollRun[]                    @relation("PayrollRunProcessedBy")
   importBatchesCreated          ImportBatch[]                   @relation("ImportBatchCreatedBy")
+  socialPostsCreated            SocialPost[]                    @relation("SocialPostCreatedBy")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -2831,6 +2835,102 @@ model RecordAssociation {
   @@index([businessId, expenseId])
   @@index([receiptId])
   @@index([documentId])
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+}
+
+enum SocialConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum SocialPostStatus {
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  PARTIAL
+  FAILED
+}
+
+enum SocialDeliveryStatus {
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+model SocialConnection {
+  id                 String                 @id @default(cuid())
+  businessId         String
+  platform           SocialPlatform
+  status             SocialConnectionStatus @default(DISCONNECTED)
+  externalId         String
+  displayName        String
+  accountKind        String
+  parentExternalId   String?
+  accessTokenCipher  String?                @db.Text
+  refreshTokenCipher String?                @db.Text
+  tokenExpiresAt     DateTime?
+  lastSyncAt         DateTime?
+  lastSyncStatus     String?
+  lastSyncError      String?
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  deliveries SocialDelivery[]
+
+  @@unique([businessId, platform, externalId])
+  @@index([businessId, status])
+}
+
+model SocialPost {
+  id           String           @id @default(cuid())
+  businessId   String
+  createdById  String
+  body         String           @db.Text
+  linkUrl      String?
+  imageName    String?
+  imageMime    String?
+  imageData    Bytes?
+  status       SocialPostStatus @default(SCHEDULED)
+  scheduledFor DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy  EmployeeProfile  @relation("SocialPostCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  deliveries SocialDelivery[]
+
+  @@index([businessId, createdAt])
+  @@index([businessId, status, scheduledFor])
+}
+
+model SocialDelivery {
+  id             String               @id @default(cuid())
+  businessId     String
+  postId         String
+  connectionId   String
+  platform       SocialPlatform
+  status         SocialDeliveryStatus @default(SCHEDULED)
+  externalPostId String?
+  error          String?
+  publishedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  post       SocialPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, postId])
+  @@index([connectionId])
 }
 
 // ─── Office / Document Workspace ────────────────────────────────────────────

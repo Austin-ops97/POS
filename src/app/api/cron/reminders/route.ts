@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { claimDueReminders, processReminder } from "@/lib/office/reminder-service";
 import { authorizeCron } from "@/lib/cron-auth";
+import { publishDueSocialPosts } from "@/lib/social/social-service";
+import { safeSocialMessage } from "@/lib/social/providers";
 
 /**
  * Processes due project reminders.
@@ -18,9 +20,18 @@ export async function GET(request: Request) {
     results.push(await processReminder(item.id, item.claimToken));
   }
 
+  let social = { published: 0, error: null as string | null };
+  try {
+    const published = await publishDueSocialPosts();
+    social = { published: published.published, error: null };
+  } catch (error) {
+    social = { published: 0, error: safeSocialMessage(error instanceof Error ? error.message : "social publish failed") };
+  }
+
   return NextResponse.json({
     claimed: claimed.length,
     results,
+    social,
   });
 }
 

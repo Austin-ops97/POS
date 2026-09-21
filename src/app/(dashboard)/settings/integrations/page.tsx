@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, CreditCard, Landmark, Puzzle } from "lucide-react";
+import { ChevronLeft, CreditCard, Landmark, Puzzle, Share2 } from "lucide-react";
 
 export default function IntegrationsSettingsPage() {
   return (
@@ -48,6 +48,23 @@ export default function IntegrationsSettingsPage() {
         <CardContent>
           <Button asChild variant="outline">
             <Link href="/settings/integrations/banking">Banking settings</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-slate-400" aria-hidden="true" />
+            Social media
+          </CardTitle>
+          <CardDescription>
+            Official Facebook, Instagram, and LinkedIn OAuth. The page stays not connected until each platform finishes authorization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild variant="outline">
+            <Link href="/settings/integrations/social">Social media settings</Link>
           </Button>
         </CardContent>
       </Card>

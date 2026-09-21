@@ -136,8 +136,8 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 14. Social connection center | Missing | OAuth for Facebook, Instagram, and LinkedIn. Reconnect and disconnect. Store tokens server-side only |
-| 15. Post composer | Missing | Multi-destination publish with partial failure and an audit row. Depends on feature 14. Connections messaging is internal staff chat, not social publishing |
+| 14. Social connection center | Done for OAuth scaffolding | Settings → Integrations → Social media. Facebook and Instagram share the Meta app. LinkedIn is separate. Tokens are encrypted. The page stays Not connected until OAuth finishes |
+| 15. Post composer | Done | Create Social Post publishes to the selected connected accounts. One platform can fail without cancelling the others, and a failed delivery can be retried. Scheduled posts run on the existing reminders cron |
 
 Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, responsive polish) is mostly partial on top of the systems above. Global search, dashboard stat cards, audit logs, and RBAC already exist and should be extended rather than replaced.
 
@@ -150,6 +150,7 @@ Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, re
 - Phase 4 added `PayrollRun`, `PayStub`, `PayStubLine`, `PayrollTaxConfig`, and `PayrollDeductionConfig`, plus `WorkforceSettings.employerReference`. One processed run per business and period is enforced with a partial unique index. Voided runs remain in the table. Stubs do not reuse mutable `PayrollBonus` rows; bonuses are copied into the snapshot at process time.
 - Phase 5 added `ImportBatch`, `ImportBatchRow`, and `ImportExternalId` for provenance and rollback, plus `QuickBooksConnection` and `QuickBooksSyncLog`. Imported customers, vendors, products, and expenses stay on those tables. QuickBooks tokens are ciphertext columns, not audit details.
 - Phase 6 added `BankConnection`, `BankAccount`, `BankTransaction`, `BankTransactionSplit`, `ExpenseCategoryRule`, `TaxCategoryMapping`, and `RecordAssociation`. Bank rows reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id. Plaid access tokens are ciphertext and are omitted from audit details.
+- Phase 7 added `SocialConnection`, `SocialPost`, and `SocialDelivery`. Social tokens are ciphertext and are omitted from audit details. Connections chat stays the internal staff messenger.
 - Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
 - Backfill nothing that rewrites historical pay or posted expenses.
 
@@ -174,6 +175,6 @@ Phase 1 does not block on these. Do not invent buttons that pretend they are con
 | --- | --- |
 | QuickBooks | `INTUIT_CLIENT_ID`, `INTUIT_CLIENT_SECRET`, `INTUIT_REDIRECT_URI` (must match the Intuit app and end in `/api/integrations/quickbooks/callback`), `INTUIT_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `INTUIT_ENVIRONMENT` (`sandbox` or `production`). Official OAuth only. The realm id comes back from Intuit when the user connects |
 | Bank link | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `PLAID_ENV` (`sandbox`, `development`, or `production`; default `sandbox`). No bank passwords in EmeraldOne |
-| Social | Meta app id/secret for Facebook and Instagram, LinkedIn client id/secret, and the OAuth redirect URLs for each |
+| Social | `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI` (must end in `/api/integrations/meta/callback`), `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI` (must end in `/api/integrations/linkedin/callback`), and `SOCIAL_TOKEN_ENCRYPTION_KEY` (32 bytes, base64). Optional `BLOB_READ_WRITE_TOKEN` for Instagram image URLs. No social passwords |
 
 Already required for the current app, unchanged by this phase: `DATABASE_URL`, `DIRECT_URL`, Clerk keys, Stripe keys, `PLATFORM_ADMIN_EMAILS`. Optional and already wired: Resend, LiveKit, Vercel Blob, Sentry, Upstash Redis, cron secret.
