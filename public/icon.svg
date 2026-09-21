@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="EmeraldPOS">
-  <rect width="32" height="32" rx="8" fill="#1e3a5f"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="EmeraldOne">
+  <rect width="32" height="32" rx="8" fill="#0f172a"/>
   <text
     x="16"
     y="21.2"
     text-anchor="middle"
     font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
-    font-size="12.5"
+    font-size="11"
     font-weight="700"
-    letter-spacing="-0.06em"
-    fill="#ffffff"
-  >EP</text>
+    letter-spacing="-0.04em"
+  >
+    <tspan fill="#ffffff">E</tspan><tspan fill="#34d399">O</tspan>
+  </text>
 </svg>

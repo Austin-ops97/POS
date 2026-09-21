@@ -1,0 +1,176 @@
+# EmeraldOne implementation map
+
+Phase 1 audit of the existing production app (repo package `nexapos`). This document is the handoff for phases 2–8. No new domain models were added in Phase 1. Extend the models below; do not create parallel expense, employee, receipt, project, or statement tables.
+
+## Stack and layout
+
+Single Next.js application. There is no monorepo, no packages workspace, and no separate mobile client.
+
+| Layer | What is in the repo |
+| --- | --- |
+| App | Next.js 15 App Router, React 19, TypeScript |
+| UI | Tailwind CSS 4, Radix primitives under `src/components/ui`, Lucide icons, Recharts |
+| Data | PostgreSQL via Prisma 5 (`prisma/schema.prisma`, `prisma/migrations/`) |
+| Auth | Clerk (`@clerk/nextjs`). Local-only bypass when Clerk is unset and `ALLOW_DEV_AUTH_BYPASS=true` outside production |
+| Payments | Stripe Connect, PaymentIntents, Terminal readers, webhooks |
+| Files | Vercel Blob adapter plus local receipt bytes (`src/lib/storage/`) |
+| Email | Resend (receipts, project reminders, task assignment) |
+| Calls | LiveKit (Connections audio/video) |
+| Jobs | Vercel Cron: `/api/cron/reminders`, `/api/cron/pto-accrual` |
+| State | Zustand for register cart |
+| Tests | Node test runner (`npm test`), Playwright (`e2e/`) |
+
+App routes:
+
+- `src/app/(marketing)` — public entry (features/pricing redirect home)
+- `src/app/(dashboard)` — authenticated product
+- `src/app/admin` — platform control plane
+- `src/app/api` — route handlers
+- `src/lib` — services, auth, validations
+- `src/components` — UI by domain (`dashboard`, `register`, `expenses`, `workforce`, `office`, `brand`)
+
+The npm package name stays `nexapos`. Cookies, localStorage keys, and the `x-nexapos-module` request header stay as they are so existing sessions and drafts keep working.
+
+## Auth and tenant isolation
+
+1. Clerk identity maps to `User.clerkId`.
+2. A person works inside a business through `EmployeeProfile` (`userId` + `businessId`). One user can belong to more than one business. `getAuthContext` prefers an invited workplace over an empty auto-provisioned shell.
+3. Almost every business row carries `businessId`. Services take `AuthContext` and filter by `ctx.business.id`. Location access is a second filter for some register and inventory flows.
+4. Permissions live on global `Role` / `Permission` rows (`Role.name` is globally unique, not per business). `hasPermission` grants every permission to the `Owner` role. New capabilities should be new permission keys in `src/lib/permissions.ts`, seeded through `ensureRolesAndPermissions`, and checked on the server.
+5. Module licensing is `ModuleSetting` (business) plus `EmployeeModuleAccess` (employee). Middleware stamps `x-nexapos-module`; `requireAuth` rejects a disabled module. Nav hiding is not the security boundary.
+6. Platform admins are Clerk emails in `PLATFORM_ADMIN_EMAILS` (`User.platformRole = ADMIN`) and use `/admin`. That plane lists businesses; it is not a tenant bypass for day-to-day APIs.
+
+Money fields already use Prisma `Decimal` (`Decimal(12, 2)` on expenses and payments, `Decimal(10, 2)` on wages). Keep that. Do not introduce floats for stored money.
+
+## Schema overview
+
+Tenant root: `Business`, `Location`, `BusinessSetting`, `ModuleSetting`, `AuditLog`.
+
+People: `User`, `Role`, `Permission`, `RolePermission`, `EmployeeProfile`, `EmployeeModuleAccess`, `EmployeeEmergencyContact`, `EmployeeCompensation`, `EmployeeLocation`.
+
+POS: `Category`, `Product`, `ProductVariant`, `ProductBarcode`, `InventoryItem`, `InventoryMovement`, `InventoryReceipt`, `InventoryScanSession`, `ModifierGroup`, `Customer`, `Order`, `OrderItem`, `Payment`, `Refund`, `Discount`, `TaxRate`, `Receipt`, `RegisterSession`, `CashMovement`, `Signature`, `StripeAccount`, `TerminalReader`.
+
+Workforce: `WorkforceSettings`, `Shift`, `TimeEntry`, `TimeBreak`, `TimeEntryEditRequest`, `TimeOffRequest`, `PayrollBonus`, `PtoLedgerEntry`, `SickLedgerEntry`.
+
+Expenses: `ExpenseSettings`, `ExpenseCategory`, `ExpenseVendor`, `CompanyCard`, `CompanyCardTransaction`, `Expense`, `ExpenseReceipt`, `ExpenseLineItem`, `ExpenseTag`, `ExpenseComment`, `ExpenseApprovalEvent`, `ExpenseFlag`, `ExpenseBudget`, `ExpenseNotification`, `ExpenseAuditEvent`, `ExpenseSavedFilter`, `BankStatement`.
+
+Office: `OfficeFolder`, `OfficeDocument`, `OfficeDocumentVersion`, `OfficeDocumentFile`, `OfficeWorkspaceRecord` (projects, tasks, spreadsheets, and other suite workspaces store JSON here), `ProjectReminder`, `ProjectAttachment`, `ProjectSubmission`, `ProjectApprovalEvent`.
+
+Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`, `CallParticipant`.
+
+## What already exists
+
+| Area | Status | Where to extend |
+| --- | --- | --- |
+| POS / register | Exists | `src/app/(dashboard)/register`, `src/app/api/checkout`, `src/lib/register` |
+| Inventory + barcode lookup | Exists | Scan sessions, Open Food Facts lookup |
+| Customers | Exists | `Customer` plus register attach |
+| Employees / HR profile | Partial | `EmployeeProfile` already has legal name, contact, address, DOB, hire/start dates, job, department, manager, emergency contacts, compensation history. Profile UI does not yet hide the birth year, show anniversary, or offer a vCard QR |
+| Scheduling | Partial | `Shift` calendar is manual. No availability windows and no suggestion engine |
+| Time clock / timesheets | Exists | PIN kiosk, edit requests, breaks, flags. Timesheet UI does not label overtime hours |
+| PTO | Exists | Requests, balances, daily accrual cron, sick ledger |
+| Payroll | Partial | Period calculator with weekly OT threshold, multiplier, bonuses, CSV export. No pay stub PDF, no tax withholding, no immutable pay-run snapshot |
+| Sale receipts | Exists | HTML, PDF, email. Branded with the **business** name, not the product name |
+| Expenses | Partial | Draft through reimburse, approvals, budgets, cards, vendors, duplicate/fraud flags, keyword categorization |
+| Expense receipts | Partial | `ExpenseReceipt` image/PDF, client corner detect + perspective warp (`src/lib/receipts/document-scanner.ts`), contrast enhance, regex OCR on text (`src/lib/expenses/ocr.ts`). Line items persist but the form does not edit them |
+| Receipt viewer | Partial | Approval dialog shows the image. No zoom, fit, pan, or pinch |
+| Expense reports | Partial | Filterable expense report with CSV/XLS/text export. No ZIP of receipt files (`jszip` is already a dependency and unused) |
+| Bank statements | Partial | Uploaded statement files (`BankStatement`). Not parsed transactions |
+| Card transactions | Partial | `CompanyCardTransaction` with `externalId` and source enum that already includes `PLAID`. Feeds are manual today |
+| Projects | Exists | `OfficeWorkspaceRecord` workspace `projects`, reminders, attachments, completion approval. Create flow lives in Office, not on the dashboard |
+| Documents | Exists | Folders, versions, scanner (color/gray/contrast, rotate, multi-page images), rich-text editor with its own zoom |
+| Reporting | Partial | Sales dashboard, charts, CSV. Inventory value report. No profit-and-loss or tax packet |
+| Search | Partial | Command palette over nav, products, customers, orders, documents. No OCR full text |
+| Permissions / audit | Exists | RBAC plus `AuditLog` and `ExpenseAuditEvent` / `OfficeAuditEvent` |
+| Background jobs | Partial | Two Vercel crons. No generic job table |
+| Design system | Exists | Light slate chrome, navy `--primary` (`#1e3a5f`), success green `#10b981`. No app-wide dark theme. Marketing and platform admin use dark surfaces via an explicit wordmark tone |
+
+## Phases 2–7
+
+### Phase 2 — Receipts and expenses
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 1. Simple vs itemized expenses | Partial | Keep `Expense`, `ExpenseLineItem`, `ExpenseFlag`. Add a mode on the existing expense (or derive itemized from line items) and a discrepancy flag such as `LINE_TOTAL_MISMATCH` on `ExpenseFlagType`. Do not add a second expense table |
+| 2. Receipt scanner | Partial | Expense capture already detects corners and warps. Office scanner already rotates and filters. Extend those clients: corner handles, color/gray/B&W, original plus cleaned file, multi-page PDF. OCR today is regex over text, not a vision engine — confirm extracted fields before save |
+| 3. Receipt zoom viewer | Partial | Extend the approval-panel dialog (and any office preview) with zoom, fit, 100%, pan, pinch, double-tap |
+| 4. Receipt search and bulk download | Partial | Expense list, saved filters, and `ocrText` / `ocrRawText` are the search base. Add ZIP + CSV index using the existing `jszip` dependency. Filenames from merchant, date, and amount |
+
+### Phase 3 — HR and scheduling
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 5. Quick project from dashboard | Partial | Projects already create `OfficeWorkspaceRecord` rows. Add a dashboard action that calls the same create path. No second project model |
+| 6. HR profile expansion | Partial | Fields mostly exist on `EmployeeProfile`. UI work: month/day birthday display (keep the full date stored; do not collect a public birth year in the directory), anniversary from `hireDate` / `startDate`, vCard QR from contact fields (`qrcode` is already a dependency) |
+| 7. Availability | Missing | New tenant-scoped availability (weekly windows, exceptions) that the scheduler reads. Check `TimeOffRequest` for PTO conflicts. Do not overload `Shift` |
+| 8. Assisted scheduler | Missing | Suggestions only, with labor cost from `EmployeeCompensation` and warnings. Manager must publish onto existing `Shift` rows. Never auto-publish |
+
+### Phase 4 — Payroll
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 9. Overtime hours and pay | Partial | `computeWeeklyOvertimeHours` and `WorkforceSettings.overtimeThresholdHours` already exist. Surface OT **hours** on timesheets and payroll (the payroll table currently shows OT pay, not hours) and keep the threshold/multiplier that produced them |
+| 10. Pay stubs | Missing | New immutable snapshot per employee per pay period (earnings, taxes, deductions, YTD) plus PDF. Generate from the existing payroll calculator. Do not rewrite historical rows when rules change |
+| 11. Employer payroll tax | Missing | Separate employee withholding from employer liability. Version tax config by effective date, same pattern as `EmployeeCompensation.effectiveFrom` |
+
+### Phase 5 — Import and QuickBooks
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 12. Data Import Center | Missing | Settings entry and a wizard. Spreadsheet CSV import inside Office is not this. Store mapping, row provenance, and a rollback batch. No live QuickBooks calls in the wizard until OAuth exists |
+| 13. QuickBooks architecture | Missing | Official OAuth and APIs only. External ids, sync status, and logs on a connection record. No scraping and no writes until the user connects a real app |
+
+### Phase 6 — Banking and accounting
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 16. Bank connection | Missing | `CardTransactionSource.PLAID` is only an enum value. Add a tokenized link (Plaid or equivalent). Never store bank passwords |
+| 17. Transaction center | Partial | Categorize and split on top of `CompanyCardTransaction` or a sibling bank-transaction row that can point at `Expense`, `ExpenseReceipt`, project, and vendor. Do not duplicate `Expense` |
+| 18–20. P&L, charts, tax-ready expenses | Partial | Sales and expense reports/charts exist separately. A P&L should compose paid orders and approved expenses. Tax-ready export should reuse expense categories and receipt files |
+| 21. Statement import fallback | Partial | `BankStatement` already stores the file. Parsing into transactions is new and must stay optional next to a live bank link |
+| 22. Categorization | Partial | `src/lib/expenses/constants.ts` keyword map and fraud flags. Extend that; do not add a second rules engine |
+| 23. Document associations | Partial | Office files and expense receipts are separate. Association should be a link table, not a copy of `OfficeDocument` or `ExpenseReceipt` |
+
+### Phase 7 — Social
+
+| Feature | Status | Reuse / add |
+| --- | --- | --- |
+| 14. Social connection center | Missing | OAuth for Facebook, Instagram, and LinkedIn. Reconnect and disconnect. Store tokens server-side only |
+| 15. Post composer | Missing | Multi-destination publish with partial failure and an audit row. Depends on feature 14. Connections messaging is internal staff chat, not social publishing |
+
+Phase 8 (search, dashboard actions, overview cards, audit, permissions, jobs, responsive polish) is mostly partial on top of the systems above. Global search, dashboard stat cards, audit logs, and RBAC already exist and should be extended rather than replaced.
+
+## Migration strategy
+
+- One shared Postgres database. Every new table gets `businessId`, a foreign key to `Business`, and indexes that start with `businessId`.
+- Add columns and enum values with Prisma migrations (`npm run db:migrate` locally, `db:deploy` in production). Do not `db push` against production.
+- Phase 2 can ship with a small migration: expense mode and/or `ExpenseFlagType` value for line-total mismatch, plus any receipt viewer state that must be stored (most viewer state is client-only and needs no migration).
+- Later payroll snapshots and tax tables are new models keyed by `employeeId` + period. They must not reuse mutable `PayrollBonus` rows as the stub.
+- Bank and accounting links should reference `Expense`, `ExpenseReceipt`, `OfficeDocument`, and `OfficeWorkspaceRecord` by id.
+- Roles stay global. Adding permissions is an upsert in `ensureRolesAndPermissions`, not a per-business role clone.
+- Backfill nothing that rewrites historical pay or posted expenses.
+
+## Risks
+
+- `Role.name` is globally unique. A permission change affects every business using that system role.
+- Owner short-circuit in `hasPermission` skips the permission list. New sensitive reads (tax, bank tokens, full birth date) still need explicit checks for non-owners and should not leak through Owner-only UI assumptions on the client.
+- Queries that forget `businessId` cross tenants. Follow existing service functions instead of new ad hoc Prisma calls.
+- Receipt and statement bytes can contain card numbers. Keep storage server-side; the browser should receive authorized file routes, not raw storage credentials.
+- Renaming cookies (`nexapos_register_cashier`) or draft keys would sign cashiers out and drop unsaved office drafts. Leave them.
+- Sentry service name is now `emeraldone`. Older events were tagged `nexapos`.
+- Email “from” display names in production come from `RECEIPTS_FROM_EMAIL` and `OFFICE_FROM_EMAIL`, which are already set in the host. `.env.example` shows EmeraldOne; updating live sender names is an environment change, not a migration.
+- Reminder email chrome says **Emerald Vale Studios** (the company). That is not the product name and was left in place.
+- Sale receipts and receipt emails use the merchant business name. They were not rewritten with the product wordmark.
+- There is no class-based dark theme. The wordmark uses `on-light` (near-black + emerald-700) on app chrome and `on-dark` (white + emerald-400) on the marketing page and platform admin bar. Do not flip those colors with `prefers-color-scheme`, or the light sidebar would render white text.
+
+## Credentials to collect later
+
+Phase 1 does not block on these. Do not invent buttons that pretend they are connected. Stripe, Clerk, Resend, and LiveKit are already the live integrations.
+
+| Later phase | What the user must provide |
+| --- | --- |
+| QuickBooks | Intuit app client id, client secret, redirect URI, and the realm/company to link. Official OAuth only |
+| Bank link | Plaid (or the chosen provider) client id, secret, and environment (sandbox vs production). No bank passwords in EmeraldOne |
+| Social | Meta app id/secret for Facebook and Instagram, LinkedIn client id/secret, and the OAuth redirect URLs for each |
+
+Already required for the current app, unchanged by this phase: `DATABASE_URL`, `DIRECT_URL`, Clerk keys, Stripe keys, `PLATFORM_ADMIN_EMAILS`. Optional and already wired: Resend, LiveKit, Vercel Blob, Sentry, Upstash Redis, cron secret.

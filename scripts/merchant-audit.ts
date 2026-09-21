@@ -54,7 +54,7 @@ async function ensureRoles() {
 }
 
 async function main() {
-  console.log("NexaPOS Merchant Audit — starting\n");
+  console.log("EmeraldOne Merchant Audit — starting\n");
 
   await ensureRoles();
   const ownerRole = await db.role.findUnique({ where: { name: "Owner" } });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
 import { requirePlatformAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-slate-950 text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link href="/admin" className="inline-flex items-center gap-2 font-semibold">Platform admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-3" aria-label="EmeraldOne platform admin">
+            <BrandWordmark size="sm" tone="on-dark" />
+            <span className="text-sm font-medium text-slate-300">Platform admin</span>
+          </Link>
           <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white">Open my workspace</Link>
         </div>
       </header>

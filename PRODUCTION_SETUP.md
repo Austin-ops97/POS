@@ -1,6 +1,6 @@
 # Production Setup
 
-NexaPOS runs as an authenticated, fully unlocked POS. After Clerk sign-in, users are provisioned automatically and land on the dashboard. There are no trials, subscription plans, or commercial paywalls.
+EmeraldOne runs as an authenticated, fully unlocked POS. After Clerk sign-in, users are provisioned automatically and land on the dashboard. There are no trials, subscription plans, or commercial paywalls.
 
 ## Required Services
 
@@ -36,7 +36,7 @@ NEXT_PUBLIC_APP_URL=https://your-production-domain.com
 
 # Optional: external product barcode lookup (Open Facts)
 PRODUCT_LOOKUP_ENABLED=true
-PRODUCT_LOOKUP_USER_AGENT="NexaPOS/0.1.0 (support@your-domain.com)"
+PRODUCT_LOOKUP_USER_AGENT="EmeraldOne/0.1.0 (support@your-domain.com)"
 PRODUCT_LOOKUP_CACHE_DAYS=30
 ```
 

@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="nexapos-sales-report.csv"`,
+        "Content-Disposition": `attachment; filename="emeraldone-sales-report.csv"`,
       },
     });
   } catch (error) {

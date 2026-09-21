@@ -42,7 +42,7 @@ function toLogPayload(event: MonitoringEvent): Record<string, unknown> {
   return {
     ...event,
     timestamp: new Date().toISOString(),
-    service: "nexapos",
+    service: "emeraldone",
   };
 }
 

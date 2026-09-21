@@ -4,7 +4,7 @@ import { ensureRolesAndPermissions } from "../src/lib/roles-permissions";
 const db = new PrismaClient();
 
 async function main() {
-  console.log("Seeding NexaPOS system roles and permissions...");
+  console.log("Seeding EmeraldOne system roles and permissions...");
 
   const roleIds = await ensureRolesAndPermissions(db);
 

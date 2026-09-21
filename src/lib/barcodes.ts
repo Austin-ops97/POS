@@ -1,5 +1,5 @@
 /**
- * Shared barcode normalization and validation for NexaPOS.
+ * Shared barcode normalization and validation for EmeraldOne.
  * Decoding happens on-device; only decoded values reach the server.
  */
 
