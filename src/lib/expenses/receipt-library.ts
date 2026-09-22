@@ -1,10 +1,16 @@
 import type { Prisma } from "@prisma/client";
-import JSZip from "jszip";
 import { db } from "@/lib/db";
 import type { AuthContext } from "@/lib/auth";
 import { canViewAllExpenses } from "./expense-service";
 import { readReceiptBlob } from "@/lib/storage/receipt-storage";
 import { receiptDownloadName } from "./reconciliation";
+import {
+  RECEIPT_ARCHIVE_MAX_BYTES,
+  RECEIPT_ARCHIVE_MAX_FILES,
+  assembleReceiptArchive,
+  receiptArchiveSizeError,
+  type ReceiptArchiveEntry,
+} from "./receipt-archive";
 import {
   preferredReceipt,
   receiptIndexCsv,
@@ -73,7 +79,13 @@ export async function searchReceiptLibrary(ctx: AuthContext, filters: ReceiptLib
 
 export async function buildReceiptArchive(
   ctx: AuthContext,
-  input: { receiptIds?: string[]; allFiltered?: boolean; includeCsv?: boolean; filters?: ReceiptLibraryFilters }
+  input: {
+    receiptIds?: string[];
+    allFiltered?: boolean;
+    includeCsv?: boolean;
+    buildDigitalCopies?: boolean;
+    filters?: ReceiptLibraryFilters;
+  }
 ) {
   const viewAll = canViewAllExpenses(ctx);
   const filters = input.filters ?? {};
@@ -93,10 +105,11 @@ export async function buildReceiptArchive(
     include: {
       employee: { select: { name: true } },
       category: { select: { name: true } },
+      lineItems: { orderBy: { sortOrder: "asc" }, select: { description: true, quantity: true, amount: true } },
       receipts: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } },
     },
     orderBy: { purchaseDate: "asc" },
-    take: 80,
+    take: RECEIPT_ARCHIVE_MAX_FILES,
   });
 
   const chosen = expenses.flatMap((expense) => {
@@ -109,25 +122,18 @@ export async function buildReceiptArchive(
     return receipt ? [{ expense, receipt }] : [];
   });
   if (!chosen.length) throw new Error("Invalid receipt download: nothing matched those filters");
-  if (chosen.length > 80) throw new Error("Invalid receipt download: narrow the selection to 80 receipts or fewer");
+  if (chosen.length > RECEIPT_ARCHIVE_MAX_FILES) {
+    throw new Error("Invalid receipt download: narrow the selection to 80 receipts or fewer");
+  }
 
-  const zip = new JSZip();
   const used = new Set<string>();
-  const index: Array<{
-    filename: string;
-    date: string;
-    vendor: string;
-    amount: string;
-    category: string;
-    employee: string;
-    project: string;
-  }> = [];
+  const files: ReceiptArchiveEntry[] = [];
   let bytes = 0;
   for (const item of chosen) {
     const blob = await readReceiptBlob(item.receipt.storageUrl, item.receipt.data, item.receipt.mimeType);
     if (!blob) continue;
     bytes += blob.buffer.length;
-    if (bytes > 30_000_000) throw new Error("Invalid receipt download: the archive is larger than 30 MB. Narrow the date range.");
+    if (bytes > RECEIPT_ARCHIVE_MAX_BYTES) throw new Error(receiptArchiveSizeError());
     const extension = item.receipt.kind === "PDF" || item.receipt.mimeType === "application/pdf"
       ? "pdf"
       : item.receipt.mimeType.includes("png")
@@ -140,19 +146,33 @@ export async function buildReceiptArchive(
       extension,
       used,
     });
-    zip.file(filename, blob.buffer);
-    index.push({
+    files.push({
       filename,
+      buffer: blob.buffer,
+      mimeType: blob.mimeType,
       date: dateKey(item.expense.purchaseDate),
       vendor: item.expense.merchant,
       amount: Number(item.expense.total).toFixed(2),
       category: item.expense.category?.name ?? "",
       employee: item.expense.employee.name,
       project: item.expense.project ?? "",
+      source: {
+        merchant: item.expense.merchant,
+        date: dateKey(item.expense.purchaseDate),
+        total: Number(item.expense.total),
+        tax: Number(item.expense.tax),
+        lineItems: item.expense.lineItems.map((line) => ({
+          description: line.description,
+          quantity: Number(line.quantity),
+          amount: Number(line.amount),
+        })),
+        ocrText: item.receipt.ocrText?.trim() || item.expense.ocrRawText?.trim() || null,
+      },
     });
   }
-  if (!index.length) throw new Error("Invalid receipt download: the files are no longer stored");
-  if (input.includeCsv !== false) zip.file("receipt-index.csv", receiptIndexCsv(index));
-  const archive = await zip.generateAsync({ type: "nodebuffer" });
-  return { archive, count: index.length };
+  if (!files.length) throw new Error("Invalid receipt download: the files are no longer stored");
+  return assembleReceiptArchive(files, {
+    includeCsv: input.includeCsv !== false,
+    buildDigitalCopies: input.buildDigitalCopies === true,
+  });
 }
