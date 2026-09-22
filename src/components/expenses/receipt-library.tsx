@@ -25,6 +25,15 @@ type ReceiptRow = {
 
 type Option = { id: string; name: string };
 
+function downloadErrorMessage(payload: { error?: string; fieldErrors?: Record<string, string[]> }) {
+  if (payload.error && payload.error !== "Validation error") return payload.error;
+  const details = Object.values(payload.fieldErrors ?? {})
+    .flat()
+    .filter(Boolean);
+  if (details.length) return details.join(". ");
+  return payload.error || "Download failed";
+}
+
 export function ReceiptLibrary({
   categories,
   employees,
@@ -93,19 +102,25 @@ export function ReceiptLibrary({
   async function download(allFiltered: boolean) {
     setDownloading(true);
     try {
+      const activeFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, value]) => value.trim() !== "")
+      );
       const response = await fetch("/api/expenses/receipts/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           allFiltered,
-          receiptIds: allFiltered ? undefined : selectedIds,
+          ...(allFiltered ? {} : { receiptIds: selectedIds }),
           includeCsv: true,
-          filters,
+          filters: activeFilters,
         }),
       });
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        toast.error(payload.error ?? "Download failed");
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          fieldErrors?: Record<string, string[]>;
+        };
+        toast.error(downloadErrorMessage(payload));
         return;
       }
       const blob = await response.blob();
