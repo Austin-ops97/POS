@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Download, Loader2, Search } from "lucide-react";
@@ -66,6 +67,7 @@ export function ReceiptLibrary({
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [buildDigitalCopies, setBuildDigitalCopies] = useState(false);
 
   const selectedIds = useMemo(
     () => rows.flatMap((row) => (selected.includes(row.id) && row.receipt ? [row.receipt.id] : [])),
@@ -112,6 +114,7 @@ export function ReceiptLibrary({
           allFiltered,
           ...(allFiltered ? {} : { receiptIds: selectedIds }),
           includeCsv: true,
+          buildDigitalCopies,
           filters: activeFilters,
         }),
       });
@@ -221,6 +224,22 @@ export function ReceiptLibrary({
           <Download className="h-4 w-4" />
           Download all filtered
         </Button>
+      </div>
+      <div className="flex max-w-xl items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+        <Checkbox
+          id="buildDigitalCopies"
+          checked={buildDigitalCopies}
+          onCheckedChange={(value) => setBuildDigitalCopies(value === true)}
+          aria-describedby="buildDigitalCopies-help"
+        />
+        <div>
+          <Label htmlFor="buildDigitalCopies" className="cursor-pointer">
+            Experimental: Build OCR digital PDF copies
+          </Label>
+          <p id="buildDigitalCopies-help" className="mt-1 text-xs leading-5 text-slate-600">
+            Experimental. Each receipt uses OCR, reusing stored OCR and expense fields when they are present, and becomes a PDF digital copy with the receipt image plus merchant, date, total, tax, and line items. Results may need review.
+          </p>
+        </div>
       </div>
       {searched && rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No receipts match those filters.</p>

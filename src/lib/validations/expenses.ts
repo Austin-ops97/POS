@@ -278,5 +278,6 @@ export const receiptDownloadSchema = z.object({
     .optional(),
   allFiltered: z.boolean().optional(),
   includeCsv: z.boolean().optional(),
+  buildDigitalCopies: z.boolean().optional(),
   filters: receiptLibraryQuerySchema.optional(),
 });

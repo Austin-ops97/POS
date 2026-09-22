@@ -97,7 +97,7 @@ export function preferredReceipt<T extends Pick<ExpenseReceipt, "role" | "kind" 
   );
 }
 
-function csvCell(value: string | number) {
+function csvCell(value: string | number | undefined) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
@@ -111,8 +111,11 @@ export function receiptIndexCsv(
     category: string;
     employee: string;
     project: string;
-  }>
+    digital?: string;
+  }>,
+  options?: { includeDigital?: boolean }
 ) {
   const header = ["filename", "date", "vendor", "amount", "category", "employee", "project"];
+  if (options?.includeDigital) header.push("digital");
   return [header.join(","), ...rows.map((row) => header.map((key) => csvCell(row[key as keyof typeof row])).join(","))].join("\n");
 }
