@@ -88,13 +88,13 @@ export function QuickBooksPanel(props: QuickBooksPanelProps) {
 
       {!props.credentialsReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-semibold">Connect QuickBooks needs these environment variables</p>
+          <p className="font-semibold">Connect QuickBooks needs these platform credentials</p>
           <ul className="mt-2 list-disc pl-5">
             {props.missing.map((key) => (
               <li key={key}><code>{key}</code></li>
             ))}
           </ul>
-          <p className="mt-2">Also set <code>INTUIT_ENVIRONMENT</code> to <code>sandbox</code> or <code>production</code>. The redirect URI must be the Intuit app redirect, ending in <code>/api/integrations/quickbooks/callback</code>. <code>INTUIT_TOKEN_ENCRYPTION_KEY</code> is 32 bytes, base64-encoded. Tokens stay on the server and are encrypted with that key.</p>
+          <p className="mt-2">Environment is sandbox or production. The redirect URI must end in <code>/api/integrations/quickbooks/callback</code>. A platform admin saves the client id and secret in Builder, which also generates the token encryption key. Saving does not require a host redeploy.</p>
         </div>
       ) : null}
 

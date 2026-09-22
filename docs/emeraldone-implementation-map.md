@@ -177,7 +177,7 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 ## Credentials to collect later
 
-These stay server-side. The product stays Not connected until each provider's variables are set and the user finishes OAuth. Stripe, Clerk, Resend, and LiveKit are already the live integrations.
+These stay server-side. The product stays Not connected until each provider's app credentials are saved and the user finishes OAuth. Save Meta, LinkedIn, Plaid, and Intuit in Builder → Platform credentials (encrypted with `CREDENTIALS_ENCRYPTION_KEY`). Host variables below are a fallback when the vault has no value. Stripe, Clerk, Resend, and LiveKit stay in the host environment.
 
 | Later phase | What the user must provide |
 | --- | --- |

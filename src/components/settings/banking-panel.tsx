@@ -170,13 +170,13 @@ export function BankingPanel(props: BankingPanelProps) {
 
       {!props.credentialsReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-semibold">Connect a bank needs these environment variables</p>
+          <p className="font-semibold">Connect a bank needs these platform credentials</p>
           <ul className="mt-2 list-disc pl-5">
             {props.missing.map((key) => (
               <li key={key}><code>{key}</code></li>
             ))}
           </ul>
-          <p className="mt-2">Also set <code>PLAID_ENV</code> to <code>sandbox</code>, <code>development</code>, or <code>production</code>. It defaults to sandbox. <code>PLAID_TOKEN_ENCRYPTION_KEY</code> is 32 bytes, base64-encoded. EmeraldOne encrypts the Plaid access token with that key and does not store bank passwords.</p>
+          <p className="mt-2">Plaid environment is sandbox, development, or production. It defaults to sandbox. A platform admin saves the client id and secret in Builder, which also generates the token encryption key. Saving does not require a host redeploy. Bank passwords are never stored.</p>
         </div>
       ) : null}
 

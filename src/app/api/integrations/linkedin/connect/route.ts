@@ -6,7 +6,7 @@ import { linkedInConnectUrl } from "@/lib/social/social-service";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    return NextResponse.redirect(linkedInConnectUrl(ctx));
+    return NextResponse.redirect(await linkedInConnectUrl(ctx));
   } catch (error) {
     return handleApiError(error, "GET /api/integrations/linkedin/connect");
   }

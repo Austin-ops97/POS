@@ -1570,6 +1570,17 @@ model BuilderAuditEvent {
   @@index([action])
 }
 
+/// App-level integration secrets (Meta, Plaid, Intuit, LinkedIn). Ciphertext only.
+model PlatformCredential {
+  key            String   @id
+  ciphertext     String
+  hint           String?
+  updatedById    String?
+  updatedByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model AuditLog {
   id         String      @id @default(cuid())
   businessId String

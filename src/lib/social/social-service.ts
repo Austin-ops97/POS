@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { loadLinkedInConfig, loadMetaConfig } from "@/lib/credentials/load";
 import type { AuthContext } from "@/lib/auth";
 import { canManageSocial, canPublishSocial, canViewSocial } from "./access";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -15,9 +16,7 @@ import {
 import {
   META_GRAPH_VERSION,
   linkedInAuthorizeUrl,
-  linkedInConfig,
   metaAuthorizeUrl,
-  metaConfig,
   openSocialToken,
   readSocialOAuthState,
   safeSocialMessage,
@@ -95,17 +94,17 @@ function requireKey(config: SocialProviderConfig): Buffer {
   return config.encryptionKey;
 }
 
-export function metaConnectUrl(ctx: AuthContext): string {
+export async function metaConnectUrl(ctx: AuthContext): Promise<string> {
   assertManage(ctx);
-  const config = metaConfig();
+  const config = await loadMetaConfig();
   requireKey(config);
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
   return metaAuthorizeUrl(config, state);
 }
 
-export function linkedInConnectUrl(ctx: AuthContext): string {
+export async function linkedInConnectUrl(ctx: AuthContext): Promise<string> {
   assertManage(ctx);
-  const config = linkedInConfig();
+  const config = await loadLinkedInConfig();
   requireKey(config);
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
   return linkedInAuthorizeUrl(config, state);
@@ -131,7 +130,7 @@ async function exchangeMetaUserToken(config: SocialProviderConfig, code: string)
 
 export async function connectMeta(ctx: AuthContext, input: { code: string; state: string }) {
   assertManage(ctx);
-  const config = metaConfig();
+  const config = await loadMetaConfig();
   const key = requireKey(config);
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
   if (!state || state.businessId !== ctx.business.id || state.employeeId !== ctx.employee.id) {
@@ -254,7 +253,7 @@ async function linkedInJson<T>(path: string, token: string, init?: { method?: st
 
 export async function connectLinkedIn(ctx: AuthContext, input: { code: string; state: string }) {
   assertManage(ctx);
-  const config = linkedInConfig();
+  const config = await loadLinkedInConfig();
   const key = requireKey(config);
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
   if (!state || state.businessId !== ctx.business.id || state.employeeId !== ctx.employee.id) {
@@ -404,7 +403,7 @@ export async function refreshSocial(ctx: AuthContext, connectionId: string) {
   assertManage(ctx);
   const connection = await db.socialConnection.findFirst({ where: { id: connectionId, businessId: ctx.business.id, status: "CONNECTED" } });
   if (!connection) throw new Error("Social account not found");
-  const config = connection.platform === "LINKEDIN" ? linkedInConfig() : metaConfig();
+  const config = await (connection.platform === "LINKEDIN" ? loadLinkedInConfig() : loadMetaConfig());
   const key = requireKey(config);
   try {
     const token = await usableToken(connection, key);
@@ -639,7 +638,7 @@ async function usableToken(
   if (connection.platform !== "LINKEDIN") return token;
   if (!connection.tokenExpiresAt || connection.tokenExpiresAt.getTime() > Date.now() + 60_000) return token;
   if (!connection.refreshTokenCipher) throw authError("auth expired");
-  const config = linkedInConfig();
+  const config = await loadLinkedInConfig();
   requireKey(config);
   const refreshed = await linkedInToken(
     config,
@@ -677,7 +676,7 @@ async function sendDelivery(
   const issue = platformIssue(connection.platform, { text: post.body, link: post.linkUrl, hasImage: Boolean(post.imageData?.byteLength) });
   if (issue) return { status: "FAILED", error: issue };
   if (connection.status !== "CONNECTED") return { status: "FAILED", error: "auth expired" };
-  const config = connection.platform === "LINKEDIN" ? linkedInConfig() : metaConfig();
+  const config = await (connection.platform === "LINKEDIN" ? loadLinkedInConfig() : loadMetaConfig());
   if (!config.encryptionKey) return { status: "FAILED", error: "Social token encryption is not configured" };
   try {
     const token = await usableToken(connection, config.encryptionKey);
@@ -854,8 +853,8 @@ export async function socialOverview(ctx: AuthContext) {
       },
     }),
   ]);
-  const meta = metaConfig();
-  const linkedin = linkedInConfig();
+  const meta = await loadMetaConfig();
+  const linkedin = await loadLinkedInConfig();
   return {
     meta: { ready: meta.ready, missing: meta.missing },
     linkedin: { ready: linkedin.ready, missing: linkedin.missing },
