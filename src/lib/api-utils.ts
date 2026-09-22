@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { OrderServiceError } from "./order-service";
 import { publicErrorMessage } from "./audit-redaction";
 import { BuilderGateError } from "./builder/gate-decision";
+import { validationErrorMessage, zodFieldErrors } from "./validation-message";
 
 export type ApiErrorBody = {
   error: string;
@@ -36,16 +37,6 @@ export function getClientIp(request: Request): string | undefined {
     request.headers.get("x-real-ip") ||
     undefined
   );
-}
-
-function zodFieldErrors(error: ZodError): Record<string, string[]> {
-  const fieldErrors: Record<string, string[]> = {};
-  for (const issue of error.issues) {
-    const path = issue.path.join(".") || "_form";
-    fieldErrors[path] = fieldErrors[path] ?? [];
-    fieldErrors[path].push(issue.message);
-  }
-  return fieldErrors;
 }
 
 function mapPrismaError(error: Prisma.PrismaClientKnownRequestError): {
@@ -91,7 +82,7 @@ export function handleApiError(error: unknown, context: string) {
   if (error instanceof ZodError) {
     return NextResponse.json(
       {
-        error: "Validation error",
+        error: validationErrorMessage(error),
         code: "VALIDATION_ERROR",
         fieldErrors: zodFieldErrors(error),
         requestId,

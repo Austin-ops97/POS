@@ -247,23 +247,35 @@ export const reportQuerySchema = z.object({
   jobNumber: z.string().optional(),
 });
 
+/** Blank form fields are omitted filters, not invalid dates or a $0 amount range. */
+function optionalFilter<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value: unknown) => {
+    if (value == null) return undefined;
+    if (typeof value === "string" && value.trim() === "") return undefined;
+    return value;
+  }, schema.optional());
+}
+
 export const receiptLibraryQuerySchema = z.object({
-  dateFrom: dateOnly.optional(),
-  dateTo: dateOnly.optional(),
-  merchant: z.string().max(200).optional(),
-  minAmount: z.coerce.number().optional(),
-  maxAmount: z.coerce.number().optional(),
-  employeeId: z.string().optional(),
-  categoryId: z.string().optional(),
-  project: z.string().max(120).optional(),
-  companyCardId: z.string().optional(),
-  receiptNumber: z.string().max(80).optional(),
-  locationId: z.string().optional(),
-  q: z.string().max(200).optional(),
+  dateFrom: optionalFilter(dateOnly),
+  dateTo: optionalFilter(dateOnly),
+  merchant: optionalFilter(z.string().max(200)),
+  minAmount: optionalFilter(z.coerce.number()),
+  maxAmount: optionalFilter(z.coerce.number()),
+  employeeId: optionalFilter(z.string()),
+  categoryId: optionalFilter(z.string()),
+  project: optionalFilter(z.string().max(120)),
+  companyCardId: optionalFilter(z.string()),
+  receiptNumber: optionalFilter(z.string().max(80)),
+  locationId: optionalFilter(z.string()),
+  q: optionalFilter(z.string().max(200)),
 });
 
 export const receiptDownloadSchema = z.object({
-  receiptIds: z.array(z.string().min(1)).max(80).optional(),
+  receiptIds: z
+    .array(z.string().min(1, "Receipt id is missing"))
+    .max(80, "Select 80 receipts or fewer")
+    .optional(),
   allFiltered: z.boolean().optional(),
   includeCsv: z.boolean().optional(),
   buildDigitalCopies: z.boolean().optional(),
