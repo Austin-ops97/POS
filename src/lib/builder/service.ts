@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { safeBuilderAuditDetails } from "./audit";
 import { mergeChecklist, parseChecklist, type ChecklistState } from "./checklist";
+import { platformCredentialEnv } from "@/lib/credentials/vault";
 import { platformIntegrationStatus, publicBusinessConnections } from "./connections";
 import { resolveFeatureFlags } from "./entitlements";
 import {
@@ -143,7 +144,7 @@ async function loadConnectionRows(businessId: string) {
 }
 
 export async function builderConnections(businessId: string | null) {
-  const platform = platformIntegrationStatus();
+  const platform = platformIntegrationStatus(await platformCredentialEnv());
   if (!businessId) return { platform, business: [] as ReturnType<typeof publicBusinessConnections> };
   await requireBusiness(businessId);
   const rows = await loadConnectionRows(businessId);

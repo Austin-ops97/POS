@@ -134,12 +134,13 @@ export function SocialCenter({
             <p className="text-xl font-semibold text-slate-900">{connected ? "Connected" : rows.some((account) => account.status === "ERROR") ? "Needs attention" : "Not connected"}</p>
             {platform !== "INSTAGRAM" && !provider.ready ? (
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                <p className="font-semibold">Connect needs these environment variables</p>
+                <p className="font-semibold">Connect needs these platform credentials</p>
                 <ul className="mt-2 list-disc pl-5">
                   {provider.missing.map((key) => (
                     <li key={key}><code>{key}</code></li>
                   ))}
                 </ul>
+                <p className="mt-2">A platform admin saves them in Builder. Saving does not require a host redeploy.</p>
               </div>
             ) : null}
             {rows.length === 0 ? <p className="mt-2 text-sm text-slate-600">No {platformLabel(platform)} account is connected.</p> : (

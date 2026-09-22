@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { loadIntuitConfig } from "@/lib/credentials/load";
 import { commitImportBatch, createImportBatch, previewImportBatch } from "@/lib/import/import-service";
 import { isCommitEntity, suggestMapping, tableFromRows } from "@/lib/import/import-plan";
 import {
@@ -7,7 +8,6 @@ import {
   encryptSecret,
   intuitApiBase,
   intuitAuthorizeUrl,
-  intuitConfig,
   quickBooksRows,
   signOAuthState,
   verifyOAuthState,
@@ -26,7 +26,7 @@ function safeMessage(value: string): string {
 }
 
 export async function quickBooksStatus(businessId: string) {
-  const config = intuitConfig();
+  const config = await loadIntuitConfig();
   const connection = await db.quickBooksConnection.findUnique({ where: { businessId } });
   const logs = connection
     ? await db.quickBooksSyncLog.findMany({
@@ -63,8 +63,8 @@ export async function quickBooksStatus(businessId: string) {
   };
 }
 
-export function quickBooksConnectUrl(input: { businessId: string; employeeId: string }) {
-  const config = intuitConfig();
+export async function quickBooksConnectUrl(input: { businessId: string; employeeId: string }) {
+  const config = await loadIntuitConfig();
   if (!config.ready || !config.clientSecret) throw new Error("Invalid QuickBooks: Intuit credentials are not configured");
   const state = signOAuthState(input, config.clientSecret);
   return intuitAuthorizeUrl(config, state);
@@ -77,7 +77,7 @@ export async function connectQuickBooks(input: {
   realmId: string;
   state: string;
 }) {
-  const config = intuitConfig();
+  const config = await loadIntuitConfig();
   if (!config.ready || !config.clientId || !config.clientSecret || !config.redirectUri || !config.encryptionKey) {
     throw new Error("Invalid QuickBooks: Intuit credentials are not configured");
   }
@@ -179,7 +179,7 @@ export async function disconnectQuickBooks(input: { businessId: string; employee
 }
 
 async function accessTokenFor(businessId: string): Promise<{ token: string; realmId: string; environment: "sandbox" | "production"; connectionId: string }> {
-  const config = intuitConfig();
+  const config = await loadIntuitConfig();
   if (!config.ready || !config.clientId || !config.clientSecret || !config.encryptionKey) {
     throw new Error("Invalid QuickBooks: Intuit credentials are not configured");
   }

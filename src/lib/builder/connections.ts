@@ -113,6 +113,7 @@ export function platformIntegrationStatus(env: { [key: string]: string | undefin
         `INTUIT_TOKEN_ENCRYPTION_KEY ${present(source, "INTUIT_TOKEN_ENCRYPTION_KEY") ? "set" : "missing"}`,
         `PLAID_TOKEN_ENCRYPTION_KEY ${present(source, "PLAID_TOKEN_ENCRYPTION_KEY") ? "set" : "missing"}`,
         `SOCIAL_TOKEN_ENCRYPTION_KEY ${present(source, "SOCIAL_TOKEN_ENCRYPTION_KEY") ? "set" : "missing"}`,
+        "A missing key is generated in the vault the first time that provider is saved",
       ].join(" · "),
     },
     {

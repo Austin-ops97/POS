@@ -1,5 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "crypto";
 
+export const QUICKBOOKS_CALLBACK_PATH = "/api/integrations/quickbooks/callback";
+
 export const INTUIT_ENV_VARS = [
   "INTUIT_CLIENT_ID",
   "INTUIT_CLIENT_SECRET",
@@ -22,6 +24,10 @@ export type IntuitConfig = {
 
 export function intuitConfig(env: NodeJS.ProcessEnv = process.env): IntuitConfig {
   const missing = INTUIT_ENV_VARS.filter((key) => !env[key]?.trim());
+  const redirectUri = env.INTUIT_REDIRECT_URI?.trim() || null;
+  if (redirectUri && !redirectUri.endsWith(QUICKBOOKS_CALLBACK_PATH) && !missing.includes("INTUIT_REDIRECT_URI")) {
+    missing.push("INTUIT_REDIRECT_URI");
+  }
   const environment = env.INTUIT_ENVIRONMENT === "production" ? "production" : "sandbox";
   let encryptionKey: Buffer | null = null;
   const encoded = env.INTUIT_TOKEN_ENCRYPTION_KEY?.trim();
@@ -36,7 +42,7 @@ export function intuitConfig(env: NodeJS.ProcessEnv = process.env): IntuitConfig
     environment,
     clientId: env.INTUIT_CLIENT_ID?.trim() || null,
     clientSecret: env.INTUIT_CLIENT_SECRET?.trim() || null,
-    redirectUri: env.INTUIT_REDIRECT_URI?.trim() || null,
+    redirectUri,
     encryptionKey,
   };
 }

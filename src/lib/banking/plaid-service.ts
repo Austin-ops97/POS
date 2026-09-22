@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { loadPlaidConfig } from "@/lib/credentials/load";
 import type { AuthContext } from "@/lib/auth";
 import { suggestCategory } from "./categorize";
 import { dayStart } from "./filters";
@@ -8,7 +9,6 @@ import {
   openAccessToken,
   plaidAccountKind,
   plaidAmountToStored,
-  plaidConfig,
   safeBankMessage,
   sealAccessToken,
   type PlaidConfig,
@@ -114,7 +114,7 @@ async function upsertPlaidAccounts(businessId: string, connectionId: string, acc
 }
 
 export async function bankConnectionStatus(businessId: string) {
-  const config = plaidConfig();
+  const config = await loadPlaidConfig();
   const connection = await db.bankConnection.findUnique({
     where: { businessId },
     include: {
@@ -160,7 +160,7 @@ export async function bankConnectionStatus(businessId: string) {
 
 export async function createBankLinkToken(ctx: AuthContext) {
   assertConnect(ctx);
-  const config = plaidConfig();
+  const config = await loadPlaidConfig();
   if (!config.ready) throw new Error("Invalid Plaid: credentials are not configured");
   const connection = await db.bankConnection.findUnique({ where: { businessId: ctx.business.id } });
   const updateMode = Boolean(connection?.accessTokenCipher && connection.status !== "DISCONNECTED" && config.encryptionKey);
@@ -185,7 +185,7 @@ export async function exchangeBankToken(
   input: { publicToken: string; institutionId?: string | null; institutionName?: string | null },
 ) {
   assertConnect(ctx);
-  const config = plaidConfig();
+  const config = await loadPlaidConfig();
   if (!config.ready || !config.encryptionKey) throw new Error("Invalid Plaid: credentials are not configured");
   if (!input.publicToken.trim()) throw new Error("Invalid Plaid: public token is required");
   const exchanged = await plaidPost<{ access_token?: string; item_id?: string }>(config, "/item/public_token/exchange", {
@@ -241,7 +241,7 @@ export async function exchangeBankToken(
 
 export async function syncBankConnection(ctx: AuthContext) {
   assertConnect(ctx);
-  const config = plaidConfig();
+  const config = await loadPlaidConfig();
   if (!config.ready || !config.encryptionKey) throw new Error("Invalid Plaid: credentials are not configured");
   const connection = await db.bankConnection.findUnique({ where: { businessId: ctx.business.id } });
   if (!connection || connection.status === "DISCONNECTED" || !connection.accessTokenCipher) {
@@ -376,7 +376,7 @@ async function applyPlaidTransactions(
 
 export async function disconnectBank(ctx: AuthContext) {
   assertConnect(ctx);
-  const config = plaidConfig();
+  const config = await loadPlaidConfig();
   const connection = await db.bankConnection.findUnique({ where: { businessId: ctx.business.id } });
   if (!connection) return { status: "DISCONNECTED" as const };
   if (connection.accessTokenCipher && config.ready && config.encryptionKey) {

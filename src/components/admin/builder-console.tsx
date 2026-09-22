@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CHECKLIST_STEPS } from "@/lib/builder/checklist";
 import { BUILDER_PLANS, type BuilderPlanKey } from "@/lib/builder/plans";
+import { PlatformCredentials } from "@/components/admin/platform-credentials";
 
 type BusinessRow = {
   id: string;
@@ -248,13 +249,22 @@ export function BuilderConsole() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Builder</h1>
-          <p className="text-sm text-slate-500">Onboard a business, set its plan, and check connection status.</p>
+          <p className="text-sm text-slate-500">Onboard a business, set its plan, and store platform app credentials.</p>
         </div>
         <Button variant="outline" onClick={() => void lock()}>
           Lock Builder
         </Button>
       </div>
 
+      <Tabs defaultValue="workspace">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="workspace">Businesses</TabsTrigger>
+          <TabsTrigger value="credentials">Platform credentials</TabsTrigger>
+        </TabsList>
+        <TabsContent value="credentials" className="mt-4">
+          <PlatformCredentials />
+        </TabsContent>
+        <TabsContent value="workspace" className="mt-4">
       <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
         <div className="space-y-2 rounded-lg border bg-white p-3">
           <Label htmlFor="builder-search">Business</Label>
@@ -441,6 +451,8 @@ export function BuilderConsole() {
           ) : null}
         </div>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

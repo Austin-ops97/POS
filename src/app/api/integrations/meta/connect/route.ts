@@ -6,7 +6,7 @@ import { metaConnectUrl } from "@/lib/social/social-service";
 export async function GET() {
   try {
     const ctx = await requireAuth();
-    return NextResponse.redirect(metaConnectUrl(ctx));
+    return NextResponse.redirect(await metaConnectUrl(ctx));
   } catch (error) {
     return handleApiError(error, "GET /api/integrations/meta/connect");
   }
