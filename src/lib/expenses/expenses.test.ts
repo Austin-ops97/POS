@@ -7,6 +7,8 @@ import { hashContent } from "./hash";
 import { reportToCsv } from "./report-service";
 import { lineAmount, receiptDownloadName, reconcileItemizedExpense } from "./reconciliation";
 import { preferredReceipt, receiptIndexCsv, receiptLibraryWhere } from "./receipt-query";
+import { receiptDownloadSchema, receiptLibraryQuerySchema } from "../validations/expenses";
+import { validationErrorMessage } from "../validation-message";
 
 describe("expense categories", () => {
   it("includes expected default categories", () => {
@@ -258,6 +260,101 @@ describe("receipt library tenant scope", () => {
     ]);
     assert.match(csv, /^filename,date,vendor,amount,category,employee,project/);
     assert.match(csv, /"Store, North"/);
+  });
+});
+
+describe("receipt download payload", () => {
+  const blankFilters = {
+    dateFrom: "",
+    dateTo: "",
+    merchant: "",
+    minAmount: "",
+    maxAmount: "",
+    employeeId: "",
+    categoryId: "",
+    project: "",
+    companyCardId: "",
+    receiptNumber: "",
+    locationId: "",
+    q: "",
+  };
+
+  it("accepts checked receipt ids when unused filters are blank", () => {
+    const parsed = receiptDownloadSchema.parse({
+      allFiltered: false,
+      receiptIds: ["receipt-dmca", "receipt-legalzoom"],
+      includeCsv: true,
+      filters: blankFilters,
+    });
+    assert.deepEqual(parsed.receiptIds, ["receipt-dmca", "receipt-legalzoom"]);
+    assert.equal(parsed.allFiltered, false);
+    assert.equal(parsed.includeCsv, true);
+    assert.equal(parsed.filters?.dateFrom, undefined);
+    assert.equal(parsed.filters?.dateTo, undefined);
+    assert.equal(parsed.filters?.minAmount, undefined);
+    assert.equal(parsed.filters?.maxAmount, undefined);
+    assert.equal(parsed.filters?.merchant, undefined);
+
+    const where = receiptLibraryWhere({
+      businessId: "biz-a",
+      employeeId: "emp-me",
+      viewAll: true,
+      filters: parsed.filters ?? {},
+    });
+    assert.equal(where.purchaseDate, undefined);
+    assert.equal(where.total, undefined);
+  });
+
+  it("keeps From/To dates for download all filtered and ignores blank amounts", () => {
+    const parsed = receiptDownloadSchema.parse({
+      allFiltered: true,
+      includeCsv: true,
+      filters: { ...blankFilters, dateFrom: "2026-01-01", dateTo: "2026-09-22", minAmount: "6", maxAmount: "" },
+    });
+    assert.equal(parsed.receiptIds, undefined);
+    assert.equal(parsed.filters?.dateFrom, "2026-01-01");
+    assert.equal(parsed.filters?.dateTo, "2026-09-22");
+    assert.equal(parsed.filters?.minAmount, 6);
+    assert.equal(parsed.filters?.maxAmount, undefined);
+
+    const where = receiptLibraryWhere({
+      businessId: "biz-a",
+      employeeId: "emp-me",
+      viewAll: true,
+      filters: parsed.filters ?? {},
+    });
+    assert.deepEqual(where.purchaseDate, {
+      gte: new Date(Date.UTC(2026, 0, 1)),
+      lte: new Date(Date.UTC(2026, 8, 22)),
+    });
+    assert.deepEqual(where.total, { gte: 6 });
+  });
+
+  it("still accepts the search query shape with string amounts", () => {
+    const parsed = receiptLibraryQuerySchema.parse({
+      dateFrom: "2026-01-01",
+      minAmount: "12.50",
+      merchant: "Legalzoom",
+    });
+    assert.equal(parsed.dateFrom, "2026-01-01");
+    assert.equal(parsed.minAmount, 12.5);
+    assert.equal(parsed.merchant, "Legalzoom");
+    assert.equal(parsed.dateTo, undefined);
+  });
+
+  it("explains an actually invalid download instead of a bare validation error", () => {
+    const tooMany = receiptDownloadSchema.safeParse({
+      allFiltered: false,
+      receiptIds: Array.from({ length: 81 }, (_, index) => `receipt-${index}`),
+      includeCsv: true,
+      filters: { ...blankFilters, dateFrom: "09/01/2026" },
+    });
+    assert.equal(tooMany.success, false);
+    if (tooMany.success) return;
+    const message = validationErrorMessage(tooMany.error);
+    assert.notEqual(message, "Validation error");
+    assert.match(message, /Selected receipts: Select 80 receipts or fewer/);
+    assert.match(message, /From: Use YYYY-MM-DD/);
   });
 });
 
