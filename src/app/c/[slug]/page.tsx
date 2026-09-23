@@ -40,7 +40,7 @@ export default async function PublicDigitalCardPage({ params }: Params) {
       mode="public"
       layout="page"
       saveHref={`/api/public/cards/${pub.slug}/vcard`}
-      walletHref={pub.walletAvailable ? `/api/public/cards/${pub.slug}/pass` : null}
+      walletHref={`/api/public/cards/${pub.slug}/pass`}
       qrSrc={`/api/public/cards/${pub.slug}/qr`}
     />
   );

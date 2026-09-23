@@ -61,15 +61,15 @@ function ActionRow({
   muted: string;
 }) {
   const className =
-    "flex min-h-12 items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-left transition duration-200 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
+    "flex min-h-12 w-full min-w-0 max-w-full items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-left transition duration-200 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
   const body = (
     <>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">{icon}</span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: muted }}>
           {eyebrow}
         </span>
-        <span className="block truncate text-sm font-semibold">{label}</span>
+        <span className="block break-words text-sm font-semibold [overflow-wrap:anywhere]">{label}</span>
       </span>
     </>
   );
@@ -99,22 +99,23 @@ export function GlassBusinessCard({ card, mode, layout = "frame", saveHref, wall
     <div
       className={
         layout === "page"
-          ? "card-rise relative isolate min-h-dvh overflow-hidden"
-          : "card-rise relative isolate overflow-hidden rounded-[2rem] shadow-[0_30px_80px_-36px_rgba(0,0,0,0.65)]"
+          ? "card-rise relative isolate box-border h-dvh max-h-dvh w-full min-w-0 max-w-full touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain"
+          : "card-rise relative isolate box-border w-full min-w-0 max-w-full overflow-x-clip rounded-[2rem] shadow-[0_30px_80px_-36px_rgba(0,0,0,0.65)]"
       }
       style={{ background: palette.gradient, color: palette.ink }}
     >
-      <div className="pointer-events-none absolute -left-16 top-8 h-48 w-48 rounded-full bg-white/20 blur-3xl" />
+      <div className="relative min-h-full w-full overflow-hidden">
+      <div className="pointer-events-none absolute -left-8 top-8 h-40 w-40 rounded-full bg-white/20 blur-3xl" />
       <div
-        className="pointer-events-none absolute -right-10 bottom-6 h-56 w-56 rounded-full opacity-50 blur-3xl"
+        className="pointer-events-none absolute -right-0 bottom-6 h-48 w-48 rounded-full opacity-50 blur-3xl"
         style={{ background: palette.accent }}
       />
-      <div className={layout === "page" ? "relative mx-auto w-full max-w-lg px-4 py-8 sm:px-6 sm:py-12" : "relative px-4 py-5 sm:px-6 sm:py-7"}>
+      <div className={layout === "page" ? "relative mx-auto w-full min-w-0 max-w-lg px-4 py-8 pb-16 sm:px-6 sm:py-12" : "relative w-full min-w-0 px-4 py-5 sm:px-6 sm:py-7"}>
         <article
-          className="rounded-[1.75rem] border p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-2xl sm:p-6"
+          className="w-full min-w-0 max-w-full overflow-hidden rounded-[1.75rem] border p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-2xl sm:p-6"
           style={{ background: palette.panel, borderColor: palette.border }}
         >
-          <div className="flex items-start gap-4">
+          <div className="flex w-full min-w-0 items-start gap-4">
             {card.logoUrl ? (
               // Tenant logos are dynamic blob or card URLs, so they are not passed through the image optimizer.
               // eslint-disable-next-line @next/next/no-img-element
@@ -132,21 +133,21 @@ export function GlassBusinessCard({ card, mode, layout = "frame", saveHref, wall
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: palette.muted }}>
+              <p className="break-words text-[11px] font-semibold uppercase tracking-[0.14em] [overflow-wrap:anywhere]" style={{ color: palette.muted }}>
                 {card.businessName || "Business"}
               </p>
-              <h1 className="mt-1 text-3xl font-semibold leading-tight tracking-[-0.03em]">
+              <h1 className="mt-1 break-words text-2xl font-semibold leading-tight tracking-[-0.03em] [overflow-wrap:anywhere] sm:text-3xl">
                 {card.personName || "Your name"}
               </h1>
               {card.jobTitle ? (
-                <p className="mt-1 text-sm font-medium" style={{ color: palette.muted }}>
+                <p className="mt-1 break-words text-sm font-medium [overflow-wrap:anywhere]" style={{ color: palette.muted }}>
                   {card.jobTitle}
                 </p>
               ) : null}
             </div>
           </div>
           {card.note ? (
-            <p className="mt-5 text-sm leading-6" style={{ color: palette.muted }}>
+            <p className="mt-5 break-words text-sm leading-6 [overflow-wrap:anywhere]" style={{ color: palette.muted }}>
               {card.note}
             </p>
           ) : null}
@@ -196,15 +197,15 @@ export function GlassBusinessCard({ card, mode, layout = "frame", saveHref, wall
             <ul className="mt-4 grid grid-cols-2 gap-2">
               {socials.map((link) => {
                 const className =
-                  "flex min-h-12 items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
+                  "flex min-h-12 w-full min-w-0 items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
                 const body = (
                   <>
                     <SocialBrandIcon network={link.network} className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{socialDisplayLabel(link.network, link.label)}</span>
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">{socialDisplayLabel(link.network, link.label)}</span>
                   </>
                 );
                 return (
-                  <li key={`${link.network}-${link.url}`} className={link.visible ? "" : "opacity-45"}>
+                  <li key={`${link.network}-${link.url}`} className={`min-w-0 ${link.visible ? "" : "opacity-45"}`}>
                     {interactive ? (
                       <a href={link.url} target="_blank" rel="noreferrer" className={className}>
                         {body}
@@ -239,14 +240,18 @@ export function GlassBusinessCard({ card, mode, layout = "frame", saveHref, wall
             {walletHref ? (
               <a
                 href={walletHref}
-                className="flex min-h-11 items-center justify-center rounded-2xl border border-white/25 bg-black/25 px-4 text-sm font-semibold text-white transition hover:bg-black/40"
+                className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-black px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 Add to Apple Wallet
               </a>
-            ) : null}
+            ) : (
+              <div className="flex min-h-12 w-full items-center justify-center rounded-2xl bg-black px-4 text-sm font-semibold text-white shadow-lg">
+                Add to Apple Wallet
+              </div>
+            )}
           </div>
           {qrSrc ? (
-            <div className="mt-5 flex flex-col items-center gap-2 rounded-2xl bg-white p-3 text-slate-900">
+            <div className="mt-5 flex w-full min-w-0 max-w-full flex-col items-center gap-2 rounded-2xl bg-white p-3 text-slate-900">
               {/* QR images are generated per card and should not be rewritten by the optimizer. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qrSrc} alt="QR code that opens this card" className="h-36 w-36" />
@@ -257,6 +262,7 @@ export function GlassBusinessCard({ card, mode, layout = "frame", saveHref, wall
             </div>
           ) : null}
         </article>
+      </div>
       </div>
     </div>
   );
