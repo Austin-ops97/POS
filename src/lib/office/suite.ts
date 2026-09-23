@@ -1,7 +1,7 @@
 export type OfficeSuiteIcon =
   | "files" | "document" | "sheet" | "presentation" | "pdf" | "message"
   | "calendar" | "customers" | "forms" | "finance" | "projects" | "people"
-  | "knowledge" | "security" | "automation" | "utilities" | "tasks";
+  | "knowledge" | "security" | "automation" | "utilities" | "tasks" | "card";
 
 export type OfficeSuiteGroup = "Create & organize" | "Communicate & serve" | "Run the business" | "Manage & protect";
 export type OfficeDelivery = "built-in" | "connected";
@@ -89,6 +89,19 @@ export const OFFICE_SUITE_MODULES: OfficeSuiteModule[] = [
     description: "Build a saved form with required fields, preview it, collect responses, and review submissions.",
     features: ["Form builder", "Live preview", "Saved responses"],
     quickActions: [{ label: "Build form" }, { label: "Review responses" }],
+  },
+  {
+    slug: "digital-cards",
+    name: "Digital business cards",
+    eyebrow: "Share a public card",
+    icon: "card",
+    group: "Communicate & serve",
+    accent: "emerald",
+    delivery: "connected",
+    nativeHref: "/office/cards",
+    description: "Design a liquid-glass card, publish a stable link and QR code, and let people save the contact.",
+    features: ["Live preview", "Stable link and QR", "Save to Contacts"],
+    quickActions: [{ label: "Open cards", href: "/office/cards" }],
   },
   {
     slug: "accounting", name: "Expenses & budgets", eyebrow: "Control spending", icon: "finance", group: "Run the business", accent: "emerald", delivery: "connected",
