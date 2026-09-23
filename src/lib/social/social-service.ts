@@ -22,8 +22,10 @@ import {
   safeSocialMessage,
   sealSocialToken,
   socialAuditDetails,
+  socialConnectGate,
   socialOAuthState,
   type SocialProviderConfig,
+  type SocialVaultProvider,
 } from "./providers";
 
 const IMAGE_LIMIT = 4_000_000;
@@ -87,9 +89,10 @@ async function metaPost<T>(path: string, token: string, body: FormData | Record<
   return json as T;
 }
 
-function requireKey(config: SocialProviderConfig): Buffer {
-  if (!config.ready || !config.encryptionKey || !config.clientId || !config.clientSecret || !config.redirectUri) {
-    throw new Error("Invalid social: credentials are not configured");
+function requireKey(config: SocialProviderConfig, provider: SocialVaultProvider): Buffer {
+  const gate = socialConnectGate(config, provider);
+  if (!gate.allow || !config.encryptionKey) {
+    throw new Error(gate.message ?? "Invalid social: credentials are not configured");
   }
   return config.encryptionKey;
 }
@@ -97,7 +100,7 @@ function requireKey(config: SocialProviderConfig): Buffer {
 export async function metaConnectUrl(ctx: AuthContext): Promise<string> {
   assertManage(ctx);
   const config = await loadMetaConfig();
-  requireKey(config);
+  requireKey(config, "meta");
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
   return metaAuthorizeUrl(config, state);
 }
@@ -105,7 +108,7 @@ export async function metaConnectUrl(ctx: AuthContext): Promise<string> {
 export async function linkedInConnectUrl(ctx: AuthContext): Promise<string> {
   assertManage(ctx);
   const config = await loadLinkedInConfig();
-  requireKey(config);
+  requireKey(config, "linkedin");
   const state = socialOAuthState({ businessId: ctx.business.id, employeeId: ctx.employee.id }, config.clientSecret as string);
   return linkedInAuthorizeUrl(config, state);
 }
@@ -131,7 +134,7 @@ async function exchangeMetaUserToken(config: SocialProviderConfig, code: string)
 export async function connectMeta(ctx: AuthContext, input: { code: string; state: string }) {
   assertManage(ctx);
   const config = await loadMetaConfig();
-  const key = requireKey(config);
+  const key = requireKey(config, "meta");
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
   if (!state || state.businessId !== ctx.business.id || state.employeeId !== ctx.employee.id) {
     throw new Error("Invalid social: the connection request expired");
@@ -254,7 +257,7 @@ async function linkedInJson<T>(path: string, token: string, init?: { method?: st
 export async function connectLinkedIn(ctx: AuthContext, input: { code: string; state: string }) {
   assertManage(ctx);
   const config = await loadLinkedInConfig();
-  const key = requireKey(config);
+  const key = requireKey(config, "linkedin");
   const state = readSocialOAuthState(input.state, config.clientSecret as string);
   if (!state || state.businessId !== ctx.business.id || state.employeeId !== ctx.employee.id) {
     throw new Error("Invalid social: the connection request expired");
@@ -404,7 +407,7 @@ export async function refreshSocial(ctx: AuthContext, connectionId: string) {
   const connection = await db.socialConnection.findFirst({ where: { id: connectionId, businessId: ctx.business.id, status: "CONNECTED" } });
   if (!connection) throw new Error("Social account not found");
   const config = await (connection.platform === "LINKEDIN" ? loadLinkedInConfig() : loadMetaConfig());
-  const key = requireKey(config);
+  const key = requireKey(config, connection.platform === "LINKEDIN" ? "linkedin" : "meta");
   try {
     const token = await usableToken(connection, key);
     let displayName = connection.displayName;
@@ -639,7 +642,7 @@ async function usableToken(
   if (!connection.tokenExpiresAt || connection.tokenExpiresAt.getTime() > Date.now() + 60_000) return token;
   if (!connection.refreshTokenCipher) throw authError("auth expired");
   const config = await loadLinkedInConfig();
-  requireKey(config);
+  requireKey(config, "linkedin");
   const refreshed = await linkedInToken(
     config,
     new URLSearchParams({
@@ -855,9 +858,22 @@ export async function socialOverview(ctx: AuthContext) {
   ]);
   const meta = await loadMetaConfig();
   const linkedin = await loadLinkedInConfig();
+  const metaGate = socialConnectGate(meta, "meta");
+  const linkedInGate = socialConnectGate(linkedin, "linkedin");
+  const admin = ctx.isPlatformAdmin;
   return {
-    meta: { ready: meta.ready, missing: meta.missing },
-    linkedin: { ready: linkedin.ready, missing: linkedin.missing },
+    meta: {
+      ready: meta.ready,
+      missing: admin ? meta.missing : [],
+      message: metaGate.message,
+      redirectUri: admin ? meta.redirectUri : null,
+    },
+    linkedin: {
+      ready: linkedin.ready,
+      missing: admin ? linkedin.missing : [],
+      message: linkedInGate.message,
+      redirectUri: admin ? linkedin.redirectUri : null,
+    },
     accounts: accounts.map(serializeAccount),
     posts: posts.map((post) => ({
       id: post.id,

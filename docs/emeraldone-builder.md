@@ -50,9 +50,15 @@ Redirect URIs must end with the callback the provider app whitelists:
 | Plaid OAuth redirect | `/settings/integrations/banking` |
 | Plaid webhook | `/api/webhooks/plaid` |
 
-If `NEXT_PUBLIC_APP_URL` is set, Builder suggests `origin + that path`. Plaid's webhook is shown only when that origin is `https`. Register the OAuth redirect under Plaid → Allowed redirect URIs. EmeraldOne sends the webhook when Link starts and again when a bank connects. Manual sync still imports transactions when Plaid cannot reach the webhook.
+If `NEXT_PUBLIC_APP_URL` is set, Builder suggests `origin + that path` and shows the full URI to copy into the provider console.
 
-`getPlatformCredential(name)` reads the vault first and falls back to `process.env`. Social connect, Plaid Link, exchange, sync, disconnect, and the Plaid webhook use that helper, so saving in Builder turns on Connect bank without a redeploy. Per-business Page, bank, and company links stay where they are today. This vault is only the platform app keys.
+- Meta: Facebook Login → Settings → Valid OAuth Redirect URIs. Instagram uses that same Facebook Login callback. A Page with a professional Instagram account is linked during that authorization.
+- LinkedIn: Auth → Authorized redirect URLs for the app.
+- Plaid: Allowed redirect URIs. The webhook is shown only when the origin is `https`. EmeraldOne sends the webhook when Link starts and again when a bank connects. Manual sync still imports transactions when Plaid cannot reach the webhook.
+
+`getPlatformCredential(name)` reads the vault first and falls back to `process.env`. Social connect, Plaid Link, exchange, sync, disconnect, and the Plaid webhook use that helper, so saving in Builder turns on Connect without a redeploy. Per-business Page, bank, and company links stay where they are today. This vault is only the platform app keys.
+
+Meta app id and secret, and LinkedIn client id and secret, are entered in Builder. The first save for either provider generates `SOCIAL_TOKEN_ENCRYPTION_KEY` in the vault when the host does not already have one, and stores the redirect URI. Connect Facebook and Instagram, and Connect LinkedIn, stay disabled until that save. The social settings page tells a business user to ask a platform admin. A platform admin sees the missing key names and the redirect URI. Host `META_*` and `LINKEDIN_*` values are a fallback when the vault entry is empty.
 
 Plaid client id, secret, environment (`sandbox`, `development`, or `production`), and the OAuth redirect are entered in Builder. The first Plaid save generates `PLAID_TOKEN_ENCRYPTION_KEY` in the vault when the host does not already have one. Do not keep those Plaid values in Vercel as the place you edit them. The host still needs `CREDENTIALS_ENCRYPTION_KEY` (32 bytes, base64) and `BUILDER_UNLOCK_SECRET` once. Each Sync click walks at most 5 `/transactions/sync` pages. A partial result means run Sync again. Pending Plaid rows are stored only after they post. One bank connection is stored per business, and every account and transaction write includes that `businessId`.
 

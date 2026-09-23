@@ -32,7 +32,13 @@ export default async function SocialSettingsPage({
         <h1 className="text-2xl font-bold text-slate-900">Social media</h1>
         <p className="text-sm text-slate-500">Facebook, Instagram, and LinkedIn through their official APIs. Tokens stay encrypted on the server.</p>
       </div>
-      <SocialCenter {...overview} notice={notice} canConnect={canManageSocial(ctx)} canPublish={canPublishSocial(ctx)} />
+      <SocialCenter
+        {...overview}
+        notice={notice}
+        canConnect={canManageSocial(ctx)}
+        canPublish={canPublishSocial(ctx)}
+        isPlatformAdmin={ctx.isPlatformAdmin}
+      />
     </div>
   );
 }

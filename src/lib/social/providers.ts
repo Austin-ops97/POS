@@ -34,10 +34,42 @@ function encryptionKey(env: NodeJS.ProcessEnv, missing: string[]): Buffer | null
   return null;
 }
 
+function appOrigin(env: NodeJS.ProcessEnv): string | null {
+  const raw = env.NEXT_PUBLIC_APP_URL?.trim() || env.APP_URL?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Explicit redirect wins. Otherwise the app origin plus the provider callback is the URI to register. */
+function resolveRedirect(
+  env: NodeJS.ProcessEnv,
+  explicit: string | undefined,
+  callbackPath: string,
+  missingKey: string,
+  missing: string[],
+): string | null {
+  const raw = explicit?.trim() || "";
+  if (raw) {
+    if (!raw.endsWith(callbackPath)) {
+      if (!missing.includes(missingKey)) missing.push(missingKey);
+      return null;
+    }
+    return raw;
+  }
+  const origin = appOrigin(env);
+  if (!origin) return null;
+  const index = missing.indexOf(missingKey);
+  if (index >= 0) missing.splice(index, 1);
+  return `${origin}${callbackPath}`;
+}
+
 export function metaConfig(env: NodeJS.ProcessEnv = process.env): SocialProviderConfig {
   const missing: string[] = META_ENV_VARS.filter((key) => !env[key]?.trim());
-  const redirectUri = env.META_REDIRECT_URI?.trim() || null;
-  if (redirectUri && !redirectUri.endsWith(META_CALLBACK_PATH) && !missing.includes("META_REDIRECT_URI")) missing.push("META_REDIRECT_URI");
+  const redirectUri = resolveRedirect(env, env.META_REDIRECT_URI, META_CALLBACK_PATH, "META_REDIRECT_URI", missing);
   const key = encryptionKey(env, missing);
   return {
     ready: missing.length === 0 && key != null,
@@ -51,10 +83,7 @@ export function metaConfig(env: NodeJS.ProcessEnv = process.env): SocialProvider
 
 export function linkedInConfig(env: NodeJS.ProcessEnv = process.env): SocialProviderConfig {
   const missing: string[] = LINKEDIN_ENV_VARS.filter((key) => !env[key]?.trim());
-  const redirectUri = env.LINKEDIN_REDIRECT_URI?.trim() || null;
-  if (redirectUri && !redirectUri.endsWith(LINKEDIN_CALLBACK_PATH) && !missing.includes("LINKEDIN_REDIRECT_URI")) {
-    missing.push("LINKEDIN_REDIRECT_URI");
-  }
+  const redirectUri = resolveRedirect(env, env.LINKEDIN_REDIRECT_URI, LINKEDIN_CALLBACK_PATH, "LINKEDIN_REDIRECT_URI", missing);
   const key = encryptionKey(env, missing);
   return {
     ready: missing.length === 0 && key != null,
@@ -63,6 +92,28 @@ export function linkedInConfig(env: NodeJS.ProcessEnv = process.env): SocialProv
     clientSecret: env.LINKEDIN_CLIENT_SECRET?.trim() || null,
     redirectUri,
     encryptionKey: key,
+  };
+}
+
+export type SocialVaultProvider = "meta" | "linkedin";
+
+/** Business-facing gate. Names the Builder screen. Key names stay on `missing` for a platform admin. */
+export function socialConnectGate(
+  config: Pick<SocialProviderConfig, "ready" | "missing">,
+  provider: SocialVaultProvider,
+): { allow: true; message: null } | { allow: false; message: string } {
+  if (config.ready) return { allow: true, message: null };
+  if (provider === "meta") {
+    return {
+      allow: false,
+      message:
+        "Connect Facebook and Instagram stays off until a platform admin saves the Meta app under Platform credentials at /admin/builder. The first save stores the redirect URI and the token encryption key. Facebook Login then links the Page and any Instagram professional account on that Page.",
+    };
+  }
+  return {
+    allow: false,
+    message:
+      "Connect LinkedIn stays off until a platform admin saves the LinkedIn app under Platform credentials at /admin/builder. The first save stores the redirect URI and the token encryption key.",
   };
 }
 
