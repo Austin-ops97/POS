@@ -1,12 +1,29 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { createHash, generateKeyPairSync, randomBytes, sign } from "crypto";
 import { describe, it } from "node:test";
+import { mergeCredentialEnv } from "@/lib/credentials/catalog";
 import { assertSplitsBalance, suggestCategory } from "./categorize";
 import { bankTransactionWhere } from "./filters";
 import { buildProfitAndLoss, reportRange } from "./pnl";
-import { openAccessToken, plaidAmountToStored, plaidConfig, sealAccessToken } from "./plaid";
+import {
+  openAccessToken,
+  plaidAmountToStored,
+  plaidConfig,
+  plaidConnectGate,
+  plaidLinkTokenBody,
+  plaidRedirectUri,
+  sealAccessToken,
+} from "./plaid";
+import { plaidWebhookAction, plaidWebhookBodyHash, plaidWebhookKeyId, verifyPlaidWebhookJwt, type PlaidVerificationJwk } from "./plaid-webhook";
 import { parseStatementTable } from "./statement";
 import { buildTaxSummary, TAX_SUMMARY_DISCLAIMER } from "./tax-summary";
+
+function base64Url(value: Buffer | string): string {
+  const buffer = typeof value === "string" ? Buffer.from(value) : value;
+  return buffer.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
 
 describe("bank categorization", () => {
   it("suggests Fuel for Shell and does not apply the keyword", () => {
@@ -139,5 +156,102 @@ describe("plaid configuration", () => {
     } as NodeJS.ProcessEnv);
     assert.equal(ready.ready, true);
     assert.deepEqual(ready.missing, []);
+    assert.equal(ready.webhookUrl, null);
+    assert.equal(ready.redirectUri, null);
+  });
+
+  it("opens Connect from vault credentials and keeps the host Plaid keys out of the gate copy", () => {
+    const key = randomBytes(32).toString("base64");
+    const host = { NODE_ENV: "test", NEXT_PUBLIC_APP_URL: "https://emerald.example" } as NodeJS.ProcessEnv;
+    const blocked = plaidConnectGate(plaidConfig(host));
+    assert.equal(blocked.allow, false);
+    if (!blocked.allow) {
+      assert.match(blocked.message, /\/admin\/builder/);
+      assert.match(blocked.message, /Platform credentials/);
+      assert.equal(/vercel/i.test(blocked.message), false);
+    }
+
+    const merged = mergeCredentialEnv(host, {
+      PLAID_CLIENT_ID: "vault-client",
+      PLAID_SECRET: "vault-secret",
+      PLAID_ENV: "production",
+      PLAID_TOKEN_ENCRYPTION_KEY: key,
+      PLAID_REDIRECT_URI: "https://emerald.example/settings/integrations/banking",
+    });
+    assert.equal(merged.PLAID_CLIENT_ID, "vault-client");
+    const config = plaidConfig(merged);
+    assert.equal(config.ready, true);
+    assert.equal(config.environment, "production");
+    assert.equal(config.clientId, "vault-client");
+    assert.equal(config.secret, "vault-secret");
+    assert.equal(config.redirectUri, "https://emerald.example/settings/integrations/banking");
+    assert.equal(config.webhookUrl, "https://emerald.example/api/webhooks/plaid");
+    assert.equal(plaidConnectGate(config).allow, true);
+
+    const body = plaidLinkTokenBody({
+      businessId: "biz-a",
+      accessToken: null,
+      redirectUri: config.redirectUri,
+      webhookUrl: config.webhookUrl,
+    });
+    assert.equal(body.redirect_uri, config.redirectUri);
+    assert.equal(body.webhook, config.webhookUrl);
+    assert.deepEqual(body.products, ["transactions"]);
+    const update = plaidLinkTokenBody({
+      businessId: "biz-a",
+      accessToken: "access-sandbox",
+      redirectUri: null,
+      webhookUrl: null,
+    });
+    assert.equal(update.access_token, "access-sandbox");
+    assert.equal("products" in update, false);
+    assert.equal("redirect_uri" in update, false);
+    assert.equal(plaidRedirectUri("http://evil.example/settings/integrations/banking"), null);
+    assert.equal(plaidRedirectUri("http://localhost:3000/settings/integrations/banking"), "http://localhost:3000/settings/integrations/banking");
+  });
+
+  it("rejects a bad Plaid webhook signature and ignores unrelated webhook codes", () => {
+    assert.equal(plaidWebhookAction({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE" }), "sync");
+    assert.equal(plaidWebhookAction({ webhook_type: "ITEM", webhook_code: "USER_PERMISSION_REVOKED" }), "disconnect");
+    assert.equal(plaidWebhookAction({ webhook_type: "ITEM", webhook_code: "ERROR" }), "error");
+    assert.equal(plaidWebhookAction({ webhook_type: "ITEM", webhook_code: "WEBHOOK_UPDATE_ACKNOWLEDGED" }), "ignore");
+
+    const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const jwk = publicKey.export({ format: "jwk" }) as PlaidVerificationJwk;
+    jwk.expired_at = null;
+    const rawBody = JSON.stringify({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE", item_id: "item-1" });
+    const now = 1_700_000_000;
+    const header = base64Url(JSON.stringify({ alg: "ES256", kid: "kid-1", typ: "JWT" }));
+    const payload = base64Url(JSON.stringify({ iat: now, request_body_sha256: plaidWebhookBodyHash(rawBody) }));
+    const signature = sign("sha256", Buffer.from(`${header}.${payload}`), { key: privateKey, dsaEncoding: "ieee-p1363" });
+    const jwt = `${header}.${payload}.${base64Url(signature)}`;
+    assert.equal(plaidWebhookKeyId(jwt), "kid-1");
+    assert.deepEqual(verifyPlaidWebhookJwt({ jwt, rawBody, jwk, now }), { ok: true });
+    const tampered = verifyPlaidWebhookJwt({ jwt, rawBody: `${rawBody} `, jwk, now });
+    assert.equal(tampered.ok, false);
+    if (!tampered.ok) assert.equal(tampered.reason, "body");
+    const stale = verifyPlaidWebhookJwt({ jwt, rawBody, jwk, now: now + 301 });
+    assert.equal(stale.ok, false);
+    assert.equal(createHash("sha256").update(rawBody).digest("hex"), plaidWebhookBodyHash(rawBody));
+  });
+
+  it("keeps Plaid connect on the vault helper and scopes webhook handling off the client", () => {
+    const root = process.cwd();
+    const service = fs.readFileSync(path.join(root, "src/lib/banking/plaid-service.ts"), "utf8");
+    const load = fs.readFileSync(path.join(root, "src/lib/credentials/load.ts"), "utf8");
+    const page = fs.readFileSync(path.join(root, "src/app/(dashboard)/settings/integrations/banking/page.tsx"), "utf8");
+    const panel = fs.readFileSync(path.join(root, "src/components/settings/banking-panel.tsx"), "utf8");
+    const webhook = fs.readFileSync(path.join(root, "src/app/api/webhooks/plaid/route.ts"), "utf8");
+    assert.match(service, /loadPlaidConfig/);
+    assert.equal(service.includes("process.env.PLAID"), false);
+    assert.match(service, /businessId/);
+    assert.match(load, /getPlatformCredential/);
+    assert.match(load, /PLAID_RUNTIME_KEYS/);
+    assert.equal(page.includes("process.env"), false);
+    assert.match(panel, /\/admin\/builder/);
+    assert.equal(panel.includes("process.env"), false);
+    assert.match(webhook, /verifyPlaidWebhookJwt/);
+    assert.equal(webhook.includes("requireAuth"), false);
+    assert.equal(webhook.includes("PLAID_SECRET"), false);
   });
 });

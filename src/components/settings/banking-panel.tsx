@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+
+const LINK_STORAGE_KEY = "emeraldone.plaid.link";
 
 type Account = {
   id: string;
@@ -20,7 +23,11 @@ type Account = {
 type BankingPanelProps = {
   credentialsReady: boolean;
   missing: string[];
+  connectMessage: string | null;
   environment: string;
+  redirectUri: string | null;
+  webhookUrl: string | null;
+  syncPageLimit: number;
   status: string;
   institutionId: string | null;
   institutionName: string | null;
@@ -33,13 +40,16 @@ type BankingPanelProps = {
 };
 
 type PlaidHandler = { open: () => void; destroy?: () => void };
+type InstitutionMeta = { institution?: { institution_id?: string; name?: string } | null };
+type StoredLink = { linkToken: string; updateMode: boolean };
 
 declare global {
   interface Window {
     Plaid?: {
       create: (config: {
         token: string;
-        onSuccess: (publicToken: string, metadata: { institution?: { institution_id?: string; name?: string } | null }) => void;
+        receivedRedirectUri?: string;
+        onSuccess: (publicToken: string, metadata: InstitutionMeta) => void;
         onExit?: (error: { display_message?: string; error_message?: string } | null) => void;
       }) => PlaidHandler;
     };
@@ -58,11 +68,67 @@ function loadPlaidScript(): Promise<void> {
   });
 }
 
+function rememberLink(value: StoredLink) {
+  sessionStorage.setItem(LINK_STORAGE_KEY, JSON.stringify(value));
+}
+
+function readRememberedLink(): StoredLink | null {
+  const raw = sessionStorage.getItem(LINK_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredLink;
+    if (!parsed.linkToken) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function BankingPanel(props: BankingPanelProps) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(props.lastSyncError);
+  const oauthStarted = useRef(false);
   const connected = props.status === "CONNECTED";
+
+  async function openPlaid(linkToken: string, updateMode: boolean, receivedRedirectUri?: string) {
+    await loadPlaidScript();
+    if (!window.Plaid) throw new Error("Plaid Link did not load");
+    rememberLink({ linkToken, updateMode });
+    const handler = window.Plaid.create({
+      token: linkToken,
+      receivedRedirectUri,
+      onSuccess: (publicToken, metadata) => {
+        sessionStorage.removeItem(LINK_STORAGE_KEY);
+        void finishLink(publicToken, metadata, updateMode);
+      },
+      onExit: (exitError) => {
+        setBusy(null);
+        if (exitError) setError(exitError.display_message || exitError.error_message || "Bank linking was cancelled");
+      },
+    });
+    handler.open();
+  }
+
+  useEffect(() => {
+    if (oauthStarted.current || !props.credentialsReady) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("oauth_state_id")) return;
+    oauthStarted.current = true;
+    const stored = readRememberedLink();
+    if (!stored) {
+      setError("Bank linking expired. Start Connect bank again.");
+      return;
+    }
+    setBusy("link");
+    void openPlaid(stored.linkToken, stored.updateMode, window.location.href).catch((linkError: unknown) => {
+      setBusy(null);
+      const message = linkError instanceof Error ? linkError.message : "Could not resume bank linking";
+      setError(message);
+    });
+    // Resume only on the OAuth return load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.credentialsReady]);
 
   async function openLink() {
     setBusy("link");
@@ -73,19 +139,7 @@ export function BankingPanel(props: BankingPanelProps) {
       if (!response.ok || !data?.linkToken) {
         throw new Error(data?.error ?? "Plaid did not issue a link token");
       }
-      await loadPlaidScript();
-      if (!window.Plaid) throw new Error("Plaid Link did not load");
-      const handler = window.Plaid.create({
-        token: data.linkToken,
-        onSuccess: (publicToken, metadata) => {
-          void finishLink(publicToken, metadata, Boolean(data.updateMode));
-        },
-        onExit: (exitError) => {
-          setBusy(null);
-          if (exitError) setError(exitError.display_message || exitError.error_message || "Bank linking was cancelled");
-        },
-      });
-      handler.open();
+      await openPlaid(data.linkToken, Boolean(data.updateMode));
     } catch (linkError) {
       setBusy(null);
       const message = linkError instanceof Error ? linkError.message : "Could not open bank linking";
@@ -118,6 +172,7 @@ export function BankingPanel(props: BankingPanelProps) {
       return;
     }
     toast.success(updateMode ? "Bank reconnected" : "Bank connected");
+    router.replace("/settings/integrations/banking");
     router.refresh();
   }
 
@@ -170,15 +225,30 @@ export function BankingPanel(props: BankingPanelProps) {
 
       {!props.credentialsReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-semibold">Connect a bank needs these platform credentials</p>
-          <ul className="mt-2 list-disc pl-5">
-            {props.missing.map((key) => (
-              <li key={key}><code>{key}</code></li>
-            ))}
-          </ul>
-          <p className="mt-2">Plaid environment is sandbox, development, or production. It defaults to sandbox. A platform admin saves the client id and secret in Builder, which also generates the token encryption key. Saving does not require a host redeploy. Bank passwords are never stored.</p>
+          <p className="font-semibold">Plaid is not in the Builder vault yet</p>
+          <p className="mt-2">{props.connectMessage}</p>
+          {props.missing.length > 0 ? (
+            <ul className="mt-2 list-disc pl-5">
+              {props.missing.map((key) => (
+                <li key={key}><code>{key}</code></li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mt-2">
+            Open <Link className="font-medium underline" href="/admin/builder">Builder → Platform credentials</Link> and save the Plaid client ID and secret.
+            The first save generates the token encryption key. Sandbox, development, or production is the environment field there. It defaults to sandbox.
+            Bank passwords are never stored.
+          </p>
         </div>
-      ) : null}
+      ) : (
+        <p className="text-sm text-slate-500">
+          Plaid environment is {props.environment}, from Builder (host fallback only when the vault value is empty).
+          Each sync imports at most {props.syncPageLimit} pages. If the last sync says partial, run Sync transactions again.
+          Pending bank rows are skipped until they post.
+          {props.redirectUri ? ` OAuth banks return to ${props.redirectUri}.` : " OAuth banks need the redirect URI saved in Builder and allowlisted in the Plaid dashboard."}
+          {props.webhookUrl ? ` Transaction updates post to ${props.webhookUrl}.` : " Manual sync works without an https webhook URL."}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {props.credentialsReady && !connected ? (

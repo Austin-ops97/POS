@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { plaidConfig } from "@/lib/banking/plaid";
+import { PLAID_OAUTH_REDIRECT_PATH, PLAID_WEBHOOK_PATH, plaidConfig, plaidRedirectUri } from "@/lib/banking/plaid";
 import { QUICKBOOKS_CALLBACK_PATH, decryptSecret, encryptSecret, intuitConfig } from "@/lib/integrations/quickbooks";
 import { LINKEDIN_CALLBACK_PATH, META_CALLBACK_PATH, linkedInConfig, metaConfig } from "@/lib/social/providers";
 
@@ -35,6 +35,7 @@ export type PublicProviderCredentials = {
   updatedAt: string | null;
   suggestedRedirect: string | null;
   whitelistRedirect: string | null;
+  suggestedWebhook: string | null;
   environment: string | null;
   fields: PublicCredentialField[];
 };
@@ -56,6 +57,7 @@ type ProviderSpec = {
   fields: FieldSpec[];
   assess: (env: NodeJS.ProcessEnv) => { ready: boolean; missing: readonly string[] };
   environment?: (env: NodeJS.ProcessEnv) => string;
+  webhookPath?: string;
 };
 
 const PROVIDERS: Record<PlatformProviderId, ProviderSpec> = {
@@ -94,10 +96,12 @@ const PROVIDERS: Record<PlatformProviderId, ProviderSpec> = {
     fields: [
       { key: "PLAID_CLIENT_ID", label: "Client ID", kind: "secret" },
       { key: "PLAID_SECRET", label: "Secret", kind: "secret" },
+      { key: "PLAID_REDIRECT_URI", label: "OAuth redirect URI", kind: "redirect", callbackPath: PLAID_OAUTH_REDIRECT_PATH },
       { key: "PLAID_ENV", label: "Environment", kind: "choice", choices: ["sandbox", "development", "production"] },
     ],
     assess: (env) => plaidConfig(env),
     environment: (env) => plaidConfig(env).environment,
+    webhookPath: PLAID_WEBHOOK_PATH,
   },
   intuit: {
     id: "intuit",
@@ -219,7 +223,10 @@ export function planProviderWrite(input: {
     const fromEnv = input.env[field.key]?.trim() ?? "";
     let next = raw || existing || fromEnv;
     if (!next && field.kind === "redirect" && field.callbackPath && origin) {
-      next = `${origin}${field.callbackPath}`;
+      const suggested = `${origin}${field.callbackPath}`;
+      if (field.callbackPath !== PLAID_OAUTH_REDIRECT_PATH || plaidRedirectUri(suggested)) {
+        next = suggested;
+      }
     }
     if (!next && field.kind === "choice" && field.choices?.length) {
       next = field.choices[0];
@@ -234,6 +241,12 @@ export function planProviderWrite(input: {
       return {
         ok: false,
         error: `Invalid platform credentials: ${field.key} must end with ${field.callbackPath}`,
+      };
+    }
+    if (field.callbackPath === PLAID_OAUTH_REDIRECT_PATH && next && !plaidRedirectUri(next)) {
+      return {
+        ok: false,
+        error: `Invalid platform credentials: ${field.key} must be https, or http://localhost, and end with ${field.callbackPath}`,
       };
     }
     if (next) resolved[field.key] = next;
@@ -324,6 +337,8 @@ export function projectPlatformCredentials(input: {
     const redirectField = spec.fields.find((field) => field.kind === "redirect");
     const suggestedRedirect = redirectField?.callbackPath && origin ? `${origin}${redirectField.callbackPath}` : null;
     const storedRedirect = redirectField ? readPlatformCredential(redirectField.key, input.vault, input.env) : null;
+    const webhookOrigin = origin?.startsWith("https://") ? origin : null;
+    const suggestedWebhook = spec.webhookPath && webhookOrigin ? `${webhookOrigin}${spec.webhookPath}` : null;
     const stamps = fields.map((field) => field.updatedAt).filter((stamp): stamp is string => Boolean(stamp));
     return {
       id,
@@ -334,6 +349,7 @@ export function projectPlatformCredentials(input: {
       updatedAt: stamps.sort().at(-1) ?? null,
       suggestedRedirect,
       whitelistRedirect: storedRedirect || suggestedRedirect,
+      suggestedWebhook,
       environment: spec.environment ? spec.environment(merged) : null,
       fields,
     };

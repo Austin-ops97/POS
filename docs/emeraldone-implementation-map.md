@@ -125,7 +125,7 @@ Connections: `ConnectionConversation`, `ConnectionMessage`, `CommunicationCall`,
 
 | Feature | Status | Reuse / add |
 | --- | --- | --- |
-| 16. Bank connection | Done for Plaid scaffolding | Settings → Integrations → Banking. Plaid Link only when `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_TOKEN_ENCRYPTION_KEY` exist. Otherwise the page stays Not connected. Tokens are encrypted. No bank passwords |
+| 16. Bank connection | Done for Plaid Link, exchange, sync, reconnect, and disconnect | Settings → Integrations → Banking. Link token, exchange, sync, disconnect, and `/api/webhooks/plaid` read `getPlatformCredential` (vault first, host fallback). If the vault is empty the page links to `/admin/builder` Platform credentials. Access tokens are encrypted. Sync imports at most 5 pages per click. No bank passwords |
 | 17. Transaction center | Done | `BankTransaction` keeps the imported row and stores category, project, vendor, customer, notes, personal flag, and splits beside it. Company card feeds stay on `CompanyCardTransaction` |
 | 18–20. P&L, charts, tax-ready expenses | Done | Profit and loss composes paid orders, approved expenses, and unmatched business bank withdrawals. Charts are income vs expenses plus an expense donut. Tax summary uses business-defined labels and exports CSV, Excel, PDF, and a receipt zip |
 | 21. Statement import fallback | Done | CSV and Excel imports create `BankStatement` plus `BankTransaction` rows. PDF uploads stay unparsed files |
@@ -182,7 +182,7 @@ These stay server-side. The product stays Not connected until each provider's ap
 | Later phase | What the user must provide |
 | --- | --- |
 | QuickBooks | `INTUIT_CLIENT_ID`, `INTUIT_CLIENT_SECRET`, `INTUIT_REDIRECT_URI` (must match the Intuit app and end in `/api/integrations/quickbooks/callback`), `INTUIT_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `INTUIT_ENVIRONMENT` (`sandbox` or `production`). Official OAuth only. The realm id comes back from Intuit when the user connects |
-| Bank link | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_TOKEN_ENCRYPTION_KEY` (32 bytes, base64), and `PLAID_ENV` (`sandbox`, `development`, or `production`; default `sandbox`). No bank passwords in EmeraldOne |
+| Bank link | Save `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV` (`sandbox`, `development`, or `production`; default `sandbox`) in Builder → Platform credentials. The first save generates `PLAID_TOKEN_ENCRYPTION_KEY` (32 bytes, base64) in the vault. Optional `PLAID_REDIRECT_URI` must be `https` (or `http://localhost`) and end in `/settings/integrations/banking`. Webhook helper is `https://<app>/api/webhooks/plaid`. Host fallback still works when the vault value is empty. The one-time host key for the vault is `CREDENTIALS_ENCRYPTION_KEY`. No bank passwords in EmeraldOne |
 | Social | `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI` (must end in `/api/integrations/meta/callback`), `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI` (must end in `/api/integrations/linkedin/callback`), and `SOCIAL_TOKEN_ENCRYPTION_KEY` (32 bytes, base64). Optional `BLOB_READ_WRITE_TOKEN` for Instagram image URLs. No social passwords |
 
 Already required for the current app, unchanged by this phase: `DATABASE_URL`, `DIRECT_URL`, Clerk keys, Stripe keys, `PLATFORM_ADMIN_EMAILS`. Optional and already wired: Resend, LiveKit, Vercel Blob, Sentry, Upstash Redis, cron secret.

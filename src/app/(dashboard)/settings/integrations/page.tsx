@@ -42,7 +42,7 @@ export default function IntegrationsSettingsPage() {
             Banking
           </CardTitle>
           <CardDescription>
-            Plaid Link for checking, savings, and credit accounts. The page stays not connected until a bank finishes linking. EmeraldOne does not collect bank passwords.
+            Plaid Link for checking, savings, and credit accounts. Platform keys are saved in Builder → Platform credentials. The page stays not connected until a bank finishes linking. EmeraldOne does not collect bank passwords.
           </CardDescription>
         </CardHeader>
         <CardContent>

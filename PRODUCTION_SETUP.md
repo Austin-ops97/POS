@@ -76,7 +76,7 @@ https://your-production-domain.com/api/webhooks/stripe
 2. Subscribe to Connect/payment events: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `account.updated`.
 3. Add the webhook signing secret to `STRIPE_WEBHOOK_SECRET`.
 4. Enable Stripe Connect and set `STRIPE_CONNECT_CLIENT_ID`.
-5. For in-person card payments, configure Stripe Terminal locations/readers in Stripe and connect the merchant account through Settings -> Payments.
+5. Card checkout on the register is online card entry through Stripe Connect. Stripe Terminal reader records and connection tokens exist for a later in-person phase. Tap to Pay on iPhone or iPad is not wired. See `docs/stripe-terminal-tap-to-pay.md`.
 
 ## First Use
 
