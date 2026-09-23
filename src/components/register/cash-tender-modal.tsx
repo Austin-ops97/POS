@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PaySheetFrame } from "@/components/register/pay-sheet-frame";
 import { formatCurrency } from "@/lib/utils";
 import {
   calculateChangeDue,
@@ -106,23 +107,18 @@ export function CashTenderModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descId}
+    <PaySheetFrame
+      open={open}
+      titleId={titleId}
+      descId={descId}
+      dismissDisabled={processing}
+      onDismiss={onCancel}
     >
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={processing ? undefined : onCancel}
-      />
-      <div className="relative flex max-h-[95vh] w-full max-w-md flex-col overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-6 shadow-2xl sm:rounded-2xl">
         <button
           type="button"
           onClick={onCancel}
           disabled={processing}
-          className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+          className="sticky top-0 z-10 ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
           aria-label="Close"
         >
           <X className="h-5 w-5" />
@@ -250,7 +246,6 @@ export function CashTenderModal({
             {processing ? "Processing..." : "Confirm payment"}
           </Button>
         </div>
-      </div>
-    </div>
+    </PaySheetFrame>
   );
 }

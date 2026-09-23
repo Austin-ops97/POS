@@ -5,6 +5,7 @@ import { requireAuth, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { serializeDecimal, validateOrderInventoryAvailability } from "@/lib/order-service";
+import { isTerminalPaymentIntent } from "@/lib/register/tap-to-pay";
 import { getStripeOrThrow } from "@/lib/stripe";
 import { toDecimal } from "@/lib/order-service";
 import { resolveRegisterCashier } from "@/lib/register-cashier";
@@ -60,13 +61,15 @@ export async function POST(request: Request) {
       return jsonError("Order total must be greater than zero", 400);
     }
 
-    const existingPayment = order.payments.find((p) => p.stripePaymentIntentId);
-    if (existingPayment?.stripePaymentIntentId) {
+    for (const existingPayment of order.payments) {
+      if (!existingPayment.stripePaymentIntentId) continue;
       const existingIntent = await stripe.paymentIntents.retrieve(
         existingPayment.stripePaymentIntentId,
         undefined,
         { stripeAccount: stripeAccount.stripeAccountId }
       );
+      // A Tap to Pay card_present intent cannot be confirmed in the Payment Element.
+      if (isTerminalPaymentIntent(existingIntent)) continue;
 
       return NextResponse.json({
         paymentIntentId: existingIntent.id,

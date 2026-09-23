@@ -3,6 +3,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { mobileCartSheetClassName } from "@/lib/register/pay-sheet";
 import { cn } from "@/lib/utils";
 
 const Sheet = DialogPrimitive.Root;
@@ -32,6 +33,7 @@ const sheetSideClasses = {
   bottom:
     "inset-x-0 bottom-0 max-h-[min(92dvh,100%)] w-full rounded-t-2xl border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
   top: "inset-x-0 top-0 max-h-[min(92dvh,100%)] w-full rounded-b-2xl border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+  full: `${mobileCartSheetClassName()} data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom`,
 } as const;
 
 type SheetContentProps = React.ComponentPropsWithoutRef<
@@ -39,14 +41,15 @@ type SheetContentProps = React.ComponentPropsWithoutRef<
 > & {
   side?: keyof typeof sheetSideClasses;
   showClose?: boolean;
+  hideOverlay?: boolean;
 };
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ side = "left", className, children, showClose = true, ...props }, ref) => (
+>(({ side = "left", className, children, showClose = true, hideOverlay = false, ...props }, ref) => (
   <SheetPortal>
-    <SheetOverlay />
+    {hideOverlay ? null : <SheetOverlay />}
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
@@ -54,7 +57,9 @@ const SheetContent = React.forwardRef<
         sheetSideClasses[side],
         side === "left" || side === "right"
           ? "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
-          : "pb-[env(safe-area-inset-bottom)]",
+          : side === "full"
+            ? "p-0"
+            : "pb-[env(safe-area-inset-bottom)]",
         className
       )}
       {...props}

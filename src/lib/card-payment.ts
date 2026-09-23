@@ -6,6 +6,7 @@ import {
   OrderServiceError,
 } from "@/lib/order-service";
 import type Stripe from "stripe";
+import { readChargeCardDetails } from "@/lib/register/card-charge-details";
 
 export async function finalizeSuccessfulCardPayment(
   paymentIntent: Stripe.PaymentIntent,
@@ -48,8 +49,9 @@ export async function finalizeSuccessfulCardPayment(
     chargeId = charge;
   } else if (charge && typeof charge === "object") {
     chargeId = charge.id;
-    cardLast4 = charge.payment_method_details?.card?.last4 ?? undefined;
-    cardBrand = charge.payment_method_details?.card?.brand ?? undefined;
+    const cardDetails = readChargeCardDetails(charge.payment_method_details);
+    cardLast4 = cardDetails.cardLast4;
+    cardBrand = cardDetails.cardBrand;
   }
 
   await db.$transaction(async (tx) => {

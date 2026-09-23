@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CreditCard,
   Loader2,
+  Nfc,
   X,
   XCircle,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CardPaymentCheckout } from "@/components/register/card-payment-form";
+import { PaySheetFrame } from "@/components/register/pay-sheet-frame";
 import { OrderReceiptActions } from "@/components/receipts/order-receipt-actions";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
 import { SignatureCapture } from "@/components/dashboard/signature-capture";
@@ -39,7 +41,7 @@ type PaymentModalProps = {
   open: boolean;
   onClose: () => void;
   onNewSale: () => void;
-  method: "CARD" | "CASH";
+  method: "CARD" | "CASH" | "TAP";
   amount: number;
   state: PaymentModalState;
   message?: string;
@@ -98,33 +100,24 @@ export function PaymentModal({
     receiptEmail.trim().length > 0 &&
     !isValidReceiptEmail(receiptEmail);
 
+  const methodLabel =
+    method === "CASH" ? "Cash" : method === "TAP" ? "Tap to Pay" : "Card";
+  const canDismiss = state !== "loading" && state !== "card_entry";
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descId}
+    <PaySheetFrame
+      open={open}
+      titleId={titleId}
+      descId={descId}
+      wide={state === "success" && signaturesEnabled && Boolean(orderId)}
+      dismissDisabled={!canDismiss}
+      onDismiss={canDismiss ? (state === "success" ? onNewSale : onClose) : undefined}
     >
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={
-          state !== "loading" && state !== "card_entry"
-            ? state === "success"
-              ? onNewSale
-              : onClose
-            : undefined
-        }
-      />
-      <div className={cn(
-        "relative flex max-h-[95vh] w-full flex-col overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-6 shadow-2xl sm:rounded-2xl sm:p-8",
-        state === "success" && signaturesEnabled && orderId ? "max-w-lg" : "max-w-md"
-      )}>
         {state !== "loading" && (
           <button
             type="button"
             onClick={state === "success" ? onNewSale : onClose}
-            className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="sticky top-0 z-10 ml-auto inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -193,15 +186,15 @@ export function PaymentModal({
                 <Loader2 className="h-10 w-10 animate-spin text-slate-600" />
               </div>
               <h2 id={titleId} className="text-xl font-semibold text-slate-900">
-                Processing {method === "CARD" ? "card" : "cash"} payment
+                Processing {methodLabel.toLowerCase()} payment
               </h2>
               <p id={descId} className="mt-2 text-3xl font-bold text-slate-900">
                 {formatCurrency(amount)}
               </p>
               <p className="mt-4 text-sm text-slate-500">
-                {method === "CARD"
-                  ? message || "Preparing card payment..."
-                  : "Recording cash payment..."}
+                {method === "CASH"
+                  ? "Recording cash payment..."
+                  : message || "Preparing card payment..."}
               </p>
             </>
           )}
@@ -226,12 +219,14 @@ export function PaymentModal({
                 </p>
               )}
               <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
-                {method === "CARD" ? (
-                  <CreditCard className="h-4 w-4" />
-                ) : (
+                {method === "CASH" ? (
                   <Banknote className="h-4 w-4" />
+                ) : method === "TAP" ? (
+                  <Nfc className="h-4 w-4" />
+                ) : (
+                  <CreditCard className="h-4 w-4" />
                 )}
-                <span>{method === "CARD" ? "Card" : "Cash"} payment</span>
+                <span>{methodLabel} payment</span>
               </div>
               {changeDue != null && changeDue > 0 && (
                 <p className="mt-2 rounded-lg bg-amber-50 px-4 py-2 text-base font-semibold text-amber-900">
@@ -306,19 +301,19 @@ export function PaymentModal({
               <div
                 className={cn(
                   "mb-6 flex h-20 w-20 items-center justify-center rounded-full",
-                  method === "CARD" ? "bg-blue-100" : "bg-emerald-100"
+                  method === "CASH" ? "bg-emerald-100" : "bg-blue-100"
                 )}
               >
-                {method === "CARD" ? (
-                  <CreditCard
-                    className={cn("h-10 w-10", "text-blue-600")}
-                  />
-                ) : (
+                {method === "CASH" ? (
                   <Banknote className="h-10 w-10 text-emerald-600" />
+                ) : method === "TAP" ? (
+                  <Nfc className="h-10 w-10 text-blue-600" />
+                ) : (
+                  <CreditCard className="h-10 w-10 text-blue-600" />
                 )}
               </div>
               <h2 id={titleId} className="text-xl font-semibold text-slate-900">
-                Confirm {method === "CARD" ? "card" : "cash"} payment
+                Confirm {methodLabel.toLowerCase()} payment
               </h2>
               <p id={descId} className="mt-2 text-3xl font-bold text-slate-900">
                 {formatCurrency(amount)}
@@ -326,7 +321,6 @@ export function PaymentModal({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </PaySheetFrame>
   );
 }

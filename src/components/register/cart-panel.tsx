@@ -7,11 +7,14 @@ import {
   Pause,
   RotateCcw,
   PlusCircle,
+  Nfc,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { QuantityStepper } from "@/components/ui/quantity-stepper";
 import { cn, formatCurrency } from "@/lib/utils";
+import { payActionPlacement, payFooterClassName } from "@/lib/register/pay-sheet";
 import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
 
@@ -20,6 +23,8 @@ type CartPanelProps = {
   taxRate?: number;
   onPayCash: () => void;
   onPayCard: () => void;
+  onPayTap: () => void;
+  onClose?: () => void;
   onHold: () => void;
   onResumeHeld?: () => void;
   onClear: () => void;
@@ -36,6 +41,8 @@ export function CartPanel({
   taxRate = 0,
   onPayCash,
   onPayCard,
+  onPayTap,
+  onClose,
   onHold,
   onResumeHeld,
   onClear,
@@ -79,24 +86,44 @@ export function CartPanel({
   return (
     <div
       className={cn(
-        "flex h-full flex-col",
+        "flex h-full min-h-0 flex-col",
         dark ? "bg-slate-900 text-white" : "bg-white text-slate-900 border-l border-slate-200",
         className
       )}
     >
       <div
         className={cn(
-          "flex items-center justify-between border-b px-5 py-4",
+          "flex gap-3 border-b px-5 py-4",
+          onClose
+            ? "flex-col pt-[max(1rem,env(safe-area-inset-top))]"
+            : "items-center justify-between",
           dark ? "border-slate-700" : "border-slate-200"
         )}
       >
-        <div>
-          <h2 className="text-lg font-semibold">Current Sale</h2>
-          <p className={cn("text-sm", dark ? "text-slate-400" : "text-slate-500")}>
-            {itemCount} {itemCount === 1 ? "item" : "items"}
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">Current Sale</h2>
+            <p className={cn("text-sm", dark ? "text-slate-400" : "text-slate-500")}>
+              {itemCount} {itemCount === 1 ? "item" : "items"}
+            </p>
+          </div>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className={cn(
+                "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg",
+                dark
+                  ? "text-white hover:bg-slate-800"
+                  : "text-slate-500 hover:bg-slate-100"
+              )}
+              aria-label="Close sale"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {onResumeHeld && (
             <Button
               variant={dark ? "secondary" : "outline"}
@@ -191,7 +218,7 @@ export function CartPanel({
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
         {items.length === 0 ? (
           <div
             className={cn(
@@ -268,7 +295,8 @@ export function CartPanel({
 
       <div
         className={cn(
-          "border-t px-5 py-4",
+          "border-t",
+          payFooterClassName(),
           dark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
         )}
       >
@@ -354,23 +382,51 @@ export function CartPanel({
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button
-            size="xl"
-            variant="success"
-            className="h-16 text-lg font-semibold"
-            onClick={onPayCash}
-            disabled={disabled || items.length === 0}
-          >
-            Cash
-          </Button>
-          <Button
-            size="xl"
-            className="h-16 bg-blue-600 text-lg font-semibold hover:bg-blue-700"
-            onClick={onPayCard}
-            disabled={disabled || items.length === 0}
-          >
-            Card
-          </Button>
+          {payActionPlacement().map((action) => {
+            if (action.id === "cash") {
+              return (
+                <Button
+                  key={action.id}
+                  size="xl"
+                  variant="success"
+                  className={cn(action.className, "h-16 text-lg font-semibold")}
+                  onClick={onPayCash}
+                  disabled={disabled || items.length === 0}
+                >
+                  Cash
+                </Button>
+              );
+            }
+            if (action.id === "card") {
+              return (
+                <Button
+                  key={action.id}
+                  size="xl"
+                  className={cn(
+                    action.className,
+                    "h-16 bg-blue-600 text-lg font-semibold hover:bg-blue-700"
+                  )}
+                  onClick={onPayCard}
+                  disabled={disabled || items.length === 0}
+                >
+                  Card
+                </Button>
+              );
+            }
+            return (
+              <Button
+                key={action.id}
+                size="xl"
+                variant={dark ? "secondary" : "outline"}
+                className={cn(action.className, "h-16 text-lg font-semibold")}
+                onClick={onPayTap}
+                disabled={disabled || items.length === 0}
+              >
+                <Nfc className="h-5 w-5" aria-hidden="true" />
+                Tap to Pay
+              </Button>
+            );
+          })}
         </div>
       </div>
     </div>
