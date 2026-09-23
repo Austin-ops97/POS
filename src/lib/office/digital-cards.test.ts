@@ -308,6 +308,10 @@ describe("Apple Wallet pass", () => {
     const document = JSON.parse(await zip.file("pass.json")!.async("string"));
     assert.equal(document.barcode.message, url);
     assert.equal(document.barcodes[0].format, "PKBarcodeFormatQR");
+    assert.equal(document.storeCard.primaryFields[0].value, "Ada Lovelace");
+    assert.equal(document.storeCard.headerFields[0].value, "Emerald Vale");
+    assert.equal(document.generic, undefined);
+    assert.ok(zip.file("strip.png"));
     assert.doesNotMatch(JSON.stringify(document), /BEGIN:VCARD/i);
     const manifest = JSON.parse(await zip.file("manifest.json")!.async("string"));
     const passJson = await zip.file("pass.json")!.async("nodebuffer");

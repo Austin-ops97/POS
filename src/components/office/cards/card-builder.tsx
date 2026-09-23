@@ -200,10 +200,18 @@ export function CardBuilder({ initial, shareOrigin }: { initial: EditorCard; sha
   const published = card.status === "PUBLISHED";
 
   return (
-    <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-br from-emerald-50/90 via-white/75 to-slate-200/80 p-3 shadow-[0_30px_80px_-48px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:p-5">
-      <div className="pointer-events-none absolute -left-16 top-0 h-40 w-40 rounded-full bg-emerald-200/50 blur-3xl" />
+    <div className="relative mx-auto flex min-h-0 w-full min-w-0 max-w-6xl flex-1 touch-pan-y flex-col self-stretch overflow-x-hidden overflow-y-auto overscroll-y-contain rounded-[2rem] border border-white/70 bg-gradient-to-br from-emerald-50/90 via-white/75 to-slate-200/80 p-3 pb-24 shadow-[0_30px_80px_-48px_rgba(15,23,42,0.55)] sm:p-5">
+      <div className="pointer-events-none absolute left-0 top-0 h-40 w-40 rounded-full bg-emerald-200/50 blur-3xl" />
       <div className="pointer-events-none absolute right-0 top-24 h-48 w-48 rounded-full bg-sky-200/40 blur-3xl" />
       <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/70 bg-white/75 px-3 py-3 shadow-sm backdrop-blur-xl">
+        <Button
+          type="button"
+          variant="outline"
+          className="mr-auto lg:hidden"
+          onClick={() => document.getElementById("card-fields")?.scrollIntoView({ block: "start" })}
+        >
+          Card fields
+        </Button>
         {published ? (
           <Button type="button" variant="outline" disabled={locked || busy !== null} onClick={() => void unpublish()}>
             Unpublish
@@ -216,8 +224,8 @@ export function CardBuilder({ initial, shareOrigin }: { initial: EditorCard; sha
           {busy === "publish" ? "Publishing…" : published ? "Publish changes" : "Publish"}
         </Button>
       </div>
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="order-2 space-y-6 lg:order-1">
+    <div className="grid w-full min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+      <div id="card-fields" className="order-2 min-w-0 space-y-6 lg:order-1">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/office/cards">
@@ -482,7 +490,7 @@ export function CardBuilder({ initial, shareOrigin }: { initial: EditorCard; sha
               )}
             </div>
             {published && card.wallet.ready ? (
-              <Button type="button" size="sm" asChild>
+              <Button type="button" className="w-full sm:w-auto" asChild>
                 <a href={`/api/office/cards/${card.id}/pass`}>Add to Apple Wallet</a>
               </Button>
             ) : null}
@@ -505,12 +513,13 @@ export function CardBuilder({ initial, shareOrigin }: { initial: EditorCard; sha
         )}
       </div>
 
-      <aside className="order-1 lg:sticky lg:top-4 lg:order-2">
+      <aside className="order-1 w-full min-w-0 lg:sticky lg:top-4 lg:order-2">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Live preview</p>
         <GlassBusinessCard
           card={card}
           mode="preview"
           qrSrc={published ? `/api/office/cards/${card.id}/qr` : null}
+          walletHref={published && card.wallet.ready ? `/api/office/cards/${card.id}/pass` : null}
         />
       </aside>
     </div>

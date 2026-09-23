@@ -80,7 +80,7 @@ export function buildPassJson(input: WalletPassInput, env: PasskitEnv) {
     message: input.publicUrl,
     format: "PKBarcodeFormatQR",
     messageEncoding: "iso-8859-1",
-    altText: "Open digital card",
+    altText: "Scan to open this card",
   };
   const secondary = input.jobTitle?.trim() || input.businessName;
   const backFields = [
@@ -101,11 +101,12 @@ export function buildPassJson(input: WalletPassInput, env: PasskitEnv) {
     labelColor: label,
     barcode,
     barcodes: [barcode],
-    generic: {
-      primaryFields: [{ key: "name", label: "NAME", value: input.personName }],
-      secondaryFields: [{ key: "title", label: input.jobTitle?.trim() ? "TITLE" : "BUSINESS", value: secondary }],
+    storeCard: {
+      headerFields: [{ key: "business", label: "BUSINESS", value: input.businessName.slice(0, 40) || "Card" }],
+      primaryFields: [{ key: "name", label: "NAME", value: input.personName.slice(0, 40) }],
+      secondaryFields: [{ key: "title", label: input.jobTitle?.trim() ? "TITLE" : "CARD", value: secondary.slice(0, 40) }],
       auxiliaryFields: input.phone?.trim()
-        ? [{ key: "phone", label: "PHONE", value: input.phone.trim() }]
+        ? [{ key: "phone", label: "PHONE", value: input.phone.trim().slice(0, 40) }]
         : [],
       backFields,
     },
@@ -261,6 +262,8 @@ export async function createBusinessCardPass(
   files.set("icon@2x.png", brandedPng(58, 58, input.theme));
   files.set("logo.png", brandedPng(160, 50, input.theme));
   files.set("logo@2x.png", brandedPng(320, 100, input.theme));
+  files.set("strip.png", brandedPng(375, 123, input.theme));
+  files.set("strip@2x.png", brandedPng(750, 246, input.theme));
 
   const manifest: Record<string, string> = {};
   for (const [name, body] of files) {
