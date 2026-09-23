@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Globe, Mail, MapPin, Phone, QrCode, UserRound } from "lucide-react";
-import { cardPalette } from "@/lib/office/digital-cards/access";
+// Palette lives in theme.ts so this client component never imports access.ts (node:crypto).
+import { cardPalette } from "@/lib/office/digital-cards/theme";
 import { mapsUrl, socialDisplayLabel, telHref, websiteLabel } from "@/lib/office/digital-cards/links";
 import type { SocialNetwork } from "@/lib/validations/digital-cards";
 import { SocialBrandIcon } from "./social-brand-icons";

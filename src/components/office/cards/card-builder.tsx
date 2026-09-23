@@ -15,6 +15,10 @@ import { SOCIAL_NETWORKS, type SocialNetwork } from "@/lib/validations/digital-c
 import { GlassBusinessCard } from "./glass-card";
 import { SocialBrandIcon } from "./social-brand-icons";
 import { socialDisplayLabel } from "@/lib/office/digital-cards/links";
+import { CARD_STYLE_PRESETS } from "@/lib/office/digital-cards/theme";
+
+const glassPanel =
+  "space-y-4 rounded-[1.5rem] border border-white/70 bg-white/70 p-4 shadow-[0_18px_50px_-36px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:p-5";
 
 type EditorCard = PrivateCardDto;
 
@@ -72,13 +76,14 @@ async function readError(response: Response) {
   return body?.error || "Something went wrong. Try again.";
 }
 
-export function CardBuilder({ initial }: { initial: EditorCard }) {
+export function CardBuilder({ initial, shareOrigin }: { initial: EditorCard; shareOrigin: string }) {
   const router = useRouter();
   const [card, setCard] = useState(initial);
   const [saved, setSaved] = useState(() => snapshot(initial));
   const [busy, setBusy] = useState<string | null>(null);
   const dirty = snapshot(card) !== saved;
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin =
+    shareOrigin.replace(/\/$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
   const publicUrl = card.publicPath ? `${origin}${card.publicPath}` : "";
 
   function patch(partial: Partial<EditorCard>) {
@@ -195,8 +200,10 @@ export function CardBuilder({ initial }: { initial: EditorCard }) {
   const published = card.status === "PUBLISHED";
 
   return (
-    <div className="mx-auto max-w-6xl pb-8">
-      <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-end gap-2 border-b border-slate-200 bg-slate-50/95 py-3 backdrop-blur-xl">
+    <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-br from-emerald-50/90 via-white/75 to-slate-200/80 p-3 shadow-[0_30px_80px_-48px_rgba(15,23,42,0.55)] backdrop-blur-xl sm:p-5">
+      <div className="pointer-events-none absolute -left-16 top-0 h-40 w-40 rounded-full bg-emerald-200/50 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-48 w-48 rounded-full bg-sky-200/40 blur-3xl" />
+      <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/70 bg-white/75 px-3 py-3 shadow-sm backdrop-blur-xl">
         {published ? (
           <Button type="button" variant="outline" disabled={locked || busy !== null} onClick={() => void unpublish()}>
             Unpublish
@@ -222,7 +229,7 @@ export function CardBuilder({ initial }: { initial: EditorCard }) {
           {dirty ? <span className="text-xs text-slate-500">Unsaved changes</span> : null}
         </div>
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className={glassPanel}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">Logo and business</h2>
@@ -304,7 +311,7 @@ export function CardBuilder({ initial }: { initial: EditorCard }) {
           ))}
         </RepeatSection>
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className={glassPanel}>
           <h2 className="text-base font-semibold text-slate-950">Contact</h2>
           <Field label="Email">
             <Input type="email" value={card.email} disabled={locked} onChange={(event) => patch({ email: event.target.value })} />
@@ -425,8 +432,31 @@ export function CardBuilder({ initial }: { initial: EditorCard }) {
           ))}
         </RepeatSection>
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <h2 className="text-base font-semibold text-slate-950">Colors</h2>
+        <section className={glassPanel}>
+          <h2 className="text-base font-semibold text-slate-950">Colors and styles</h2>
+          <div className="flex flex-wrap gap-2">
+            {CARD_STYLE_PRESETS.map((preset) => {
+              const active =
+                card.theme.accent.toLowerCase() === preset.theme.accent &&
+                card.theme.gradientFrom.toLowerCase() === preset.theme.gradientFrom &&
+                card.theme.gradientTo.toLowerCase() === preset.theme.gradientTo;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => patch({ theme: { ...preset.theme } })}
+                  className={`min-h-11 rounded-full border px-3 text-sm font-semibold transition ${
+                    active
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-white/80 bg-white/70 text-slate-700 hover:bg-white"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <ColorField label="Accent" value={card.theme.accent} disabled={locked} onChange={(accent) => patch({ theme: { ...card.theme, accent } })} />
             <ColorField label="Gradient start" value={card.theme.gradientFrom} disabled={locked} onChange={(gradientFrom) => patch({ theme: { ...card.theme, gradientFrom } })} />
@@ -435,7 +465,7 @@ export function CardBuilder({ initial }: { initial: EditorCard }) {
         </section>
 
         {card.slug ? (
-          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <section className={glassPanel}>
             <h2 className="text-base font-semibold text-slate-950">Share</h2>
             <p className="break-all text-sm text-slate-600">{publicUrl}</p>
             <div className="flex flex-wrap gap-2">
@@ -534,7 +564,7 @@ function RepeatSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className={glassPanel}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-slate-950">{title}</h2>
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onAdd}>

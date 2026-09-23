@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import forge from "node-forge";
 import JSZip from "jszip";
-import { cardPalette, type CardTheme } from "./access";
+import { cardPalette, type CardTheme } from "./theme";
 
 /**
  * Apple Wallet for a published digital card.

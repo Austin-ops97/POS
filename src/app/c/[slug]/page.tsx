@@ -22,7 +22,9 @@ export async function generateMetadata({ params }: Params) {
       jobTitle: pub.jobTitle,
       note: pub.note,
       pageUrl: origin ? publicCardUrl(origin, pub.slug) : null,
-      imageUrl: absoluteUrl(origin, pub.logoUrl),
+      imageUrl: origin
+        ? `${publicCardUrl(origin, pub.slug)}/opengraph-image`
+        : absoluteUrl(origin, pub.logoUrl),
     })
   );
 }

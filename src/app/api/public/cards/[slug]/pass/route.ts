@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError } from "@/lib/api-utils";
 import { publicCardUrl, requestOrigin } from "@/lib/office/digital-cards/access";
+import { normalizeTheme } from "@/lib/office/digital-cards/theme";
 import { createBusinessCardPass, PasskitConfigError } from "@/lib/office/digital-cards/passkit";
 import { getPublishedDigitalCard } from "@/lib/office/digital-cards/service";
 import { vCardFilename } from "@/lib/office/digital-cards/vcard";
@@ -21,7 +22,7 @@ export async function GET(request: Request, { params }: Params) {
       phone: card.phones.find((phone) => phone.visible)?.number,
       email: card.email,
       website: card.website,
-      theme: normalizeThemeSafe(card.theme),
+      theme: normalizeTheme(card.theme),
     });
     const filename = vCardFilename(card.personName).replace(/\.vcf$/, ".pkpass");
     return new NextResponse(new Uint8Array(pass), {
@@ -42,11 +43,3 @@ export async function GET(request: Request, { params }: Params) {
   }
 }
 
-function normalizeThemeSafe(theme: unknown) {
-  const raw = theme && typeof theme === "object" ? (theme as Record<string, unknown>) : {};
-  return {
-    accent: String(raw.accent ?? "#34d399"),
-    gradientFrom: String(raw.gradientFrom ?? "#042f2e"),
-    gradientTo: String(raw.gradientTo ?? "#0f172a"),
-  };
-}

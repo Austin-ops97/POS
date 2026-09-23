@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { hasPermission, requireAuth } from "@/lib/auth";
 import { CardBuilder } from "@/components/office/cards/card-builder";
 import { PERMISSIONS } from "@/lib/permissions";
+import { requestOrigin } from "@/lib/office/digital-cards/access";
 import { getDigitalCard } from "@/lib/office/digital-cards/service";
 
 export const dynamic = "force-dynamic";
@@ -27,5 +29,5 @@ export default async function DigitalCardEditorPage({ params }: Params) {
   const { id } = await params;
   const card = await getDigitalCard(ctx, id);
   if (!card) notFound();
-  return <CardBuilder initial={card} />;
+  return <CardBuilder initial={card} shareOrigin={requestOrigin(await headers())} />;
 }

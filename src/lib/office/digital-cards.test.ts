@@ -7,6 +7,7 @@ import JSZip from "jszip";
 import { PUBLIC_ROUTE_PATTERNS } from "@/lib/public-routes";
 import { digitalCardWriteSchema } from "@/lib/validations/digital-cards";
 import {
+  CARD_STYLE_PRESETS,
   DEFAULT_CARD_THEME,
   canEditDigitalCard,
   cardContentPatch,
@@ -22,6 +23,7 @@ import {
 } from "./digital-cards/access";
 import { renderCardQrPng } from "./digital-cards/qr";
 import { buildDigitalCardVCard } from "./digital-cards/vcard";
+import { renderCardOgImage } from "./digital-cards/og-card";
 import { cardShareMetadata, metadataFromShare } from "./digital-cards/share";
 import { createBusinessCardPass, inspectPasskit, PasskitConfigError } from "./digital-cards/passkit";
 
@@ -216,6 +218,7 @@ describe("digital card QR", () => {
 describe("digital card contrast", () => {
   it("keeps ink readable on light and dark gradients", () => {
     assert.equal(cardPalette(DEFAULT_CARD_THEME).ink, "#f8fafc");
+    assert.equal(cardPalette(CARD_STYLE_PRESETS.find((preset) => preset.id === "frost")!.theme).ink, "#0f172a");
     assert.equal(
       cardPalette({ accent: "#fbbf24", gradientFrom: "#f8fafc", gradientTo: "#e2e8f0" }).ink,
       "#0f172a"
@@ -227,6 +230,22 @@ describe("digital card contrast", () => {
     });
     assert.match(unsafe.gradient, /#042f2e/);
     assert.doesNotMatch(unsafe.gradient, /evil|expression|red/);
+  });
+});
+
+describe("digital card share image", () => {
+  it("renders a PNG share image for link previews", async () => {
+    const image = renderCardOgImage({
+      businessName: "Emerald Vale",
+      personName: "Ada Lovelace",
+      jobTitle: "Proprietor",
+      theme: DEFAULT_CARD_THEME,
+      logoSrc: null,
+    });
+    assert.equal(image.headers.get("content-type"), "image/png");
+    const png = Buffer.from(await image.arrayBuffer());
+    assert.equal(png[0], 0x89);
+    assert.equal(png[1], 0x50);
   });
 });
 
