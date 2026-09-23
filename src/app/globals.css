@@ -48,6 +48,27 @@
   }
 }
 
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card-rise {
+  animation: card-rise 0.55s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-rise {
+    animation: none;
+  }
+}
+
 html {
   height: 100%;
   overflow-x: hidden;
