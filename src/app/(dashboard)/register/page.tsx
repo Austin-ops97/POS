@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductGrid, type ProductGridItem } from "@/components/register/product-grid";
 import { CartPanel } from "@/components/register/cart-panel";
 import { PaymentModal, type PaymentModalState } from "@/components/register/payment-modal";
+import { TapToPaySheet } from "@/components/register/tap-to-pay-sheet";
 import { CashTenderModal } from "@/components/register/cash-tender-modal";
 import { CustomItemDialog } from "@/components/register/custom-item-dialog";
 import { DiscountDialog } from "@/components/register/discount-dialog";
@@ -29,9 +30,10 @@ import {
 } from "@/components/ui/sheet";
 import { useCartStore } from "@/stores/cart-store";
 import { calculateOrderTotals } from "@/lib/order-calculator";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { isValidReceiptEmail } from "@/lib/register/receipt-email";
 import { buildCheckoutPayload as serializeCheckoutPayload } from "@/lib/register/checkout-payload";
+import { MOBILE_CART_MEDIA_QUERY } from "@/lib/register/pay-sheet";
 import { BarcodeScanner } from "@/components/barcode/barcode-scanner";
 
 type Category = { id: string; name: string };
@@ -99,7 +101,8 @@ export default function RegisterPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [cashTenderOpen, setCashTenderOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"CARD" | "CASH">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<"CARD" | "CASH" | "TAP">("CASH");
+  const [tapOpen, setTapOpen] = useState(false);
   const [paymentState, setPaymentState] = useState<PaymentModalState>("idle");
   const [paymentMessage, setPaymentMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState<string>();
@@ -451,9 +454,21 @@ export default function RegisterPage() {
       });
   };
 
+  const mobileCartViewport = () =>
+    typeof window !== "undefined" && window.matchMedia(MOBILE_CART_MEDIA_QUERY).matches;
+
+  const dismissMobileCart = () => {
+    if (mobileCartViewport()) setCartOpen(false);
+  };
+
+  const restoreMobileCart = () => {
+    if (mobileCartViewport()) setCartOpen(true);
+  };
+
   const resetCheckoutUi = () => {
     setPaymentOpen(false);
     setCashTenderOpen(false);
+    setTapOpen(false);
     setPaymentState("idle");
     setPaymentMessage("");
     setOrderNumber(undefined);
@@ -478,6 +493,7 @@ export default function RegisterPage() {
       return;
     }
     resetCheckoutUi();
+    restoreMobileCart();
   };
 
   const handlePayCash = () => {
@@ -486,6 +502,7 @@ export default function RegisterPage() {
       return;
     }
     if (checkoutInFlightRef.current || processing) return;
+    dismissMobileCart();
     setPaymentMethod("CASH");
     setReceiptEmail(customerEmail ?? "");
     setSkipReceiptEmail(false);
@@ -555,6 +572,7 @@ export default function RegisterPage() {
     }
     if (checkoutInFlightRef.current || processing) return;
     checkoutInFlightRef.current = true;
+    dismissMobileCart();
     setPaymentMethod("CARD");
     setPaymentOpen(true);
     setPaymentState("loading");
@@ -614,6 +632,23 @@ export default function RegisterPage() {
         checkoutInFlightRef.current = false;
       }
     }
+  };
+
+  const handlePayTap = () => {
+    if (items.length === 0) {
+      toast.error("Add items before checkout");
+      return;
+    }
+    if (checkoutInFlightRef.current || processing || tapOpen) return;
+    checkoutInFlightRef.current = true;
+    dismissMobileCart();
+    setPaymentMethod("TAP");
+    const emailForReceipt = customerEmail ?? "";
+    setReceiptEmail(emailForReceipt);
+    receiptEmailRef.current = emailForReceipt;
+    setSkipReceiptEmail(false);
+    skipReceiptRef.current = false;
+    setTapOpen(true);
   };
 
   const handleHold = async () => {
@@ -714,6 +749,7 @@ export default function RegisterPage() {
     taxRate: primaryTaxRate(taxRates),
     onPayCash: handlePayCash,
     onPayCard: handlePayCard,
+    onPayTap: handlePayTap,
     onHold: handleHold,
     onResumeHeld: handleResumeHeld,
     onClear: clearCart,
@@ -725,7 +761,7 @@ export default function RegisterPage() {
       toast.success("Customer removed");
     },
     onAddDiscount: handleAddDiscount,
-    disabled: processing || paymentOpen || cashTenderOpen,
+    disabled: processing || paymentOpen || cashTenderOpen || tapOpen,
   };
 
   return (
@@ -836,13 +872,24 @@ export default function RegisterPage() {
         </Button>
       </div>
 
-      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-        <SheetContent side="bottom" className="h-[min(92dvh,100%)] p-0 lg:hidden" showClose>
+      <Sheet open={cartOpen} onOpenChange={setCartOpen} modal={false}>
+        <SheetContent
+          side="full"
+          hideOverlay
+          showClose={false}
+          className={cn("p-0 lg:hidden", darkCart ? "bg-slate-900" : "bg-white")}
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>Current sale cart</SheetTitle>
             <SheetDescription>Review items and complete payment</SheetDescription>
           </SheetHeader>
-          <CartPanel {...cartPanelProps} className="h-full border-0" />
+          <CartPanel
+            {...cartPanelProps}
+            onClose={() => setCartOpen(false)}
+            className="min-h-0 flex-1 border-0"
+          />
         </SheetContent>
       </Sheet>
 
@@ -852,7 +899,54 @@ export default function RegisterPage() {
         defaultReceiptEmail={customerEmail}
         processing={processing}
         onConfirm={handleCashTenderConfirm}
-        onCancel={() => setCashTenderOpen(false)}
+        onCancel={() => {
+          setCashTenderOpen(false);
+          restoreMobileCart();
+        }}
+      />
+
+      <TapToPaySheet
+        open={tapOpen}
+        amount={totals.total}
+        defaultReceiptEmail={customerEmail}
+        receiptEmail={receiptEmail}
+        onReceiptEmailChange={(email) => {
+          setReceiptEmail(email);
+          receiptEmailRef.current = email;
+        }}
+        skipReceiptEmail={skipReceiptEmail}
+        onSkipReceiptEmailChange={(skip) => {
+          setSkipReceiptEmail(skip);
+          skipReceiptRef.current = skip;
+        }}
+        onPrepareOrder={resolveOrderForPayment}
+        onSuccess={(orderId, confirmedOrderNumber) => {
+          setTapOpen(false);
+          setPaidOrderId(orderId);
+          setOrderNumber(confirmedOrderNumber);
+          setPaymentMethod("TAP");
+          setPaymentOpen(true);
+          setPaymentState("success");
+          clearCart();
+          checkoutInFlightRef.current = false;
+          setProcessing(false);
+          setCartOpen(false);
+          if (!skipReceiptRef.current && receiptEmailRef.current.trim()) {
+            sendReceiptEmailSafe(orderId, receiptEmailRef.current);
+          }
+        }}
+        onUseCard={() => {
+          setTapOpen(false);
+          checkoutInFlightRef.current = false;
+          setProcessing(false);
+          void handlePayCard();
+        }}
+        onClose={() => {
+          setTapOpen(false);
+          checkoutInFlightRef.current = false;
+          setProcessing(false);
+          restoreMobileCart();
+        }}
       />
 
       <PaymentModal

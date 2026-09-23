@@ -8,6 +8,7 @@ import {
 } from "@/lib/order-service";
 import { markWebhookEventProcessed } from "@/lib/stripe-webhook-idempotency";
 import { captureMonitoringEvent } from "@/lib/monitoring";
+import { readChargeCardDetails } from "@/lib/register/card-charge-details";
 import { getStripeOrThrow } from "@/lib/stripe";
 import type { Order, Payment } from "@prisma/client";
 import type Stripe from "stripe";
@@ -166,8 +167,9 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     chargeId = charge;
   } else if (charge && typeof charge === "object") {
     chargeId = charge.id;
-    cardLast4 = charge.payment_method_details?.card?.last4 ?? undefined;
-    cardBrand = charge.payment_method_details?.card?.brand ?? undefined;
+    const cardDetails = readChargeCardDetails(charge.payment_method_details);
+    cardLast4 = cardDetails.cardLast4;
+    cardBrand = cardDetails.cardBrand;
   }
 
   try {

@@ -1,37 +1,39 @@
 # Stripe Terminal and Tap to Pay
 
-This is the current state of in-person card payments in EmeraldOne. It is not a build plan and it does not add a Tap to Pay screen.
+The register offers three tenders: Cash, Card (typed card in the Payment Element), and Tap to Pay.
 
-## Is Stripe Terminal already in the codebase?
+## What the web register can do
 
-Partly.
+Tap to Pay starts a Stripe Terminal **server-driven** payment when the business has a Connect account and a smart reader (WisePOS E, Reader S700 / S710, supported Verifone readers, or a simulated reader):
 
-- `TerminalReader` is a Prisma model, one row per business and Stripe reader id.
-- `GET /api/stripe/terminal` lists readers for the signed-in business and refreshes status from Stripe when that business has a Connect account.
-- `POST /api/stripe/terminal` with `action: "register"` creates a Stripe Terminal reader from a registration code and stores it for that business.
-- `POST /api/stripe/terminal` with `action: "connection_token"` mints `stripe.terminal.connectionTokens.create` on the connected account.
-- Settings → Payments shows Connect status and a Terminal readers list. The list has no registration form, and the register never requests a connection token.
+1. `GET /api/checkout/terminal` lists readers for a cashier (`process_sale`). It does not require the Settings permission used by `GET /api/stripe/terminal`.
+2. `POST /api/checkout/terminal` with `action: "start"` creates a Connect PaymentIntent with `payment_method_types: ["card_present"]` and `metadata.channel: "terminal"`, then calls `terminal.readers.processPaymentIntent`.
+3. The register polls `action: "status"` until the reader collects the card. Success reuses `finalizeSuccessfulCardPayment`, the same path as a typed card and the `payment_intent.succeeded` webhook.
+4. `action: "cancel"` calls `terminal.readers.cancelAction`.
 
-Platform Stripe keys stay in the host environment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the Connect client id). They are not Builder vault entries.
+Typed Card checkout is unchanged. It still creates an `automatic_payment_methods` PaymentIntent and confirms it with Stripe Elements. A card-present intent is never handed to the Payment Element.
 
-## Is Tap to Pay on iPhone supported?
+`POST /api/stripe/terminal` with `action: "connection_token"` is still available for a future Terminal SDK client. The web register does not use a connection token, because server-driven readers do not need one.
 
-No. Nothing in the repo imports the Stripe Terminal JS SDK, the iOS SDK, or the Android SDK. There is no `card_present` PaymentIntent, no reader discovery, and no Apple Tap to Pay entitlement. The product is a Next.js web app.
+## What a phone browser cannot do
 
-## What about iPad?
+Safari and Chrome cannot take an NFC tap. Tap to Pay on iPhone needs Stripe's Terminal iOS SDK, Apple's Tap to Pay entitlement, and Stripe's approval. iPad is not a Tap to Pay device; it needs a counter reader.
 
-iPad is not supported either. Stripe Tap to Pay on iPhone is an iPhone feature (it does not run on iPad). An iPad cashier would need a Bluetooth or internet reader through the Terminal SDK. That reader path is not connected to checkout.
+If no web-drivable reader is configured, or the only reader is a phone or Bluetooth reader (`mobile_phone_reader`, M2, Chipper, WisePad), the Tap to Pay button stays on screen and explains that:
 
-## What can a cashier do today?
+- use Card to type a card, or
+- connect a Stripe reader in Settings → Payments, and
+- Tap to Pay on iPhone needs the EmeraldOne app.
 
-On the register, card payment uses Stripe Elements (`@stripe/react-stripe-js`). The server creates a PaymentIntent on the business's Stripe Connect account with `automatic_payment_methods` and no `card_present` type. The customer types a card into the Payment Element. Cash checkout is separate. A cashier cannot tap a physical card on an iPhone or iPad.
+The button does not pretend the phone read a card.
 
-Settings → Payments can show readers that were stored earlier. It does not discover a phone, pair a reader, or take a payment on one.
+## Follow-up for Tap to Pay on iPhone
 
-## What a follow-up phase needs
+A native iOS app still has to:
 
-- A Stripe Terminal client: Terminal JS for a browser reader, or a native iOS app for Tap to Pay on iPhone. Web-only checkout cannot take a phone tap.
-- PaymentIntents created as card-present on the connected account, plus the existing connection-token route.
-- A Terminal location on the connected account, reader discovery, and a register action that collects on that reader.
-- For Tap to Pay on iPhone: Stripe's Tap to Pay approval, an iOS app, the Tap to Pay entitlement, and a device that Stripe supports. iPad stays on a physical reader, not Tap to Pay on iPhone.
-- The current webhook already finalizes PaymentIntents that succeed. A card-present intent can reuse that once the register creates one.
+- obtain Stripe Tap to Pay approval and the Apple entitlement
+- embed the Terminal iOS SDK and discover the local `mobile_phone_reader`
+- mint a connection token from `POST /api/stripe/terminal` (`action: "connection_token"`) on the connected account
+- collect a `card_present` PaymentIntent and let the existing webhook finalize it
+
+Until that app exists, in-person taps go through a configured Terminal reader.
