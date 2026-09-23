@@ -1,4 +1,4 @@
-import { PLAID_ENV_VARS, plaidConfig } from "@/lib/banking/plaid";
+import { PLAID_RUNTIME_KEYS, plaidConfig } from "@/lib/banking/plaid";
 import { INTUIT_ENV_VARS, intuitConfig } from "@/lib/integrations/quickbooks";
 import { LINKEDIN_ENV_VARS, META_ENV_VARS, linkedInConfig, metaConfig } from "@/lib/social/providers";
 import { getPlatformCredential } from "./vault";
@@ -21,7 +21,7 @@ export async function loadLinkedInConfig() {
 }
 
 export async function loadPlaidConfig() {
-  const env = await envWithCredentials([...PLAID_ENV_VARS, "PLAID_ENV"]);
+  const env = await envWithCredentials(PLAID_RUNTIME_KEYS);
   return plaidConfig(env);
 }
 

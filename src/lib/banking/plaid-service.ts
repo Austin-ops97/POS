@@ -1,20 +1,23 @@
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { loadPlaidConfig } from "@/lib/credentials/load";
+import { isModuleSettingEnabled } from "@/lib/module-entitlement";
 import type { AuthContext } from "@/lib/auth";
 import { suggestCategory } from "./categorize";
 import { dayStart } from "./filters";
 import { canConnectBank } from "./access";
 import {
   openAccessToken,
+  PLAID_SYNC_PAGE_LIMIT,
   plaidAccountKind,
   plaidAmountToStored,
+  plaidConnectGate,
+  plaidLinkTokenBody,
   safeBankMessage,
   sealAccessToken,
   type PlaidConfig,
 } from "./plaid";
-
-const SYNC_PAGE_LIMIT = 5;
+import { plaidWebhookAction, type PlaidVerificationJwk, type PlaidWebhookPayload } from "./plaid-webhook";
 
 type PlaidAccount = {
   account_id: string;
@@ -54,6 +57,15 @@ async function plaidPost<T>(config: PlaidConfig, path: string, body: Record<stri
     throw new Error(`Invalid Plaid: ${safeBankMessage(json.error_message || json.error_code || "request failed")}`);
   }
   return json;
+}
+
+export async function fetchPlaidWebhookVerificationKey(keyId: string): Promise<PlaidVerificationJwk> {
+  const config = await loadPlaidConfig();
+  const result = await plaidPost<{ key?: PlaidVerificationJwk }>(config, "/webhook_verification_key/get", { key_id: keyId });
+  if (!result.key?.x || !result.key?.y || result.key.kty !== "EC") {
+    throw new Error("Invalid Plaid: verification key was not issued");
+  }
+  return result.key;
 }
 
 function money(value: number | null | undefined): number | null {
@@ -133,10 +145,15 @@ export async function bankConnectionStatus(businessId: string) {
       },
     },
   });
+  const gate = plaidConnectGate(config);
   return {
     credentialsReady: config.ready,
     missing: config.missing,
+    connectMessage: gate.allow ? null : gate.message,
     environment: config.environment,
+    redirectUri: config.redirectUri,
+    webhookUrl: config.webhookUrl,
+    syncPageLimit: PLAID_SYNC_PAGE_LIMIT,
     status: connection?.status ?? "DISCONNECTED",
     institutionId: connection?.institutionId ?? null,
     institutionName: connection?.institutionName ?? null,
@@ -167,14 +184,12 @@ export async function createBankLinkToken(ctx: AuthContext) {
   const accessToken = updateMode && connection?.accessTokenCipher && config.encryptionKey
     ? openAccessToken(connection.accessTokenCipher, config.encryptionKey)
     : null;
-  const body: Record<string, unknown> = {
-    client_name: "EmeraldOne",
-    language: "en",
-    country_codes: ["US"],
-    user: { client_user_id: ctx.business.id },
-  };
-  if (accessToken) body.access_token = accessToken;
-  else body.products = ["transactions"];
+  const body = plaidLinkTokenBody({
+    businessId: ctx.business.id,
+    accessToken,
+    redirectUri: config.redirectUri,
+    webhookUrl: config.webhookUrl,
+  });
   const created = await plaidPost<{ link_token?: string }>(config, "/link/token/create", body);
   if (!created.link_token) throw new Error("Invalid Plaid: link token was not issued");
   return { linkToken: created.link_token, updateMode: Boolean(accessToken) };
@@ -218,6 +233,7 @@ export async function exchangeBankToken(
       lastSyncError: null,
     },
   });
+  await registerItemWebhook(config, exchanged.access_token);
   const accounts = await plaidPost<{ accounts?: PlaidAccount[] }>(config, "/accounts/get", {
     access_token: exchanged.access_token,
   });
@@ -247,7 +263,35 @@ export async function syncBankConnection(ctx: AuthContext) {
   if (!connection || connection.status === "DISCONNECTED" || !connection.accessTokenCipher) {
     throw new Error("Invalid Plaid: the bank is not connected");
   }
+  return runBankSync({
+    businessId: ctx.business.id,
+    employeeId: ctx.employee.id,
+    connection,
+    config,
+  });
+}
+
+async function registerItemWebhook(config: PlaidConfig, accessToken: string) {
+  if (!config.webhookUrl) return;
+  try {
+    await plaidPost(config, "/item/webhook/update", { access_token: accessToken, webhook: config.webhookUrl });
+  } catch (error) {
+    console.error("Plaid webhook update failed", safeBankMessage(error instanceof Error ? error.message : "failed"));
+  }
+}
+
+async function runBankSync(input: {
+  businessId: string;
+  employeeId?: string;
+  connection: { id: string; accessTokenCipher: string | null; syncCursor: string | null };
+  config: PlaidConfig;
+}) {
+  const { businessId, connection, config } = input;
+  if (!config.encryptionKey || !connection.accessTokenCipher) {
+    throw new Error("Invalid Plaid: the bank is not connected");
+  }
   const accessToken = openAccessToken(connection.accessTokenCipher, config.encryptionKey);
+  await registerItemWebhook(config, accessToken);
   let cursor = connection.syncCursor;
   let added = 0;
   let modified = 0;
@@ -255,9 +299,9 @@ export async function syncBankConnection(ctx: AuthContext) {
   let partial = false;
   try {
     const accounts = await plaidPost<{ accounts?: PlaidAccount[] }>(config, "/accounts/get", { access_token: accessToken });
-    const accountIds = await upsertPlaidAccounts(ctx.business.id, connection.id, accounts.accounts ?? []);
-    const categorization = await loadCategorization(ctx.business.id);
-    for (let page = 0; page < SYNC_PAGE_LIMIT; page += 1) {
+    const accountIds = await upsertPlaidAccounts(businessId, connection.id, accounts.accounts ?? []);
+    const categorization = await loadCategorization(businessId);
+    for (let page = 0; page < PLAID_SYNC_PAGE_LIMIT; page += 1) {
       const payload: Record<string, unknown> = { access_token: accessToken };
       if (cursor) payload.cursor = cursor;
       const synced = await plaidPost<{
@@ -267,13 +311,13 @@ export async function syncBankConnection(ctx: AuthContext) {
         next_cursor?: string;
         has_more?: boolean;
       }>(config, "/transactions/sync", payload);
-      const counts = await applyPlaidTransactions(ctx.business.id, accountIds, categorization, synced.added ?? [], synced.modified ?? []);
+      const counts = await applyPlaidTransactions(businessId, accountIds, categorization, synced.added ?? [], synced.modified ?? []);
       added += counts.added;
       modified += counts.modified;
       const removedIds = (synced.removed ?? []).map((row) => row.transaction_id).filter(Boolean);
       if (removedIds.length) {
         const result = await db.bankTransaction.deleteMany({
-          where: { businessId: ctx.business.id, source: "PLAID", externalId: { in: removedIds } },
+          where: { businessId, source: "PLAID", externalId: { in: removedIds } },
         });
         removed += result.count;
       }
@@ -286,7 +330,7 @@ export async function syncBankConnection(ctx: AuthContext) {
         partial = false;
         break;
       }
-      partial = page === SYNC_PAGE_LIMIT - 1;
+      partial = page === PLAID_SYNC_PAGE_LIMIT - 1;
     }
   } catch (error) {
     const message = safeBankMessage(error instanceof Error ? error.message : "sync failed");
@@ -297,14 +341,55 @@ export async function syncBankConnection(ctx: AuthContext) {
     throw new Error(message.startsWith("Invalid Plaid:") ? message : `Invalid Plaid: ${message}`);
   }
   await createAuditLog({
-    businessId: ctx.business.id,
-    employeeId: ctx.employee.id,
+    businessId,
+    employeeId: input.employeeId,
     action: "SETTINGS_CHANGE",
     entity: "BankConnection",
     entityId: connection.id,
-    details: { kind: "BANK_SYNC", added, modified, removed, partial },
+    details: { kind: "BANK_SYNC", added, modified, removed, partial, syncPageLimit: PLAID_SYNC_PAGE_LIMIT },
   });
-  return { ...(await bankConnectionStatus(ctx.business.id)), added, modified, removed, partial };
+  return { ...(await bankConnectionStatus(businessId)), added, modified, removed, partial };
+}
+
+export async function applyVerifiedPlaidWebhook(payload: PlaidWebhookPayload) {
+  const action = plaidWebhookAction(payload);
+  const itemId = payload.item_id?.trim();
+  if (!itemId || action === "ignore") return { received: true, action };
+  const connection = await db.bankConnection.findFirst({
+    where: { itemId, provider: "PLAID" },
+  });
+  if (!connection) return { received: true, action: "unknown_item" };
+  const setting = await db.moduleSetting.findUnique({
+    where: { businessId_module: { businessId: connection.businessId, module: "BANKING" } },
+  });
+  if (!isModuleSettingEnabled(setting)) return { received: true, action: "module_disabled" };
+
+  if (action === "disconnect") {
+    await clearBankLink(connection, undefined);
+    return { received: true, action };
+  }
+  if (action === "error") {
+    const detail = safeBankMessage(payload.error?.error_message || payload.error?.error_code || payload.webhook_code || "bank needs attention");
+    await db.bankConnection.update({
+      where: { id: connection.id },
+      data: { status: "ERROR", lastSyncAt: new Date(), lastSyncStatus: "error", lastSyncError: detail },
+    });
+    await createAuditLog({
+      businessId: connection.businessId,
+      action: "SETTINGS_CHANGE",
+      entity: "BankConnection",
+      entityId: connection.id,
+      details: { kind: "BANK_WEBHOOK", action, itemId },
+    });
+    return { received: true, action };
+  }
+  if (connection.status === "DISCONNECTED" || !connection.accessTokenCipher) {
+    return { received: true, action: "not_connected" };
+  }
+  const config = await loadPlaidConfig();
+  if (!config.ready || !config.encryptionKey) return { received: true, action: "credentials_missing" };
+  await runBankSync({ businessId: connection.businessId, connection, config });
+  return { received: true, action };
 }
 
 async function applyPlaidTransactions(
@@ -374,11 +459,11 @@ async function applyPlaidTransactions(
   return { added: addedCount, modified: modifiedCount };
 }
 
-export async function disconnectBank(ctx: AuthContext) {
-  assertConnect(ctx);
+async function clearBankLink(
+  connection: { id: string; businessId: string; itemId: string | null; accessTokenCipher: string | null },
+  employeeId: string | undefined,
+) {
   const config = await loadPlaidConfig();
-  const connection = await db.bankConnection.findUnique({ where: { businessId: ctx.business.id } });
-  if (!connection) return { status: "DISCONNECTED" as const };
   if (connection.accessTokenCipher && config.ready && config.encryptionKey) {
     try {
       await plaidPost(config, "/item/remove", { access_token: openAccessToken(connection.accessTokenCipher, config.encryptionKey) });
@@ -396,12 +481,19 @@ export async function disconnectBank(ctx: AuthContext) {
     },
   });
   await createAuditLog({
-    businessId: ctx.business.id,
-    employeeId: ctx.employee.id,
+    businessId: connection.businessId,
+    employeeId,
     action: "SETTINGS_CHANGE",
     entity: "BankConnection",
     entityId: connection.id,
     details: { kind: "BANK_DISCONNECTED", provider: "PLAID", itemId: connection.itemId },
   });
+}
+
+export async function disconnectBank(ctx: AuthContext) {
+  assertConnect(ctx);
+  const connection = await db.bankConnection.findUnique({ where: { businessId: ctx.business.id } });
+  if (!connection) return { status: "DISCONNECTED" as const };
+  await clearBankLink(connection, ctx.employee.id);
   return { status: "DISCONNECTED" as const };
 }

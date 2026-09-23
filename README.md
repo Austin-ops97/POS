@@ -127,7 +127,7 @@ Merchants connect their Stripe account via Settings → Payments. Uses Stripe Co
 Card payments on the register use Stripe Elements / PaymentIntents created server-side. Webhooks confirm payment success — the frontend never marks orders as paid.
 
 ### Terminal
-Register and manage Stripe Terminal readers in Settings → Payments. Connection tokens are available via API for future reader-present checkout. Register checkout today uses online card entry, not Tap to Pay on phone.
+Register and manage Stripe Terminal readers in Settings → Payments. Connection tokens are available via API for future reader-present checkout. Register checkout today uses online card entry, not Tap to Pay on iPhone or iPad. See `docs/stripe-terminal-tap-to-pay.md`.
 
 ## Security
 

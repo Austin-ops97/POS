@@ -148,7 +148,28 @@ describe("platform credential vault", () => {
     if (!unknown.ok) assert.match(unknown.error, /CLERK_SECRET_KEY/);
 
     assert.equal(providerClearKeys("meta").includes("SOCIAL_TOKEN_ENCRYPTION_KEY"), false);
-    assert.deepEqual(providerClearKeys("plaid"), ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV"]);
+    assert.deepEqual(providerClearKeys("plaid"), ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_REDIRECT_URI", "PLAID_ENV"]);
+
+    const plaidPlan = planProviderWrite({
+      provider: "plaid",
+      incoming: { PLAID_CLIENT_ID: "id", PLAID_SECRET: "plaidsecretvalue" },
+      vault: {},
+      env: env({ NEXT_PUBLIC_APP_URL: "https://emerald.example" }),
+    });
+    assert.equal(plaidPlan.ok, true);
+    if (!plaidPlan.ok) return;
+    assert.equal(plaidPlan.upserts.PLAID_REDIRECT_URI, "https://emerald.example/settings/integrations/banking");
+    assert.equal(plaidPlan.upserts.PLAID_ENV, "sandbox");
+    assert.equal(Buffer.from(plaidPlan.upserts.PLAID_TOKEN_ENCRYPTION_KEY, "base64").length, 32);
+    const plaidView = projectPlatformCredentials({
+      vault: plaidPlan.upserts,
+      env: env({ NEXT_PUBLIC_APP_URL: "https://emerald.example" }),
+    });
+    const plaid = plaidView.providers.find((provider) => provider.id === "plaid");
+    assert.equal(plaid?.configured, true);
+    assert.equal(plaid?.suggestedWebhook, "https://emerald.example/api/webhooks/plaid");
+    assert.equal(plaid?.whitelistRedirect, "https://emerald.example/settings/integrations/banking");
+    assert.equal(JSON.stringify(plaidView).includes("plaidsecretvalue"), false);
   });
 
   it("denies the credential vault to someone who is not a platform admin", () => {

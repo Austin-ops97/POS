@@ -30,6 +30,7 @@ type ProviderCard = {
   updatedAt: string | null;
   suggestedRedirect: string | null;
   whitelistRedirect: string | null;
+  suggestedWebhook: string | null;
   environment: string | null;
   fields: Field[];
 };
@@ -201,7 +202,27 @@ export function PlatformCredentials() {
               <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-700">
                 <p className="font-medium text-slate-800">Whitelist this redirect URI</p>
                 <p className="mt-1 break-all font-mono">{provider.whitelistRedirect}</p>
+                {provider.id === "plaid" ? (
+                  <p className="mt-1">
+                    Add that exact URI under Plaid → Allowed redirect URIs before an OAuth bank can finish Link.
+                    Saving here stores it in the vault with the client id and secret.
+                  </p>
+                ) : null}
               </div>
+            ) : null}
+            {provider.suggestedWebhook ? (
+              <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-700">
+                <p className="font-medium text-slate-800">Plaid webhook URL</p>
+                <p className="mt-1 break-all font-mono">{provider.suggestedWebhook}</p>
+                <p className="mt-1">
+                  EmeraldOne sends this when Link starts and when a bank connects. Register the same URL in the Plaid dashboard if you keep a team webhook there.
+                  Manual sync still imports transactions when Plaid cannot reach this host.
+                </p>
+              </div>
+            ) : provider.id === "plaid" ? (
+              <p className="text-xs text-slate-500">
+                Set <code>NEXT_PUBLIC_APP_URL</code> to the https site origin to show the Plaid webhook URL. Connect bank and manual sync work without it.
+              </p>
             ) : null}
             {!provider.configured && provider.missing.length > 0 ? (
               <p className="text-xs text-amber-800">Still needed: {provider.missing.join(", ")}</p>

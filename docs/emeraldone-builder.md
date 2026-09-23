@@ -47,10 +47,14 @@ Redirect URIs must end with the callback the provider app whitelists:
 | Meta | `/api/integrations/meta/callback` |
 | LinkedIn | `/api/integrations/linkedin/callback` |
 | Intuit | `/api/integrations/quickbooks/callback` |
+| Plaid OAuth redirect | `/settings/integrations/banking` |
+| Plaid webhook | `/api/webhooks/plaid` |
 
-If `NEXT_PUBLIC_APP_URL` is set, Builder suggests `origin + that path`.
+If `NEXT_PUBLIC_APP_URL` is set, Builder suggests `origin + that path`. Plaid's webhook is shown only when that origin is `https`. Register the OAuth redirect under Plaid → Allowed redirect URIs. EmeraldOne sends the webhook when Link starts and again when a bank connects. Manual sync still imports transactions when Plaid cannot reach the webhook.
 
-`getPlatformCredential(name)` reads the vault first and falls back to `process.env`. Social connect, Plaid Link, and QuickBooks OAuth use that helper, so saving in Builder turns on Connect without a redeploy. Per-business Page, bank, and company links stay where they are today. This vault is only the platform app keys.
+`getPlatformCredential(name)` reads the vault first and falls back to `process.env`. Social connect, Plaid Link, exchange, sync, disconnect, and the Plaid webhook use that helper, so saving in Builder turns on Connect bank without a redeploy. Per-business Page, bank, and company links stay where they are today. This vault is only the platform app keys.
+
+Plaid client id, secret, environment (`sandbox`, `development`, or `production`), and the OAuth redirect are entered in Builder. The first Plaid save generates `PLAID_TOKEN_ENCRYPTION_KEY` in the vault when the host does not already have one. Do not keep those Plaid values in Vercel as the place you edit them. The host still needs `CREDENTIALS_ENCRYPTION_KEY` (32 bytes, base64) and `BUILDER_UNLOCK_SECRET` once. Each Sync click walks at most 5 `/transactions/sync` pages. A partial result means run Sync again. Pending Plaid rows are stored only after they post. One bank connection is stored per business, and every account and transaction write includes that `businessId`.
 
 Vault writes are `PLATFORM_CREDENTIALS_SET` and `PLATFORM_CREDENTIALS_CLEAR` on `BuilderAuditEvent`: actor, time, provider, and key names. The submitted secret is not stored in the audit row.
 
