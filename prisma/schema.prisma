@@ -435,6 +435,7 @@ model Business {
   socialConnections         SocialConnection[]
   socialPosts               SocialPost[]
   socialDeliveries          SocialDelivery[]
+  digitalBusinessCards      DigitalBusinessCard[]
 
   @@index([createdAt])
 }
@@ -657,6 +658,7 @@ model EmployeeProfile {
   payrollRunsProcessed          PayrollRun[]                    @relation("PayrollRunProcessedBy")
   importBatchesCreated          ImportBatch[]                   @relation("ImportBatchCreatedBy")
   socialPostsCreated            SocialPost[]                    @relation("SocialPostCreatedBy")
+  digitalCardsCreated           DigitalBusinessCard[]           @relation("DigitalCardCreatedBy")
 
   @@unique([businessId, employeeNumber])
   @@index([businessId])
@@ -3381,4 +3383,102 @@ model CallParticipant {
 
   @@unique([callId, employeeId])
   @@index([employeeId, status])
+}
+
+// ─── Digital business cards ──────────────────────────────────────────────────
+
+enum DigitalCardStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum DigitalCardSocialNetwork {
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  X
+  TIKTOK
+  YOUTUBE
+  CUSTOM
+}
+
+/// Tenant-scoped digital business card. The public slug is assigned on first
+/// publish and is never changed by later edits.
+model DigitalBusinessCard {
+  id             String            @id @default(cuid())
+  businessId     String
+  createdById    String
+  slug           String?           @unique
+  status         DigitalCardStatus @default(DRAFT)
+  publishedAt    DateTime?
+  unpublishedAt  DateTime?
+  businessName   String
+  personName     String
+  jobTitle       String?
+  email          String?
+  website        String?
+  note           String?
+  logoUrl        String?
+  logoStorageKey String?
+  logoMime       String?
+  logoData       Bytes?
+  theme          Json
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  business    Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy   EmployeeProfile         @relation("DigitalCardCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  phones      DigitalCardPhone[]
+  addresses   DigitalCardAddress[]
+  socialLinks DigitalCardSocialLink[]
+
+  @@index([businessId, updatedAt])
+  @@index([businessId, status])
+  @@index([createdById])
+}
+
+model DigitalCardPhone {
+  id        String  @id @default(cuid())
+  cardId    String
+  label     String  @default("")
+  number    String
+  visible   Boolean @default(true)
+  sortOrder Int
+
+  card DigitalBusinessCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, sortOrder])
+}
+
+model DigitalCardAddress {
+  id         String  @id @default(cuid())
+  cardId     String
+  label      String  @default("")
+  line1      String
+  line2      String  @default("")
+  city       String  @default("")
+  region     String  @default("")
+  postalCode String  @default("")
+  country    String  @default("")
+  visible    Boolean @default(true)
+  sortOrder  Int
+
+  card DigitalBusinessCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, sortOrder])
+}
+
+model DigitalCardSocialLink {
+  id        String                   @id @default(cuid())
+  cardId    String
+  network   DigitalCardSocialNetwork
+  label     String                   @default("")
+  url       String
+  visible   Boolean                  @default(true)
+  sortOrder Int
+
+  card DigitalBusinessCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, sortOrder])
 }

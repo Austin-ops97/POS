@@ -6,6 +6,7 @@ import {
   Files,
   FileSignature,
   FileText,
+  IdCard,
   FolderKanban,
   Landmark,
   LibraryBig,
@@ -38,6 +39,7 @@ export const OFFICE_SUITE_ICONS: Record<OfficeSuiteIcon, LucideIcon> = {
   security: ShieldCheck,
   automation: Bot,
   utilities: Calculator,
+  card: IdCard,
 };
 export const OFFICE_ACCENTS: Record<string, { icon: string; soft: string; border: string; text: string }> = {
   sky: { icon: "bg-sky-600", soft: "bg-sky-50", border: "border-sky-200", text: "text-sky-700" },

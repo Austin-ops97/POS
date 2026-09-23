@@ -170,6 +170,21 @@ describe("platform credential vault", () => {
     assert.equal(plaid?.suggestedWebhook, "https://emerald.example/api/webhooks/plaid");
     assert.equal(plaid?.whitelistRedirect, "https://emerald.example/settings/integrations/banking");
     assert.equal(JSON.stringify(plaidView).includes("plaidsecretvalue"), false);
+
+    const suggested = projectPlatformCredentials({
+      vault: {},
+      env: env({ NEXT_PUBLIC_APP_URL: "https://pos.example" }),
+    });
+    assert.equal(
+      suggested.providers.find((provider) => provider.id === "meta")?.whitelistRedirect,
+      "https://pos.example/api/integrations/meta/callback",
+    );
+    assert.equal(
+      suggested.providers.find((provider) => provider.id === "linkedin")?.whitelistRedirect,
+      "https://pos.example/api/integrations/linkedin/callback",
+    );
+    assert.equal(suggested.providers.find((provider) => provider.id === "meta")?.configured, false);
+    assert.equal(suggested.providers.find((provider) => provider.id === "linkedin")?.configured, false);
   });
 
   it("denies the credential vault to someone who is not a platform admin", () => {

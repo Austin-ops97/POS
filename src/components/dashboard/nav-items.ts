@@ -17,6 +17,7 @@ import {
   Landmark,
   Files,
   FileText,
+  IdCard,
   FolderKanban,
   FileSignature,
   Bot,
@@ -62,6 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/office", label: "Office hub", icon: Files },
       { href: "/office/documents", label: "Documents", icon: FileText },
+      { href: "/office/cards", label: "Digital Business Cards", icon: IdCard },
       { href: "/office/apps/projects", label: "Projects", icon: FolderKanban },
       { href: "/office/apps/task-assignments", label: "Task assignments", icon: ListTodo },
       { href: "/office/reminders", label: "Reminders", icon: Bell },

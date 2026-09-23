@@ -63,6 +63,7 @@ export default async function DashboardLayout({
       ? [
           "/office",
           "/office/documents",
+          "/office/cards",
           ...(access.PROJECTS ? ["/office/apps/projects"] : []),
           "/office/apps/task-assignments",
           "/office/apps/forms-approvals",

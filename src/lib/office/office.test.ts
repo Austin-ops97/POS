@@ -96,8 +96,8 @@ describe("Office validation", () => {
 
 describe("Office & Admin suite", () => {
   it("publishes an accurate, uniquely-addressable tool directory", () => {
-    assert.equal(OFFICE_SUITE_MODULES.length, 17);
-    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 17);
+    assert.equal(OFFICE_SUITE_MODULES.length, 18);
+    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 18);
     assert.deepEqual(
       new Set(OFFICE_SUITE_MODULES.map((module) => module.group)),
       new Set(OFFICE_SUITE_GROUPS)

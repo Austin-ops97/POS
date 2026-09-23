@@ -97,6 +97,24 @@ Set `CRON_SECRET` in Vercel. Vercel Cron sends `Authorization: Bearer $CRON_SECR
 
 Project reminder alerts require `RESEND_API_KEY` and `OFFICE_FROM_EMAIL` (or `RECEIPTS_FROM_EMAIL`). Employees can disable email or in-app reminder alerts from the notification bell. `vercel.json` uses daily crons so Hobby deploys are not rejected. On a paid Vercel plan you can change the reminders schedule to `*/5 * * * *`, or keep the daily cron and hit `/api/cron/reminders` every few minutes from an external scheduler with `Authorization: Bearer $CRON_SECRET`.
 
+## Digital business cards and Apple Wallet
+
+Office → Digital Business Cards publishes a stable public page at `/c/{slug}`. The QR code and Apple Wallet pass both open that page. They do not add a contact. The visitor taps **Save to Contacts** to download a vCard.
+
+Card logos upload to Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set. Otherwise the image is stored on the card row and served from the public card URL. Set `NEXT_PUBLIC_APP_URL` so QR codes, Wallet passes, and iMessage previews use an absolute link.
+
+Apple Wallet downloads stay disabled until a Pass Type ID certificate is configured. Set these in the host environment, then reload the editor:
+
+```txt
+PASSKIT_PASS_TYPE_IDENTIFIER=pass.com.yourcompany.emeraldone.card
+PASSKIT_TEAM_IDENTIFIER=ABCDE12345
+PASSKIT_CERT_P12_BASE64=base64-of-the-pass-type-id-p12
+PASSKIT_CERT_PASSPHRASE=the-p12-passphrase
+PASSKIT_WWDR_PEM=Apple WWDR intermediate PEM
+```
+
+`PASSKIT_WWDR_PEM` accepts a PEM block, the same PEM with newline characters written as `\n`, or base64 of the PEM text. Download the Apple Worldwide Developer Relations intermediate (G4) from the Apple developer certificates page. Export the Pass Type ID certificate together with its private key as a `.p12`, then base64-encode that file for `PASSKIT_CERT_P12_BASE64`. If the `.p12` has no passphrase, set `PASSKIT_CERT_PASSPHRASE` to an empty value so the app can tell it apart from a missing setting. Do not commit the certificate or passphrase.
+
 ## End-to-end tests
 
 Public marketing routes can be run with `npm run test:e2e:public` after a production build and real Clerk keys. Authenticated dashboard and register flows need a Clerk session file:
