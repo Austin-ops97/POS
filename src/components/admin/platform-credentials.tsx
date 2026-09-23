@@ -208,6 +208,17 @@ export function PlatformCredentials() {
                     Saving here stores it in the vault with the client id and secret.
                   </p>
                 ) : null}
+                {provider.id === "meta" ? (
+                  <p className="mt-1">
+                    Register that exact URI in the Meta developer console under Facebook Login → Settings → Valid OAuth Redirect URIs.
+                    Instagram uses this Facebook Login callback. A Page with a professional Instagram account is linked in the same authorization.
+                  </p>
+                ) : null}
+                {provider.id === "linkedin" ? (
+                  <p className="mt-1">
+                    Register that exact URI in the LinkedIn developer console under Auth → Authorized redirect URLs for your app.
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {provider.suggestedWebhook ? (
@@ -222,6 +233,16 @@ export function PlatformCredentials() {
             ) : provider.id === "plaid" ? (
               <p className="text-xs text-slate-500">
                 Set <code>NEXT_PUBLIC_APP_URL</code> to the https site origin to show the Plaid webhook URL. Connect bank and manual sync work without it.
+              </p>
+            ) : null}
+            {provider.id === "meta" && !provider.whitelistRedirect ? (
+              <p className="text-xs text-slate-500">
+                Callback path <code>/api/integrations/meta/callback</code>. Set <code>NEXT_PUBLIC_APP_URL</code> to show the full URI to register under Facebook Login → Valid OAuth Redirect URIs.
+              </p>
+            ) : null}
+            {provider.id === "linkedin" && !provider.whitelistRedirect ? (
+              <p className="text-xs text-slate-500">
+                Callback path <code>/api/integrations/linkedin/callback</code>. Set <code>NEXT_PUBLIC_APP_URL</code> to show the full URI to register under Auth → Authorized redirect URLs.
               </p>
             ) : null}
             {!provider.configured && provider.missing.length > 0 ? (

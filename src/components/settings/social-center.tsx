@@ -39,6 +39,13 @@ type Post = {
 
 const PLATFORMS: SocialPlatformName[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN"];
 
+type ProviderGate = {
+  ready: boolean;
+  missing: string[];
+  message: string | null;
+  redirectUri: string | null;
+};
+
 export function SocialCenter({
   meta,
   linkedin,
@@ -47,14 +54,16 @@ export function SocialCenter({
   notice,
   canConnect,
   canPublish,
+  isPlatformAdmin,
 }: {
-  meta: { ready: boolean; missing: string[] };
-  linkedin: { ready: boolean; missing: string[] };
+  meta: ProviderGate;
+  linkedin: ProviderGate;
   accounts: Account[];
   posts: Post[];
   notice: string | null;
   canConnect: boolean;
   canPublish: boolean;
+  isPlatformAdmin: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -134,14 +143,40 @@ export function SocialCenter({
             <p className="text-xl font-semibold text-slate-900">{connected ? "Connected" : rows.some((account) => account.status === "ERROR") ? "Needs attention" : "Not connected"}</p>
             {platform !== "INSTAGRAM" && !provider.ready ? (
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                <p className="font-semibold">Connect needs these platform credentials</p>
-                <ul className="mt-2 list-disc pl-5">
-                  {provider.missing.map((key) => (
-                    <li key={key}><code>{key}</code></li>
-                  ))}
-                </ul>
-                <p className="mt-2">A platform admin saves them in Builder. Saving does not require a host redeploy.</p>
+                <p className="font-semibold">{platform === "LINKEDIN" ? "LinkedIn is not in the Builder vault yet" : "Meta is not in the Builder vault yet"}</p>
+                <p className="mt-2">{provider.message}</p>
+                {isPlatformAdmin && provider.missing.length > 0 ? (
+                  <>
+                    <p className="mt-2 font-medium">Still needed in Builder</p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {provider.missing.map((key) => (
+                        <li key={key}><code>{key}</code></li>
+                      ))}
+                    </ul>
+                    {provider.missing.includes("SOCIAL_TOKEN_ENCRYPTION_KEY") ? (
+                      <p className="mt-2">The token encryption key is generated on the first save.</p>
+                    ) : null}
+                  </>
+                ) : null}
+                {isPlatformAdmin ? (
+                  <p className="mt-2">
+                    <Link className="font-medium underline" href="/admin/builder">Open Platform credentials</Link>
+                  </p>
+                ) : (
+                  <p className="mt-2">Ask a platform admin to open Builder → Platform credentials and save this app once. Connect turns on after that save.</p>
+                )}
+                {isPlatformAdmin && provider.redirectUri ? (
+                  <p className="mt-2 break-all">
+                    Register this redirect URI in the {platform === "LINKEDIN" ? "LinkedIn" : "Meta"} developer console:{" "}
+                    <span className="font-mono">{provider.redirectUri}</span>
+                  </p>
+                ) : null}
               </div>
+            ) : null}
+            {platform !== "INSTAGRAM" && provider.ready && isPlatformAdmin && provider.redirectUri ? (
+              <p className="mt-2 text-xs text-slate-500">
+                OAuth returns to <span className="break-all font-mono">{provider.redirectUri}</span>. That URI is registered in the {platform === "LINKEDIN" ? "LinkedIn" : "Meta"} developer console.
+              </p>
             ) : null}
             {rows.length === 0 ? <p className="mt-2 text-sm text-slate-600">No {platformLabel(platform)} account is connected.</p> : (
               <ul className="mt-3 divide-y divide-slate-100">
