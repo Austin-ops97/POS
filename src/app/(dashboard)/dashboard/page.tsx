@@ -30,7 +30,6 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { canPublishSocial } from "@/lib/social/access";
 import { getEmployeeModuleAccess } from "@/lib/access-control";
 import { NewProjectButton } from "@/components/dashboard/new-project-button";
-import { listProjectCustomerOptions } from "@/lib/office/project-form-options";
 import { db } from "@/lib/db";
 import { celebrationSentence, upcomingCelebrations } from "@/lib/workforce/hr-dates";
 
@@ -64,15 +63,12 @@ export default async function DashboardPage() {
         14
       ).filter((item) => item.kind === "anniversary")
     : [];
-  const projectForm = canCreateProject
-    ? await Promise.all([
-        listProjectCustomerOptions(ctx.business.id),
-        db.employeeProfile.findMany({
-          where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" },
-        }),
-      ])
+  const projectEmployees = canCreateProject
+    ? await db.employeeProfile.findMany({
+        where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
     : null;
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
@@ -111,9 +107,7 @@ export default async function DashboardPage() {
               </Button>
             </Link>
           ) : null}
-          {canCreateProject && projectForm ? (
-            <NewProjectButton customers={projectForm[0]} employees={projectForm[1]} />
-          ) : null}
+          {projectEmployees ? <NewProjectButton employees={projectEmployees} /> : null}
           {canExpense ? (
             <Link href="/finance/expenses/new?scan=1">
               <Button variant="outline">Scan Receipt</Button>

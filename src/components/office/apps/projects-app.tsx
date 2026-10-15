@@ -21,7 +21,6 @@ import {
 import { ProjectRemindersPanel } from "./project-reminders-panel";
 import { ProjectCompletionPanel } from "./project-completion-panel";
 import { ProjectCreateDialog } from "./project-create-dialog";
-import type { ProjectCustomerOption } from "@/lib/office/project-form-options";
 import { formatProjectDate, projectCustomerName, projectStartDate } from "@/lib/office/project-create";
 
 type TaskStatus = "TODO" | "DOING" | "DONE";
@@ -39,16 +38,16 @@ export function ProjectsApp({
   module,
   initialRecords,
   employees,
-  customers,
   permissions,
+  blobConfigured,
   initialProjectId,
   startCreating = false,
 }: {
   module: OfficeSuiteModule;
   initialRecords: OfficeWorkspaceRecordSummary[];
   employees: EmployeeOption[];
-  customers: ProjectCustomerOption[];
   permissions: OfficeAppPermissions;
+  blobConfigured: boolean;
   initialProjectId?: string;
   startCreating?: boolean;
 }) {
@@ -446,6 +445,7 @@ export function ProjectsApp({
                     projectStatus={active.status}
                     canSubmit={Boolean(permissions.canSubmitCompletion)}
                     canReopen={Boolean(permissions.canReopenProject)}
+                    blobConfigured={blobConfigured}
                     onStatusChange={updateActiveStatus}
                   />
                 ) : null}
@@ -471,7 +471,6 @@ export function ProjectsApp({
       <ProjectCreateDialog
         open={creating}
         onOpenChange={setCreating}
-        customers={customers}
         employees={employees}
         onCreated={onProjectCreated}
       />

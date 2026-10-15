@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getOfficeSuiteModule, isCustomOfficeWorkspace } from "@/lib/office/suite";
 import { listOfficeWorkspaceRecords } from "@/lib/office/workspace-service";
-import { listProjectCustomerOptions } from "@/lib/office/project-form-options";
+import { isProjectBlobConfigured } from "@/lib/storage/blob-config";
 import { SpreadsheetApp } from "@/components/office/apps/spreadsheet-app";
 import { PresentationApp } from "@/components/office/apps/presentation-app";
 import { CommunicationApp } from "@/components/office/apps/communication-app";
@@ -33,13 +33,12 @@ export default async function OfficeModulePage({ params, searchParams }: Props) 
   if (!isCustomOfficeWorkspace(workspace)) notFound();
 
   const ctx = await requireAuth();
-  const [records, employees, customers] = await Promise.all([
+  const [records, employees] = await Promise.all([
     listOfficeWorkspaceRecords(ctx, workspace, { includeComplete: true }),
     db.employeeProfile.findMany({
       where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
       select: { id: true, name: true }, orderBy: { name: "asc" },
     }),
-    workspace === "projects" ? listProjectCustomerOptions(ctx.business.id) : Promise.resolve([]),
   ]);
   const permissions = {
     canCreate: hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS),
@@ -63,8 +62,8 @@ export default async function OfficeModulePage({ params, searchParams }: Props) 
         module={tool}
         initialRecords={records}
         employees={employees}
-        customers={customers}
         permissions={permissions}
+        blobConfigured={isProjectBlobConfigured()}
         initialProjectId={firstParam(query.project)}
         startCreating={firstParam(query.new) === "1"}
       />

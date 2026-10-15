@@ -2,6 +2,7 @@ export type ProjectCreateDraft = {
   title: string;
   description: string;
   customerId: string;
+  clientName: string;
   startsAt: string;
   dueAt: string;
   priority: string;
@@ -19,6 +20,7 @@ export type ProjectCreateInput = {
     tasks: [];
     color: "amber";
     customerId: string | null;
+    customerName: string | null;
     startsAt: string | null;
   };
 };
@@ -43,12 +45,14 @@ export function buildProjectRecordInput(
   if (startsAt && !DATE_ONLY.test(startsAt)) return { ok: false, error: "Enter a valid start date." };
   if (dueAt && !DATE_ONLY.test(dueAt)) return { ok: false, error: "Enter a valid due date." };
   if (startsAt && dueAt && startsAt > dueAt) {
-    return { ok: false, error: "Start date must be on or before the due date." };
+    return { ok: false, error: "The due date can't be before the start date." };
   }
 
   const priority = PRIORITIES.has(draft.priority) ? draft.priority : "NORMAL";
   const customerId = draft.customerId.trim();
   const assignedToId = draft.assignedToId.trim();
+  // A directory customer wins. The typed name is only kept when nobody was selected.
+  const clientName = customerId ? null : normalizeProjectClientName(draft.clientName);
 
   return {
     ok: true,
@@ -63,6 +67,7 @@ export function buildProjectRecordInput(
         tasks: [],
         color: "amber",
         customerId: customerId || null,
+        customerName: clientName,
         startsAt: startsAt || null,
       },
     },
@@ -79,10 +84,17 @@ export function normalizeProjectSchedule(startsAt: unknown, dueAt: Date | null |
   if (dueAt) {
     const dueKey = dueAt.toISOString().slice(0, 10);
     if (value > dueKey) {
-      throw new Error("Invalid project dates: the start date must be on or before the due date");
+      throw new Error("Invalid project dates: the due date can't be before the start date");
     }
   }
   return value;
+}
+
+/** Trimmed display name for a client who is not in the customer directory. */
+export function normalizeProjectClientName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = value.trim().replace(/\s+/g, " ").slice(0, 120);
+  return name || null;
 }
 
 export function projectCustomerName(metadata: Record<string, unknown> | null | undefined): string | null {

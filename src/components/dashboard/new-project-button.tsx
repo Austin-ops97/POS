@@ -6,17 +6,10 @@ import { FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ProjectCreateDialog } from "@/components/office/apps/project-create-dialog";
-import type { ProjectCustomerOption } from "@/lib/office/project-form-options";
 import type { EmployeeOption } from "@/components/office/apps/record-client";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
 
-export function NewProjectButton({
-  customers,
-  employees,
-}: {
-  customers: ProjectCustomerOption[];
-  employees: EmployeeOption[];
-}) {
+export function NewProjectButton({ employees }: { employees: EmployeeOption[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -32,13 +25,7 @@ export function NewProjectButton({
         <FolderKanban className="h-4 w-4" />
         New Project
       </Button>
-      <ProjectCreateDialog
-        open={open}
-        onOpenChange={setOpen}
-        customers={customers}
-        employees={employees}
-        onCreated={onCreated}
-      />
+      <ProjectCreateDialog open={open} onOpenChange={setOpen} employees={employees} onCreated={onCreated} />
     </>
   );
 }

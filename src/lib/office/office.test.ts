@@ -21,7 +21,8 @@ import {
 import { columnName, evaluateFormula, parseCsv, toCsv } from "./spreadsheet";
 import { appointmentsConflict } from "./calendar";
 import { convertUnit } from "./converters";
-import { buildProjectRecordInput, normalizeProjectSchedule } from "./project-create";
+import { buildProjectRecordInput, normalizeProjectClientName, normalizeProjectSchedule } from "./project-create";
+import { isProjectBlobConfigError, PROJECT_BLOB_SETUP_MESSAGE } from "@/lib/storage/blob-config";
 
 describe("Office content security", () => {
   it("removes scripts, event handlers, external images, and unsafe links", () => {
@@ -163,6 +164,7 @@ describe("Functional Office tools", () => {
       title: "  Patio install ",
       description: "Replace the back steps",
       customerId: "cust_1",
+      clientName: "Should be ignored",
       startsAt: "2026-10-01",
       dueAt: "2026-10-15",
       priority: "HIGH",
@@ -173,28 +175,68 @@ describe("Functional Office tools", () => {
     assert.equal(built.input.title, "Patio install");
     assert.equal(built.input.summary, "Replace the back steps");
     assert.equal(built.input.metadata.customerId, "cust_1");
+    assert.equal(built.input.metadata.customerName, null);
     assert.equal(built.input.metadata.startsAt, "2026-10-01");
     assert.equal(built.input.dueAt, "2026-10-15T00:00:00.000Z");
     assert.equal(built.input.assignedToId, null);
     assert.deepEqual(built.input.metadata.tasks, []);
   });
 
-  it("rejects a start date after the due date", () => {
+  it("keeps an optional free-text client name when no directory customer is chosen", () => {
+    const named = buildProjectRecordInput({
+      title: "Walk-in",
+      description: "",
+      customerId: "",
+      clientName: "  Jane   Doe  ",
+      startsAt: "",
+      dueAt: "",
+      priority: "NORMAL",
+      assignedToId: "",
+    });
+    assert.equal(named.ok, true);
+    if (!named.ok) return;
+    assert.equal(named.input.metadata.customerId, null);
+    assert.equal(named.input.metadata.customerName, "Jane Doe");
+    assert.equal(named.input.metadata.startsAt, null);
+    assert.equal(named.input.dueAt, null);
+    assert.equal(normalizeProjectClientName("   "), null);
+    assert.equal(normalizeProjectClientName("x".repeat(140))?.length, 120);
+
+    const missing = buildProjectRecordInput({
+      title: "   ",
+      description: "",
+      customerId: "",
+      clientName: "",
+      startsAt: "",
+      dueAt: "",
+      priority: "NORMAL",
+      assignedToId: "",
+    });
+    assert.equal(missing.ok, false);
+  });
+
+  it("rejects a due date before the start date", () => {
     const built = buildProjectRecordInput({
       title: "Late start",
       description: "",
       customerId: "",
+      clientName: "",
       startsAt: "2026-11-02",
       dueAt: "2026-11-01",
       priority: "NORMAL",
       assignedToId: "",
     });
     assert.equal(built.ok, false);
+    if (built.ok) return;
+    assert.match(built.error, /due date can't be before the start date/);
     assert.equal(normalizeProjectSchedule("2026-10-01", new Date("2026-10-15T00:00:00.000Z")), "2026-10-01");
+    assert.equal(normalizeProjectSchedule("2026-10-01", null), "2026-10-01");
     assert.throws(
       () => normalizeProjectSchedule("2026-11-02", new Date("2026-11-01T00:00:00.000Z")),
-      /Invalid project dates/
+      /Invalid project dates: the due date can't be before the start date/
     );
+    assert.equal(isProjectBlobConfigError(PROJECT_BLOB_SETUP_MESSAGE), true);
+    assert.match(PROJECT_BLOB_SETUP_MESSAGE, /BLOB_READ_WRITE_TOKEN/);
   });
 
   it("converts business units and temperatures", () => {

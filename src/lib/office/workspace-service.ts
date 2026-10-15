@@ -11,7 +11,7 @@ import {
 import { workspaceRecordListFilter } from "@/lib/office/workspace-archive";
 import { notifyTaskAssignee } from "@/lib/office/task-assignment-notify";
 import { TASK_ASSIGNMENTS_WORKSPACE } from "@/lib/office/task-assignments";
-import { normalizeProjectSchedule } from "@/lib/office/project-create";
+import { normalizeProjectClientName, normalizeProjectSchedule } from "@/lib/office/project-create";
 
 export type OfficeWorkspaceRecordSummary = {
   id: string;
@@ -140,7 +140,7 @@ async function normalizeProjectMetadata(
   const raw = next.customerId;
   if (raw == null || raw === "") {
     next.customerId = null;
-    delete next.customerName;
+    next.customerName = normalizeProjectClientName(next.customerName);
     return next;
   }
   if (typeof raw !== "string" || !raw.trim()) {
