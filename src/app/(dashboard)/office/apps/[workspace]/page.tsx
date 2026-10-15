@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getOfficeSuiteModule, isCustomOfficeWorkspace } from "@/lib/office/suite";
 import { listOfficeWorkspaceRecords } from "@/lib/office/workspace-service";
+import { listProjectCustomerOptions } from "@/lib/office/project-form-options";
 import { SpreadsheetApp } from "@/components/office/apps/spreadsheet-app";
 import { PresentationApp } from "@/components/office/apps/presentation-app";
 import { CommunicationApp } from "@/components/office/apps/communication-app";
@@ -14,22 +15,31 @@ import { ProjectsApp } from "@/components/office/apps/projects-app";
 import { WorkflowsApp } from "@/components/office/apps/workflows-app";
 import { UtilitiesApp } from "@/components/office/apps/utilities-app";
 
-type Props = { params: Promise<{ workspace: string }> };
+type Props = {
+  params: Promise<{ workspace: string }>;
+  searchParams: Promise<{ project?: string | string[]; new?: string | string[] }>;
+};
 
-export default async function OfficeModulePage({ params }: Props) {
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function OfficeModulePage({ params, searchParams }: Props) {
   const { workspace } = await params;
+  const query = await searchParams;
   const tool = getOfficeSuiteModule(workspace);
   if (!tool) notFound();
   if (tool.nativeHref) redirect(tool.nativeHref);
   if (!isCustomOfficeWorkspace(workspace)) notFound();
 
   const ctx = await requireAuth();
-  const [records, employees] = await Promise.all([
+  const [records, employees, customers] = await Promise.all([
     listOfficeWorkspaceRecords(ctx, workspace, { includeComplete: true }),
     db.employeeProfile.findMany({
       where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
       select: { id: true, name: true }, orderBy: { name: "asc" },
     }),
+    workspace === "projects" ? listProjectCustomerOptions(ctx.business.id) : Promise.resolve([]),
   ]);
   const permissions = {
     canCreate: hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS),
@@ -48,7 +58,17 @@ export default async function OfficeModulePage({ params }: Props) {
     case "calendar": return <CalendarApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
     case "task-assignments": return <TaskAssignmentsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} currentEmployeeId={ctx.employee.id} currentEmployeeName={ctx.employee.name} />;
     case "forms-approvals": return <FormsApp module={tool} initialRecords={records} permissions={permissions} />;
-    case "projects": return <ProjectsApp module={tool} initialRecords={records} employees={employees} permissions={permissions} />;
+    case "projects": return (
+      <ProjectsApp
+        module={tool}
+        initialRecords={records}
+        employees={employees}
+        customers={customers}
+        permissions={permissions}
+        initialProjectId={firstParam(query.project)}
+        startCreating={firstParam(query.new) === "1"}
+      />
+    );
     case "automations-ai": return <WorkflowsApp module={tool} initialRecords={records} permissions={permissions} />;
     case "utilities": return <UtilitiesApp module={tool} />;
   }

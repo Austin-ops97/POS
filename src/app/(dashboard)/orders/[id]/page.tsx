@@ -119,6 +119,7 @@ export default async function OrderDetailPage({
             </p>
           </div>
         </div>
+        {(showTerminate || showRefund) && (
         <div className="flex flex-col items-end gap-3 lg:flex-row lg:items-start">
           {showTerminate && (
             <OrderTerminateActions
@@ -140,20 +141,8 @@ export default async function OrderDetailPage({
               items={refundItems}
             />
           )}
-          <div className="min-w-[280px]">
-            <OrderReceiptActions
-              orderId={order.id}
-              defaultEmail={customerEmail}
-              emailedTo={latestReceipt?.emailedTo}
-              lastEmailedAt={
-                latestReceipt?.lastEmailedAt
-                  ? new Date(latestReceipt.lastEmailedAt).toISOString()
-                  : undefined
-              }
-              printed={latestReceipt?.printed}
-            />
-          </div>
         </div>
+        )}
       </div>
 
       {order.terminatedAt && (
@@ -272,6 +261,57 @@ export default async function OrderDetailPage({
         <div className="space-y-6">
           <Card>
             <CardHeader>
+              <CardTitle>Receipt</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <OrderReceiptActions
+                orderId={order.id}
+                orderNumber={order.orderNumber}
+                defaultEmail={customerEmail}
+                emailedTo={latestReceipt?.emailedTo}
+                lastEmailedAt={
+                  latestReceipt?.lastEmailedAt
+                    ? new Date(latestReceipt.lastEmailedAt).toISOString()
+                    : undefined
+                }
+                printed={latestReceipt?.printed}
+              />
+              {order.receipts && order.receipts.length > 0 ? (
+                <ul className="space-y-2 text-sm">
+                  {order.receipts.map(
+                    (receipt: {
+                      id: string;
+                      receiptNumber: string;
+                      printed?: boolean;
+                      printedAt?: Date | string | null;
+                      emailedTo?: string | null;
+                      lastEmailedAt?: Date | string | null;
+                    }) => (
+                      <li key={receipt.id} className="text-slate-600">
+                        <span className="font-medium text-slate-900">
+                          {receipt.receiptNumber}
+                        </span>
+                        {receipt.printed && " · Printed"}
+                        {receipt.emailedTo
+                          ? ` · Emailed to ${receipt.emailedTo}`
+                          : " · Not emailed"}
+                        {receipt.lastEmailedAt && (
+                          <span className="block text-xs text-slate-500">
+                            Last emailed {formatDisplayDate(receipt.lastEmailedAt, ctx)}
+                          </span>
+                        )}
+                      </li>
+                    )
+                  )}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-500">No receipt has been issued yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Customer</CardTitle>
             </CardHeader>
             <CardContent>
@@ -350,42 +390,6 @@ export default async function OrderDetailPage({
             </Card>
           )}
 
-          {order.receipts && order.receipts.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Receipts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  {order.receipts.map(
-                    (receipt: {
-                      id: string;
-                      receiptNumber: string;
-                      printed?: boolean;
-                      printedAt?: Date | string | null;
-                      emailedTo?: string | null;
-                      lastEmailedAt?: Date | string | null;
-                    }) => (
-                      <li key={receipt.id} className="text-slate-600">
-                        <span className="font-medium text-slate-900">
-                          {receipt.receiptNumber}
-                        </span>
-                        {receipt.printed && " · Printed"}
-                        {receipt.emailedTo
-                          ? ` · Emailed to ${receipt.emailedTo}`
-                          : " · Not emailed"}
-                        {receipt.lastEmailedAt && (
-                          <span className="block text-xs text-slate-500">
-                            Last emailed {formatDisplayDate(receipt.lastEmailedAt, ctx)}
-                          </span>
-                        )}
-                      </li>
-                    )
-                  )}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

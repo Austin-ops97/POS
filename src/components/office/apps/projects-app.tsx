@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Archive, Check, Circle, FolderKanban, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-servic
 import { OfficeAppHeader } from "./app-header";
 import {
   archiveWorkspaceRecord,
-  createWorkspaceRecord,
   recordMetadata,
   restoreWorkspaceRecord,
   updateWorkspaceRecord,
@@ -21,26 +20,46 @@ import {
 } from "./record-client";
 import { ProjectRemindersPanel } from "./project-reminders-panel";
 import { ProjectCompletionPanel } from "./project-completion-panel";
+import { ProjectCreateDialog } from "./project-create-dialog";
+import type { ProjectCustomerOption } from "@/lib/office/project-form-options";
+import { formatProjectDate, projectCustomerName, projectStartDate } from "@/lib/office/project-create";
 
 type TaskStatus = "TODO" | "DOING" | "DONE";
 type ProjectTask = { id: string; title: string; status: TaskStatus; complete: boolean };
-type ProjectData = { tasks: ProjectTask[]; color: string };
+type ProjectData = {
+  tasks: ProjectTask[];
+  color: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  startsAt?: string | null;
+};
 const empty: ProjectData = { tasks: [], color: "amber" };
 
 export function ProjectsApp({
   module,
   initialRecords,
   employees,
+  customers,
   permissions,
+  initialProjectId,
+  startCreating = false,
 }: {
   module: OfficeSuiteModule;
   initialRecords: OfficeWorkspaceRecordSummary[];
   employees: EmployeeOption[];
+  customers: ProjectCustomerOption[];
   permissions: OfficeAppPermissions;
+  initialProjectId?: string;
+  startCreating?: boolean;
 }) {
   const [records, setRecords] = useState(initialRecords);
   const [view, setView] = useState<"active" | "archived">("active");
-  const [activeId, setActiveId] = useState(initialRecords[0]?.id ?? "");
+  const [activeId, setActiveId] = useState(
+    initialProjectId && initialRecords.some((record) => record.id === initialProjectId)
+      ? initialProjectId
+      : initialRecords[0]?.id ?? ""
+  );
+  const [creating, setCreating] = useState(startCreating && permissions.canCreate);
   const active = records.find((record) => record.id === activeId);
   const [data, setData] = useState<ProjectData>(recordMetadata(active, empty));
   const [adding, setAdding] = useState<TaskStatus | null>(null);
@@ -55,28 +74,11 @@ export function ProjectsApp({
     setData(recordMetadata(record, empty));
   }
 
-  async function newProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    try {
-      const saved = await createWorkspaceRecord(module.slug, {
-        title: String(form.get("title")),
-        summary: String(form.get("summary") || ""),
-        dueAt: form.get("dueAt") ? new Date(String(form.get("dueAt"))).toISOString() : null,
-        assignedToId: String(form.get("assignedToId") || "") || null,
-        priority: String(form.get("priority") || "NORMAL"),
-        metadata: empty,
-      });
-      setRecords((items) => [saved, ...items]);
-      load(saved);
-      setAdding(null);
-      toast.success("Project created");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create project");
-    } finally {
-      setBusy(false);
-    }
+  function onProjectCreated(saved: OfficeWorkspaceRecordSummary) {
+    setView("active");
+    setRecords((items) => [saved, ...items.filter((item) => item.id !== saved.id)]);
+    load(saved);
+    toast.success("Project created");
   }
 
   async function save(next = data) {
@@ -205,7 +207,7 @@ export function ProjectsApp({
           <Button
             size="sm"
             className="h-9 min-h-9"
-            onClick={() => (active ? save() : setAdding("DONE"))}
+            onClick={() => (active ? save() : setCreating(true))}
             disabled={busy || (active ? !permissions.canEdit : !permissions.canCreate) || view === "archived"}
           >
             <Save className="h-4 w-4" />
@@ -220,10 +222,8 @@ export function ProjectsApp({
             {view === "active" ? (
               <Button
                 className="w-full"
-                onClick={() => {
-                  setActiveId("");
-                  setAdding("DONE");
-                }}
+                onClick={() => setCreating(true)}
+                disabled={!permissions.canCreate}
               >
                 <Plus className="h-4 w-4" />
                 New project
@@ -298,11 +298,9 @@ export function ProjectsApp({
                     <Button
                       type="button"
                       size="icon"
-                      onClick={() => {
-                        setActiveId("");
-                        setAdding("DONE");
-                      }}
+                      onClick={() => setCreating(true)}
                       aria-label="New project"
+                      disabled={!permissions.canCreate}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
@@ -312,6 +310,7 @@ export function ProjectsApp({
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-lg font-semibold text-slate-900">{active.title}</h2>
                     {active.summary ? <p className="truncate text-sm text-slate-500">{active.summary}</p> : null}
+                    <ProjectFacts record={active} />
                   </div>
                   <div className="flex w-36 shrink-0 flex-col gap-2 sm:w-44">
                     {permissions.canDelete && view === "active" && ["COMPLETE", "APPROVED"].includes(active.status) ? (
@@ -461,7 +460,7 @@ export function ProjectsApp({
               <p className="mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
                 Give it an owner and deadline, then move tasks across the board.
               </p>
-              <Button className="mt-5" onClick={() => setAdding("DONE")}>
+              <Button className="mt-5" onClick={() => setCreating(true)} disabled={!permissions.canCreate || view === "archived"}>
                 New project
               </Button>
             </div>
@@ -469,6 +468,13 @@ export function ProjectsApp({
         </section>
       </div>
 
+      <ProjectCreateDialog
+        open={creating}
+        onOpenChange={setCreating}
+        customers={customers}
+        employees={employees}
+        onCreated={onProjectCreated}
+      />
       <Dialog
         open={adding !== null}
         onOpenChange={(open) => {
@@ -476,55 +482,7 @@ export function ProjectsApp({
         }}
       >
         <DialogContent>
-          {adding === "DONE" && !activeId ? (
-            <form onSubmit={newProject}>
-              <DialogHeader>
-                <DialogTitle>New project</DialogTitle>
-              </DialogHeader>
-              <div className="my-5 grid gap-4">
-                <label className="text-sm font-medium">
-                  Project name
-                  <Input name="title" required className="mt-1" />
-                </label>
-                <label className="text-sm font-medium">
-                  Purpose
-                  <Input name="summary" className="mt-1" />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-sm font-medium">
-                    Due date
-                    <Input name="dueAt" type="date" className="mt-1" />
-                  </label>
-                  <label className="text-sm font-medium">
-                    Priority
-                    <select name="priority" className="mt-1 h-10 w-full rounded-md border px-3">
-                      <option>NORMAL</option>
-                      <option>HIGH</option>
-                      <option>URGENT</option>
-                      <option>LOW</option>
-                    </select>
-                  </label>
-                </div>
-                <label className="text-sm font-medium">
-                  Owner
-                  <select name="assignedToId" className="mt-1 h-10 w-full rounded-md border px-3">
-                    <option value="">Unassigned</option>
-                    {employees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={busy}>
-                  Create project
-                </Button>
-              </DialogFooter>
-            </form>
-          ) : (
-            <form
+          <form
               onSubmit={(event) => {
                 event.preventDefault();
                 const title = String(new FormData(event.currentTarget).get("title") || "").trim();
@@ -554,7 +512,6 @@ export function ProjectsApp({
                 <Button type="submit">Add task</Button>
               </DialogFooter>
             </form>
-          )}
         </DialogContent>
       </Dialog>
       <ConfirmDialog
@@ -569,5 +526,23 @@ export function ProjectsApp({
         loading={busy}
       />
     </div>
+  );
+}
+
+function ProjectFacts({ record }: { record: OfficeWorkspaceRecordSummary }) {
+  const customer = projectCustomerName(record.metadata);
+  const start = formatProjectDate(projectStartDate(record.metadata));
+  const due = formatProjectDate(record.dueAt);
+  if (!customer && !start && !due) return null;
+  return (
+    <p className="mt-1 truncate text-xs text-slate-500">
+      {[
+        customer ? `Customer: ${customer}` : null,
+        start ? `Starts ${start}` : null,
+        due ? `Due ${due}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    </p>
   );
 }

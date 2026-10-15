@@ -311,6 +311,12 @@ export async function ensureReceiptForOrder(
   businessId: string,
   orderId: string
 ): Promise<void> {
+  const order = await db.order.findFirst({
+    where: { id: orderId, businessId },
+    select: { id: true },
+  });
+  if (!order) throw new ReceiptAccessError();
+
   const existing = await db.receipt.findFirst({
     where: { orderId, businessId },
   });

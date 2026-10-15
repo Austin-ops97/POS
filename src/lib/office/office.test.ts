@@ -21,6 +21,7 @@ import {
 import { columnName, evaluateFormula, parseCsv, toCsv } from "./spreadsheet";
 import { appointmentsConflict } from "./calendar";
 import { convertUnit } from "./converters";
+import { buildProjectRecordInput, normalizeProjectSchedule } from "./project-create";
 
 describe("Office content security", () => {
   it("removes scripts, event handlers, external images, and unsafe links", () => {
@@ -155,6 +156,45 @@ describe("Functional Office tools", () => {
     ];
     assert.deepEqual(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T10:30:00Z", endsAt: "2026-07-31T11:30:00Z" }, existing).map((item) => item.id), ["one"]);
     assert.equal(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T11:00:00Z", endsAt: "2026-07-31T12:00:00Z" }, existing).length, 0);
+  });
+
+  it("builds a project with name, customer, dates, and description", () => {
+    const built = buildProjectRecordInput({
+      title: "  Patio install ",
+      description: "Replace the back steps",
+      customerId: "cust_1",
+      startsAt: "2026-10-01",
+      dueAt: "2026-10-15",
+      priority: "HIGH",
+      assignedToId: "",
+    });
+    assert.equal(built.ok, true);
+    if (!built.ok) return;
+    assert.equal(built.input.title, "Patio install");
+    assert.equal(built.input.summary, "Replace the back steps");
+    assert.equal(built.input.metadata.customerId, "cust_1");
+    assert.equal(built.input.metadata.startsAt, "2026-10-01");
+    assert.equal(built.input.dueAt, "2026-10-15T00:00:00.000Z");
+    assert.equal(built.input.assignedToId, null);
+    assert.deepEqual(built.input.metadata.tasks, []);
+  });
+
+  it("rejects a start date after the due date", () => {
+    const built = buildProjectRecordInput({
+      title: "Late start",
+      description: "",
+      customerId: "",
+      startsAt: "2026-11-02",
+      dueAt: "2026-11-01",
+      priority: "NORMAL",
+      assignedToId: "",
+    });
+    assert.equal(built.ok, false);
+    assert.equal(normalizeProjectSchedule("2026-10-01", new Date("2026-10-15T00:00:00.000Z")), "2026-10-01");
+    assert.throws(
+      () => normalizeProjectSchedule("2026-11-02", new Date("2026-11-01T00:00:00.000Z")),
+      /Invalid project dates/
+    );
   });
 
   it("converts business units and temperatures", () => {

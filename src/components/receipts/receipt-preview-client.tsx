@@ -77,6 +77,7 @@ export function ReceiptPreviewClient({
             </Button>
             <OrderReceiptActions
               orderId={orderId}
+              orderNumber={orderNumber}
               defaultEmail={defaultEmail}
               variant="toolbar"
             />
