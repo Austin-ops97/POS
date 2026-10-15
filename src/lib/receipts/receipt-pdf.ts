@@ -18,7 +18,12 @@ function formatReceiptDate(iso: string, timeZone: string): string {
 
 export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: [226.77, 600], margin: 12 });
+    const doc = new PDFDocument({
+      size: [226.77, 792],
+      margin: 12,
+      compress: false,
+      info: { Title: `Receipt ${data.orderNumber}` },
+    });
     const chunks: Buffer[] = [];
 
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -50,6 +55,13 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
     }
     if (data.settings.showCustomer && data.customer) {
       doc.text(`Customer: ${data.customer.name}`, { align: "center" });
+      if (data.customer.email) doc.text(data.customer.email, { align: "center" });
+    }
+    if (data.isRefunded || data.isPartiallyRefunded) {
+      doc.font("Helvetica-Bold").text(data.isRefunded ? "REFUNDED" : "PARTIALLY REFUNDED", {
+        align: "center",
+      });
+      doc.font("Helvetica");
     }
 
     doc.moveDown(0.5);
@@ -61,7 +73,7 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
         data.settings.showSku && item.sku ? ` (${item.sku})` : "";
       doc.font("Helvetica-Bold").fontSize(8).text(`${item.quantity}x ${item.name}${sku}`);
       doc.font("Helvetica").text(
-        `  ${formatReceiptMoney(item.unitPrice)} ea    ${formatReceiptMoney(item.total)}`,
+        `${formatReceiptMoney(item.unitPrice)} ea    ${formatReceiptMoney(item.total)}`,
         { align: "right" }
       );
     }
@@ -97,6 +109,9 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
             doc.text(`  Change: ${formatReceiptMoney(payment.changeDue)}`);
           }
         }
+        if (payment.stripePaymentIntentId) {
+          doc.text(`  Ref: ${payment.stripePaymentIntentId}`);
+        }
       }
     }
 
@@ -105,11 +120,20 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
       doc.font("Helvetica-Bold").text("Refunds");
       doc.font("Helvetica");
       for (const refund of data.refunds) {
+        const reason = refund.reason.replace(/_/g, " ");
+        const note = refund.reasonNote ? ` — ${refund.reasonNote}` : "";
         doc.text(
           `${formatReceiptDate(refund.createdAt, data.displayTimezone)}: -${formatReceiptMoney(refund.amount)}`
         );
+        doc.text(`  ${reason}${note}`);
       }
+      totalLine("Total refunded", `-${formatReceiptMoney(data.totalRefunded)}`);
       totalLine("Net paid", formatReceiptMoney(data.netPaid));
+    }
+
+    if (data.settings.showSignature && data.signature) {
+      doc.moveDown(0.4);
+      doc.text(`Signature captured by: ${data.signature.signerName}`, { align: "center" });
     }
 
     if (data.settings.footer) {

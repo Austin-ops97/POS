@@ -1,13 +1,10 @@
 import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
+import { PROJECT_BLOB_SETUP_MESSAGE } from "@/lib/storage/blob-config";
 
 function requireBlobToken() {
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-  if (!token) {
-    throw new Error(
-      "Blob storage is not configured. Set BLOB_READ_WRITE_TOKEN for project completion photos."
-    );
-  }
+  if (!token) throw new Error(PROJECT_BLOB_SETUP_MESSAGE);
   return token;
 }
 

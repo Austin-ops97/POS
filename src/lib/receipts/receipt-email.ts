@@ -3,6 +3,8 @@ import { captureMonitoringEvent } from "@/lib/monitoring";
 import type { ReceiptData } from "./receipt-data";
 import { renderReceiptHtml, renderReceiptPlainText } from "./receipt-html";
 import { markReceiptEmailed } from "./receipt-data";
+import { generateReceiptPdf } from "./receipt-pdf";
+import { receiptPdfFilename } from "./receipt-filename";
 
 export class ReceiptEmailConfigError extends Error {
   readonly code = "RECEIPT_EMAIL_NOT_CONFIGURED" as const;
@@ -36,6 +38,27 @@ export function isReceiptEmailConfigured(): boolean {
   );
 }
 
+export async function buildReceiptEmailMessage(data: ReceiptData) {
+  const businessName = data.business.legalName || data.business.name;
+  const pdf = await generateReceiptPdf(data);
+  if (!pdf.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+    throw new ReceiptEmailSendError("Could not build the receipt PDF.");
+  }
+  const filename = receiptPdfFilename(data.orderNumber);
+  return {
+    subject: `Receipt from ${businessName} - Order #${data.orderNumber}`,
+    html: renderReceiptHtml(data),
+    text: renderReceiptPlainText(data),
+    attachments: [
+      {
+        filename,
+        content: pdf,
+        contentType: "application/pdf",
+      },
+    ],
+  };
+}
+
 export async function sendReceiptEmail(params: {
   businessId: string;
   orderId: string;
@@ -60,22 +83,19 @@ export async function sendReceiptEmail(params: {
     throw new ReceiptEmailConfigError();
   }
 
-  const businessName = data.business.legalName || data.business.name;
-  const subject = `Receipt from ${businessName} - Order #${data.orderNumber}`;
-  const html = renderReceiptHtml(data);
-  const text = renderReceiptPlainText(data);
-
   const replyTo =
     process.env.RECEIPTS_REPLY_TO_EMAIL?.trim() ||
     (data.settings.showBusinessEmail ? data.business.email : undefined);
 
   try {
+    const message = await buildReceiptEmailMessage(data);
     const result = await resend.emails.send({
       from: fromEmail,
       to,
-      subject,
-      html,
-      text,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      attachments: message.attachments,
       ...(replyTo ? { reply_to: replyTo } : {}),
     });
 

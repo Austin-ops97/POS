@@ -39,7 +39,10 @@ export const metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const ctx = await requireAuth();
   const moduleAccess = await getEmployeeModuleAccess(ctx);
-  const canCreateProject = moduleAccess.OFFICE && hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  const canCreateProject =
+    moduleAccess.OFFICE &&
+    moduleAccess.PROJECTS &&
+    hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
   const canSell = moduleAccess.POS && hasPermission(ctx, PERMISSIONS.OPEN_REGISTER);
   const canExpense = moduleAccess.EXPENSES && hasPermission(ctx, PERMISSIONS.CREATE_EXPENSE);
   const canAddCustomer = moduleAccess.CUSTOMERS && hasPermission(ctx, PERMISSIONS.MANAGE_CUSTOMERS);
@@ -60,6 +63,13 @@ export default async function DashboardPage() {
         14
       ).filter((item) => item.kind === "anniversary")
     : [];
+  const projectEmployees = canCreateProject
+    ? await db.employeeProfile.findMany({
+        where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : null;
   const { stats, recentOrders, lowStock, topProducts, salesByDay, stripe, setup } =
     await getDashboardData(ctx);
 
@@ -97,7 +107,7 @@ export default async function DashboardPage() {
               </Button>
             </Link>
           ) : null}
-          {canCreateProject ? <NewProjectButton /> : null}
+          {projectEmployees ? <NewProjectButton employees={projectEmployees} /> : null}
           {canExpense ? (
             <Link href="/finance/expenses/new?scan=1">
               <Button variant="outline">Scan Receipt</Button>

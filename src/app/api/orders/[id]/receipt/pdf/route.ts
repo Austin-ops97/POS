@@ -9,6 +9,7 @@ import {
   ReceiptAccessError,
   ReceiptNotFoundError,
 } from "@/lib/receipts";
+import { receiptPdfFilename } from "@/lib/receipts/receipt-filename";
 
 export async function GET(
   _request: Request,
@@ -22,11 +23,14 @@ export async function GET(
     await ensureReceiptForOrder(ctx.business.id, orderId);
     const data = await getReceiptData(ctx.business.id, orderId);
     const pdf = await generateReceiptPdf(data);
+    const filename = receiptPdfFilename(data.orderNumber);
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="receipt-${data.receiptNumber}.pdf"`,
+        "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {

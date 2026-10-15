@@ -11,6 +11,7 @@ import {
 import { workspaceRecordListFilter } from "@/lib/office/workspace-archive";
 import { notifyTaskAssignee } from "@/lib/office/task-assignment-notify";
 import { TASK_ASSIGNMENTS_WORKSPACE } from "@/lib/office/task-assignments";
+import { normalizeProjectClientName, normalizeProjectSchedule } from "@/lib/office/project-create";
 
 export type OfficeWorkspaceRecordSummary = {
   id: string;
@@ -124,6 +125,48 @@ async function validateAssignee(ctx: AuthContext, assignedToId?: string | null) 
   if (!employee) throw new Error("Assigned employee not found");
 }
 
+async function normalizeProjectMetadata(
+  businessId: string,
+  metadata: Record<string, unknown> | undefined,
+  dueAt: Date | null | undefined,
+  previous?: Record<string, unknown> | null
+) {
+  const next: Record<string, unknown> = { ...(metadata ?? {}) };
+  if ("startsAt" in next) {
+    next.startsAt = normalizeProjectSchedule(next.startsAt, dueAt);
+  }
+  if (!("customerId" in next)) return next;
+
+  const raw = next.customerId;
+  if (raw == null || raw === "") {
+    next.customerId = null;
+    next.customerName = normalizeProjectClientName(next.customerName);
+    return next;
+  }
+  if (typeof raw !== "string" || !raw.trim()) {
+    throw new Error("Invalid customer");
+  }
+  const customerId = raw.trim();
+
+  const customer = await db.customer.findFirst({
+    where: { id: customerId, businessId, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (!customer) {
+    const previousId = typeof previous?.customerId === "string" ? previous.customerId : "";
+    const previousName = typeof previous?.customerName === "string" ? previous.customerName.trim() : "";
+    if (previousId === customerId && previousName) {
+      next.customerId = customerId;
+      next.customerName = previousName;
+      return next;
+    }
+    throw new Error("Customer not found");
+  }
+  next.customerId = customer.id;
+  next.customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ").trim() || "Customer";
+  return next;
+}
+
 export async function createOfficeWorkspaceRecord(
   ctx: AuthContext,
   workspace: string,
@@ -132,7 +175,13 @@ export async function createOfficeWorkspaceRecord(
 ) {
   requirePermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
   requireWorkspace(workspace);
-  const input = officeWorkspaceRecordCreateSchema.parse(payload);
+  const parsed = officeWorkspaceRecordCreateSchema.parse(payload);
+  const input = workspace === "projects" && parsed.metadata
+    ? {
+        ...parsed,
+        metadata: await normalizeProjectMetadata(ctx.business.id, parsed.metadata, parsed.dueAt ?? null),
+      }
+    : parsed;
   await validateAssignee(ctx, input.assignedToId);
   const record = await db.$transaction(async (tx) => {
     const created = await tx.officeWorkspaceRecord.create({
@@ -197,16 +246,28 @@ export async function updateOfficeWorkspaceRecord(
   await validateAssignee(ctx, input.assignedToId);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id, archivedAt: null },
-    select: { id: true, createdById: true, assignedToId: true },
+    select: { id: true, createdById: true, assignedToId: true, dueAt: true, metadata: true },
   });
   if (!current) throw new Error("Workspace record not found");
   requireCreateOrEdit(ctx, current.createdById);
+  const previousMetadata =
+    current.metadata && typeof current.metadata === "object" && !Array.isArray(current.metadata)
+      ? current.metadata as Record<string, unknown>
+      : null;
+  const metadata = workspace === "projects" && input.metadata
+    ? await normalizeProjectMetadata(
+        ctx.business.id,
+        input.metadata,
+        input.dueAt !== undefined ? input.dueAt : current.dueAt,
+        previousMetadata
+      )
+    : input.metadata;
   const record = await db.$transaction(async (tx) => {
     const updated = await tx.officeWorkspaceRecord.update({
       where: { id },
       data: {
         ...input,
-        metadata: input.metadata as Prisma.InputJsonValue | undefined,
+        metadata: metadata as Prisma.InputJsonValue | undefined,
       },
       include: recordPeople,
     });

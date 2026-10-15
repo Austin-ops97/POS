@@ -5,6 +5,7 @@ import { Camera, CheckCircle2, ImagePlus, Loader2, RotateCcw, Trash2, Upload } f
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isProjectBlobConfigError, PROJECT_BLOB_SETUP_MESSAGE } from "@/lib/storage/blob-config";
 
 type Attachment = {
   id: string;
@@ -35,12 +36,14 @@ export function ProjectCompletionPanel({
   projectStatus,
   canSubmit,
   canReopen,
+  blobConfigured,
   onStatusChange,
 }: {
   projectId: string;
   projectStatus: string;
   canSubmit: boolean;
   canReopen: boolean;
+  blobConfigured: boolean;
   onStatusChange?: (status: string) => void;
 }) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -48,6 +51,7 @@ export function ProjectCompletionPanel({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [uploadsAvailable, setUploadsAvailable] = useState(blobConfigured);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -73,8 +77,12 @@ export function ProjectCompletionPanel({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setUploadsAvailable(blobConfigured);
+  }, [blobConfigured]);
+
   async function uploadFiles(files: FileList | null) {
-    if (!files?.length) return;
+    if (!files?.length || !uploadsAvailable) return;
     setBusy(true);
     try {
       for (const file of Array.from(files)) {
@@ -89,7 +97,13 @@ export function ProjectCompletionPanel({
       toast.success("Photo uploaded");
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed");
+      const message = error instanceof Error ? error.message : "Upload failed";
+      if (isProjectBlobConfigError(message)) {
+        setUploadsAvailable(false);
+        toast.error("Photo uploads aren't available until Blob storage is connected.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -180,17 +194,23 @@ export function ProjectCompletionPanel({
               className="hidden"
               onChange={(e) => void uploadFiles(e.target.files)}
             />
-            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy} onClick={() => cameraRef.current?.click()}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy || !uploadsAvailable} onClick={() => cameraRef.current?.click()}>
               <Camera className="h-3.5 w-3.5" />
               Photo
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 min-h-8 px-2 text-xs" disabled={busy || !uploadsAvailable} onClick={() => fileRef.current?.click()}>
               <ImagePlus className="h-3.5 w-3.5" />
               Upload
             </Button>
           </div>
         ) : null}
       </div>
+
+      {!uploadsAvailable ? (
+        <p role="status" className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-950">
+          {PROJECT_BLOB_SETUP_MESSAGE}
+        </p>
+      ) : null}
 
       {loading ? (
         <p className="mt-1.5 text-xs text-slate-500">Loading…</p>

@@ -253,6 +253,7 @@ export function PaymentModal({
                 <div className="mt-6 w-full">
                   <OrderReceiptActions
                     orderId={orderId}
+                    orderNumber={orderNumber}
                     defaultEmail={defaultReceiptEmail}
                     variant="compact"
                   />
