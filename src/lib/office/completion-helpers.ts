@@ -2,9 +2,11 @@
  * Pure helpers for project completion validation (exported for tests).
  */
 
+export const PENDING_APPROVAL_STATUS = "PENDING_APPROVAL";
+
 export const PROJECT_COMPLETION_STATUSES = [
   "ACTIVE",
-  "PENDING_APPROVAL",
+  PENDING_APPROVAL_STATUS,
   "CHANGES_REQUESTED",
   "APPROVED",
   "COMPLETE",
@@ -32,6 +34,29 @@ export function canSubmitForApproval(status: string) {
   return status === "ACTIVE" || status === "CHANGES_REQUESTED" || status === "REJECTED";
 }
 
+/**
+ * Scope for Office → Project approvals.
+ *
+ * `supervisorId` is who was notified at submit time. It is not a visibility
+ * rule: submit assigns a supervisor whenever one exists, so filtering the
+ * queue to that person hid the submission from every other approver.
+ * Permission and business checks stay outside this filter.
+ */
+export function projectApprovalQueueWhere(businessId: string) {
+  return {
+    businessId,
+    status: PENDING_APPROVAL_STATUS,
+  };
+}
+
+export function submissionVisibleInApprovalQueue(
+  submission: { businessId: string; status: string; supervisorId?: string | null },
+  businessId: string
+) {
+  const where = projectApprovalQueueWhere(businessId);
+  return submission.businessId === where.businessId && submission.status === where.status;
+}
+
 export function canUploadAttachments(status: string) {
   return status === "ACTIVE" || status === "CHANGES_REQUESTED" || status === "REJECTED";
 }
@@ -41,7 +66,7 @@ export function canDeleteAttachment(status: string, linkedToSubmission: boolean)
 }
 
 export function canReviewSubmission(submissionStatus: string) {
-  return submissionStatus === "PENDING_APPROVAL";
+  return submissionStatus === PENDING_APPROVAL_STATUS;
 }
 
 export function projectStatusAfterReview(action: ReviewAction): ProjectCompletionStatus {

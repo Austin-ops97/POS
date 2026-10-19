@@ -8,11 +8,13 @@ import { deleteBlob, uploadBlob } from "@/lib/storage/blob-storage";
 import {
   canDeleteAttachment,
   canReopenProject,
-  canReviewSubmission,
   canSubmitForApproval,
   canUploadAttachments,
+  PENDING_APPROVAL_STATUS,
+  projectApprovalQueueWhere,
   projectStatusAfterReview,
   submissionStatusAfterReview,
+  submissionVisibleInApprovalQueue,
   validatePhotoCount,
   type ReviewAction,
 } from "@/lib/office/completion-helpers";
@@ -301,7 +303,7 @@ export async function submitForApproval(
         projectId,
         submittedById: ctx.employee.id,
         supervisorId: supervisor?.id ?? null,
-        status: "PENDING_APPROVAL",
+        status: PENDING_APPROVAL_STATUS,
         completionNote: input.completionNote?.trim().slice(0, 2_000) || null,
       },
     });
@@ -326,7 +328,7 @@ export async function submitForApproval(
 
     await tx.officeWorkspaceRecord.update({
       where: { id: projectId },
-      data: { status: "PENDING_APPROVAL" },
+      data: { status: PENDING_APPROVAL_STATUS },
     });
 
     return submission;
@@ -407,11 +409,7 @@ export async function listApprovalQueue(ctx: AuthContext) {
   await assertCompletionEnabled(ctx.business.id);
 
   const rows = await db.projectSubmission.findMany({
-    where: {
-      businessId: ctx.business.id,
-      status: "PENDING_APPROVAL",
-      OR: [{ supervisorId: ctx.employee.id }, { supervisorId: null }],
-    },
+    where: projectApprovalQueueWhere(ctx.business.id),
     include: {
       project: { select: { id: true, title: true, status: true, summary: true } },
       submittedBy: { select: { id: true, name: true } },
@@ -461,7 +459,7 @@ export async function reviewSubmission(
     },
   });
   if (!submission) throw new Error("Submission not found");
-  if (!canReviewSubmission(submission.status)) {
+  if (!submissionVisibleInApprovalQueue(submission, ctx.business.id)) {
     throw new Error("This submission has already been reviewed");
   }
 
