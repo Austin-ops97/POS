@@ -65,7 +65,7 @@ async function sendSignEmail(input: {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RECEIPTS_FROM_EMAIL?.trim() || process.env.OFFICE_FROM_EMAIL?.trim();
   if (!apiKey || !from) {
-    throw new Error("Email is not configured. Set RESEND_API_KEY and RECEIPTS_FROM_EMAIL.");
+    return { skipped: true as const };
   }
   const resend = new Resend(apiKey);
   const result = await resend.emails.send({
@@ -76,6 +76,7 @@ async function sendSignEmail(input: {
     html: `<p>${input.signerName},</p><p>${input.businessName} sent you a document to sign: <strong>${input.title}</strong></p><p><a href="${input.link}">Review and sign</a></p>`,
   });
   if (result.error) throw new Error(result.error.message);
+  return { skipped: false as const };
 }
 
 export async function listEsignRequests(ctx: AuthContext) {
@@ -141,14 +142,19 @@ export async function createAndSendEsign(ctx: AuthContext, input: {
     },
   });
   const link = `${appOrigin()}/sign/${token}`;
-  await sendSignEmail({
+  const emailed = await sendSignEmail({
     to: signerEmail,
     signerName,
     title,
     businessName: ctx.business.name,
     link,
   });
-  return { ...serialize(created), signUrl: link, emailConfigured: isReceiptEmailConfigured() };
+  return {
+    ...serialize(created),
+    signUrl: link,
+    emailConfigured: isReceiptEmailConfigured(),
+    emailSent: !emailed.skipped,
+  };
 }
 
 export async function getEsignRequest(ctx: AuthContext, id: string) {
