@@ -12,7 +12,6 @@ import { workspaceRecordListFilter } from "@/lib/office/workspace-archive";
 import { notifyTaskAssignee } from "@/lib/office/task-assignment-notify";
 import { TASK_ASSIGNMENTS_WORKSPACE } from "@/lib/office/task-assignments";
 import { normalizeProjectClientName, normalizeProjectSchedule } from "@/lib/office/project-create";
-import { syncCalendarRecordToOutlook } from "@/lib/office/outlook-calendar";
 
 export type OfficeWorkspaceRecordSummary = {
   id: string;
@@ -211,17 +210,6 @@ export async function createOfficeWorkspaceRecord(
     });
     return created;
   });
-  if (workspace === "calendar") {
-    await syncCalendarRecordToOutlook({
-      recordId: record.id,
-      businessId: ctx.business.id,
-      title: record.title,
-      summary: record.summary,
-      status: record.status,
-      archivedAt: record.archivedAt,
-      metadata: record.metadata as Record<string, unknown> | null,
-    });
-  }
   if (input.assignedToId) {
     try {
       await notifyTaskAssignee({
@@ -294,17 +282,6 @@ export async function updateOfficeWorkspaceRecord(
     });
     return updated;
   });
-  if (workspace === "calendar") {
-    await syncCalendarRecordToOutlook({
-      recordId: record.id,
-      businessId: ctx.business.id,
-      title: record.title,
-      summary: record.summary,
-      status: record.status,
-      archivedAt: record.archivedAt,
-      metadata: record.metadata as Record<string, unknown> | null,
-    });
-  }
   const nextAssignee = input.assignedToId !== undefined ? input.assignedToId : current.assignedToId;
   try {
     await notifyTaskAssignee({
@@ -338,22 +315,10 @@ export async function archiveOfficeWorkspaceRecord(
   requireWorkspace(workspace);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id, archivedAt: null },
-    select: { id: true, title: true, createdById: true, summary: true, status: true, metadata: true },
+    select: { id: true, title: true, createdById: true },
   });
   if (!current) throw new Error("Workspace record not found");
   requireDeleteOrOwner(ctx, current.createdById, workspace);
-  if (workspace === "calendar") {
-    await syncCalendarRecordToOutlook({
-      recordId: current.id,
-      businessId: ctx.business.id,
-      title: current.title,
-      summary: current.summary,
-      status: current.status,
-      archivedAt: new Date(),
-      metadata: current.metadata as Record<string, unknown> | null,
-      deleted: true,
-    });
-  }
   const archived = await db.$transaction(async (tx) => {
     const updated = await tx.officeWorkspaceRecord.update({
       where: { id },
@@ -416,30 +381,10 @@ export async function deleteOfficeWorkspaceRecord(
   requireWorkspace(workspace);
   const current = await db.officeWorkspaceRecord.findFirst({
     where: { id, workspace, businessId: ctx.business.id },
-    select: {
-      id: true,
-      title: true,
-      createdById: true,
-      summary: true,
-      status: true,
-      metadata: true,
-      archivedAt: true,
-    },
+    select: { id: true, title: true, createdById: true },
   });
   if (!current) throw new Error("Workspace record not found");
   requireDeleteOrOwner(ctx, current.createdById, workspace);
-  if (workspace === "calendar") {
-    await syncCalendarRecordToOutlook({
-      recordId: current.id,
-      businessId: ctx.business.id,
-      title: current.title,
-      summary: current.summary,
-      status: current.status,
-      archivedAt: current.archivedAt,
-      metadata: current.metadata as Record<string, unknown> | null,
-      deleted: true,
-    });
-  }
   await db.$transaction(async (tx) => {
     await tx.officeWorkspaceRecord.delete({ where: { id } });
     await tx.officeAuditEvent.create({

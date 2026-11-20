@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { OfficeSuiteModule } from "@/lib/office/suite";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
-import { appointmentsConflict } from "@/lib/office/calendar";
-import { isCancelledAppointment } from "@/lib/office/outlook-calendar";
+import { appointmentsConflict, isCancelledAppointment } from "@/lib/office/calendar";
 import { OfficeAppHeader } from "./app-header";
 import {
   archiveWorkspaceRecord,

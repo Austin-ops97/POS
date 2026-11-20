@@ -1,3 +1,7 @@
+export function isCancelledAppointment(status: string | null | undefined) {
+  return status === "CANCELLED";
+}
+
 export type AppointmentWindow = {
   id?: string;
   assignedToId?: string | null;
