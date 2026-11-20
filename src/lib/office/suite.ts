@@ -43,6 +43,12 @@ export const OFFICE_SUITE_MODULES: OfficeSuiteModule[] = [
     quickActions: [{ label: "New document", href: "/office/new" }, { label: "Open library", href: "/office/documents" }],
   },
   {
+    slug: "esign", name: "E-signature", eyebrow: "Send and collect signatures", icon: "document", group: "Create & organize", accent: "blue", delivery: "connected",
+    description: "Create or attach a quote, contract, or work authorization and send a signing link by email.", nativeHref: "/office/signatures",
+    features: ["Email signing links", "Drawn or typed signature", "Audit trail and signed PDF"],
+    quickActions: [{ label: "Send for signature", href: "/office/signatures" }, { label: "Open requests", href: "/office/signatures" }],
+  },
+  {
     slug: "spreadsheets", name: "Spreadsheets", eyebrow: "Calculate and export", icon: "sheet", group: "Create & organize", accent: "emerald", delivery: "built-in",
     description: "Edit a saved grid, use common formulas, paste tabular data, and import or export CSV files.",
     features: ["Editable cell grid", "SUM, AVERAGE, MIN, MAX", "CSV import and export"],

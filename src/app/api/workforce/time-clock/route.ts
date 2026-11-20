@@ -17,6 +17,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const data = timeClockActionSchema.parse(body);
 
+    if (!data.pin) {
+      if (data.action !== "CLOCK_IN" && data.action !== "CLOCK_OUT") {
+        return NextResponse.json({ error: "PIN is required" }, { status: 400 });
+      }
+      const result = await executePunch({
+        businessId: ctx.business.id,
+        employeeId: ctx.employee.id,
+        employeeName: ctx.employee.name,
+        action: data.action,
+        locationId: data.locationId ?? ctx.location?.id,
+        source: "MANUAL",
+      });
+      return NextResponse.json({
+        ...result,
+        todayHours: Math.round(result.todayHours * 100) / 100,
+      });
+    }
+
     const employee = await findEmployeeByPin(ctx.business.id, data.pin);
     if (!employee) {
       return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });

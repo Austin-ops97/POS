@@ -13,16 +13,28 @@ import { createWorkspaceRecord, type EmployeeOption } from "./record-client";
 
 const DATE_ERROR = "The due date can't be before the start date.";
 
+export type ProjectCreateDefaults = {
+  title?: string;
+  description?: string;
+  customerId?: string;
+  customerName?: string;
+  sourceOrderId?: string;
+  sourceOrderNumber?: string;
+  address?: string;
+};
+
 export function ProjectCreateDialog({
   open,
   onOpenChange,
   employees,
   onCreated,
+  defaults,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employees: EmployeeOption[];
   onCreated: (record: OfficeWorkspaceRecordSummary) => void;
+  defaults?: ProjectCreateDefaults;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -37,7 +49,13 @@ export function ProjectCreateDialog({
   const [dueAt, setDueAt] = useState("");
 
   useEffect(() => {
-    if (open) return;
+    if (open) {
+      setCustomerId(defaults?.customerId ?? "");
+      setSelectedName(defaults?.customerName ?? "");
+      setClientName("");
+      setQuery("");
+      return;
+    }
     setBusy(false);
     setError(undefined);
     setSearchError(undefined);
@@ -49,7 +67,7 @@ export function ProjectCreateDialog({
     setSearching(false);
     setStartsAt("");
     setDueAt("");
-  }, [open]);
+  }, [open, defaults]);
 
   useEffect(() => {
     if (!open || customerId) return;
@@ -118,6 +136,9 @@ export function ProjectCreateDialog({
       dueAt,
       priority: String(form.get("priority") || "NORMAL"),
       assignedToId: String(form.get("assignedToId") || ""),
+      sourceOrderId: defaults?.sourceOrderId,
+      sourceOrderNumber: defaults?.sourceOrderNumber,
+      address: defaults?.address,
     });
     if (!built.ok) {
       setError(built.error);
@@ -146,7 +167,7 @@ export function ProjectCreateDialog({
       }}
     >
       <DialogContent>
-        <form onSubmit={(event) => void submit(event)}>
+        <form key={defaults?.sourceOrderId ?? "new"} onSubmit={(event) => void submit(event)}>
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>
@@ -156,7 +177,15 @@ export function ProjectCreateDialog({
           <div className="my-5 grid gap-4">
             <div>
               <Label htmlFor="project-name">Project name</Label>
-              <Input id="project-name" name="title" required maxLength={160} className="mt-1" autoFocus />
+              <Input
+                id="project-name"
+                name="title"
+                required
+                maxLength={160}
+                className="mt-1"
+                autoFocus
+                defaultValue={defaults?.title ?? ""}
+              />
             </div>
             <div>
               <Label htmlFor="project-customer-search">Customer</Label>
@@ -247,7 +276,13 @@ export function ProjectCreateDialog({
             </div>
             <div>
               <Label htmlFor="project-description">Description</Label>
-              <Textarea id="project-description" name="description" maxLength={2000} className="mt-1" />
+              <Textarea
+                id="project-description"
+                name="description"
+                maxLength={2000}
+                className="mt-1"
+                defaultValue={defaults?.description ?? ""}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

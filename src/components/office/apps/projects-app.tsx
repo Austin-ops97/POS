@@ -21,7 +21,8 @@ import {
 import { ProjectRemindersPanel } from "./project-reminders-panel";
 import { ProjectCompletionPanel } from "./project-completion-panel";
 import { ProjectCreateDialog } from "./project-create-dialog";
-import { formatProjectDate, projectCustomerName, projectStartDate } from "@/lib/office/project-create";
+import { ProjectMileagePanel } from "./project-mileage-panel";
+import { formatProjectDate, projectCustomerName, projectSourceOrder, projectStartDate } from "@/lib/office/project-create";
 
 type TaskStatus = "TODO" | "DOING" | "DONE";
 type ProjectTask = { id: string; title: string; status: TaskStatus; complete: boolean };
@@ -31,6 +32,10 @@ type ProjectData = {
   customerId?: string | null;
   customerName?: string | null;
   startsAt?: string | null;
+  address?: string | null;
+  originAddress?: string | null;
+  destinationAddress?: string | null;
+  mileageMiles?: number | null;
 };
 const empty: ProjectData = { tasks: [], color: "amber" };
 
@@ -40,6 +45,7 @@ export function ProjectsApp({
   employees,
   permissions,
   blobConfigured,
+  mapquestConfigured,
   initialProjectId,
   startCreating = false,
 }: {
@@ -48,6 +54,7 @@ export function ProjectsApp({
   employees: EmployeeOption[];
   permissions: OfficeAppPermissions;
   blobConfigured: boolean;
+  mapquestConfigured: boolean;
   initialProjectId?: string;
   startCreating?: boolean;
 }) {
@@ -435,6 +442,17 @@ export function ProjectsApp({
               </div>
 
               <div className="mt-3 grid shrink-0 gap-3 lg:grid-cols-2">
+                {view === "active" ? (
+                  <ProjectMileagePanel
+                    key={active.id}
+                    project={active}
+                    configured={mapquestConfigured}
+                    defaultOrigin={typeof data.address === "string" ? data.address : ""}
+                    onSaved={(saved) => {
+                      setRecords((items) => items.map((item) => (item.id === saved.id ? saved : item)));
+                    }}
+                  />
+                ) : null}
                 {view === "active" && permissions.canManageReminders ? (
                   <ProjectRemindersPanel projectId={active.id} employees={employees} />
                 ) : null}
@@ -532,16 +550,28 @@ function ProjectFacts({ record }: { record: OfficeWorkspaceRecordSummary }) {
   const customer = projectCustomerName(record.metadata);
   const start = formatProjectDate(projectStartDate(record.metadata));
   const due = formatProjectDate(record.dueAt);
-  if (!customer && !start && !due) return null;
+  const sourceOrder = projectSourceOrder(record.metadata);
+  if (!customer && !start && !due && !sourceOrder) return null;
   return (
     <p className="mt-1 truncate text-xs text-slate-500">
       {[
         customer ? `Customer: ${customer}` : null,
+        sourceOrder ? (
+          <a key="order" href={`/orders/${sourceOrder.id}`} className="underline-offset-2 hover:underline">
+            Order {sourceOrder.number}
+          </a>
+        ) : null,
         start ? `Starts ${start}` : null,
         due ? `Due ${due}` : null,
       ]
         .filter(Boolean)
-        .join(" · ")}
+        .map((item, index) =>
+          typeof item === "string" ? (
+            <span key={index}>{index ? " · " : ""}{item}</span>
+          ) : (
+            <span key={index}>{index ? " · " : ""}{item}</span>
+          )
+        )}
     </p>
   );
 }

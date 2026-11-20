@@ -4,6 +4,7 @@ import { requireModule } from "@/lib/access-control";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import {
   archiveOfficeWorkspaceRecord,
+  deleteOfficeWorkspaceRecord,
   restoreOfficeWorkspaceRecord,
   updateOfficeWorkspaceRecord,
 } from "@/lib/office/workspace-service";
@@ -27,7 +28,11 @@ export async function DELETE(request: Request, { params }: Params) {
     const ctx = await requireAuth();
     const { workspace, id } = await params;
     if (workspace === "projects") await requireModule(ctx, "PROJECTS");
-    await archiveOfficeWorkspaceRecord(ctx, workspace, id, getClientIp(request));
+    if (workspace === "calendar") {
+      await deleteOfficeWorkspaceRecord(ctx, workspace, id, getClientIp(request));
+    } else {
+      await archiveOfficeWorkspaceRecord(ctx, workspace, id, getClientIp(request));
+    }
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return handleApiError(error, "DELETE /api/office/workspaces/[workspace]/records/[id]");

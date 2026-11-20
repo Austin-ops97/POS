@@ -5,6 +5,10 @@ applyLocalEnvOverrides();
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
+  serverExternalPackages: ["pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/**": ["./node_modules/pdfkit/js/data/**"],
+  },
   eslint: {
     ignoreDuringBuilds: false,
   },

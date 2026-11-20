@@ -7,6 +7,9 @@ export type ProjectCreateDraft = {
   dueAt: string;
   priority: string;
   assignedToId: string;
+  sourceOrderId?: string;
+  sourceOrderNumber?: string;
+  address?: string;
 };
 
 export type ProjectCreateInput = {
@@ -22,6 +25,9 @@ export type ProjectCreateInput = {
     customerId: string | null;
     customerName: string | null;
     startsAt: string | null;
+    sourceOrderId: string | null;
+    sourceOrderNumber: string | null;
+    address: string | null;
   };
 };
 
@@ -69,6 +75,9 @@ export function buildProjectRecordInput(
         customerId: customerId || null,
         customerName: clientName,
         startsAt: startsAt || null,
+        sourceOrderId: draft.sourceOrderId?.trim() || null,
+        sourceOrderNumber: draft.sourceOrderNumber?.trim() || null,
+        address: draft.address?.trim() || null,
       },
     },
   };
@@ -105,6 +114,15 @@ export function projectCustomerName(metadata: Record<string, unknown> | null | u
 export function projectStartDate(metadata: Record<string, unknown> | null | undefined): string | null {
   const value = typeof metadata?.startsAt === "string" ? metadata.startsAt : "";
   return DATE_ONLY.test(value.slice(0, 10)) ? value.slice(0, 10) : null;
+}
+
+export function projectSourceOrder(
+  metadata: Record<string, unknown> | null | undefined
+): { id: string; number: string } | null {
+  const id = typeof metadata?.sourceOrderId === "string" ? metadata.sourceOrderId.trim() : "";
+  const number = typeof metadata?.sourceOrderNumber === "string" ? metadata.sourceOrderNumber.trim() : "";
+  if (!id) return null;
+  return { id, number: number || id };
 }
 
 export function formatProjectDate(value: string | null | undefined): string | null {

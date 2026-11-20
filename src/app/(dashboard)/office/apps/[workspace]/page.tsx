@@ -64,6 +64,7 @@ export default async function OfficeModulePage({ params, searchParams }: Props) 
         employees={employees}
         permissions={permissions}
         blobConfigured={isProjectBlobConfigured()}
+        mapquestConfigured={Boolean(process.env.MAPQUEST_API_KEY?.trim())}
         initialProjectId={firstParam(query.project)}
         startCreating={firstParam(query.new) === "1"}
       />

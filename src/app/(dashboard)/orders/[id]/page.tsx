@@ -22,6 +22,7 @@ import { OrderTerminateActions } from "@/components/dashboard/order-terminate-ac
 import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import { PERMISSIONS } from "@/lib/permissions";
 import { SignatureCapture } from "@/components/dashboard/signature-capture";
+import { CreateProjectFromOrderButton } from "@/components/orders/create-project-from-order";
 
 export default async function OrderDetailPage({
   params,
@@ -91,6 +92,29 @@ export default async function OrderDetailPage({
   const customerName = order.customer
     ? `${order.customer.firstName} ${order.customer.lastName ?? ""}`.trim()
     : null;
+  const canCreateProject =
+    moduleAccess.OFFICE &&
+    moduleAccess.PROJECTS &&
+    hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  const projectEmployees = canCreateProject
+    ? await db.employeeProfile.findMany({
+        where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  const lineNotes = order.items
+    .map((item) => `${item.quantity} × ${item.name}`)
+    .join("\n");
+  const projectDefaults = {
+    title: `Order ${order.orderNumber}`,
+    description: [`Source order ${order.orderNumber}`, lineNotes].filter(Boolean).join("\n\n"),
+    customerId: order.customerId ?? undefined,
+    customerName: customerName ?? undefined,
+    sourceOrderId: order.id,
+    sourceOrderNumber: order.orderNumber,
+    address: order.customer?.address ?? undefined,
+  };
 
   return (
     <div className="space-y-6">
@@ -119,8 +143,11 @@ export default async function OrderDetailPage({
             </p>
           </div>
         </div>
-        {(showTerminate || showRefund) && (
+        {(showTerminate || showRefund || canCreateProject) && (
         <div className="flex flex-col items-end gap-3 lg:flex-row lg:items-start">
+          {canCreateProject ? (
+            <CreateProjectFromOrderButton employees={projectEmployees} defaults={projectDefaults} />
+          ) : null}
           {showTerminate && (
             <OrderTerminateActions
               order={{

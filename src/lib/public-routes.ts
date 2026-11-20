@@ -11,6 +11,7 @@ export const PUBLIC_ROUTE_PATTERNS = [
   "/api/invitations(.*)",
   "/forms(.*)",
   "/c/:slug",
+  "/sign(.*)",
   "/api/public(.*)",
   "/api/webhooks(.*)",
   "/api/cron(.*)",

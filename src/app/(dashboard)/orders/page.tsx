@@ -24,6 +24,17 @@ export default async function OrdersPage() {
     hasPermission(ctx, PERMISSIONS.TERMINATE_ORDER) &&
     moduleAccess.ORDER_TERMINATION &&
     settings?.enableOrderTermination !== false;
+  const canCreateProject =
+    moduleAccess.OFFICE &&
+    moduleAccess.PROJECTS &&
+    hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS);
+  const projectEmployees = canCreateProject
+    ? await db.employeeProfile.findMany({
+        where: { businessId: ctx.business.id, status: "ACTIVE", deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   const orderRows = (orders as Array<{
     id: string;
@@ -38,6 +49,7 @@ export default async function OrdersPage() {
     return {
       id: order.id,
       orderNumber: order.orderNumber,
+      customerId: (order as { customerId?: string | null }).customerId ?? null,
       customerName: order.customer
         ? `${order.customer.firstName} ${order.customer.lastName ?? ""}`.trim()
         : null,
@@ -55,7 +67,12 @@ export default async function OrdersPage() {
         <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
         <p className="text-sm text-slate-500">View and manage all orders</p>
       </div>
-      <OrdersTable orders={orderRows} canTerminateOrders={canTerminateOrders} />
+      <OrdersTable
+        orders={orderRows}
+        canTerminateOrders={canTerminateOrders}
+        canCreateProject={canCreateProject}
+        projectEmployees={projectEmployees}
+      />
     </div>
   );
 }

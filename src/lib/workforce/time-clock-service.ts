@@ -144,6 +144,7 @@ export async function executePunch(params: {
   employeeName: string;
   action: "CLOCK_IN" | "CLOCK_OUT" | "START_BREAK" | "END_BREAK";
   locationId?: string;
+  source?: "PIN_KIOSK" | "MANUAL";
 }): Promise<PunchResult> {
   const now = new Date();
   const activeEntry = await getActiveTimeEntry(params.employeeId);
@@ -159,7 +160,7 @@ export async function executePunch(params: {
         employeeId: params.employeeId,
         locationId: params.locationId,
         clockIn: now,
-        source: "PIN_KIOSK",
+        source: params.source ?? "PIN_KIOSK",
         status: "ACTIVE",
       },
     });

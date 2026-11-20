@@ -98,8 +98,8 @@ describe("Office validation", () => {
 
 describe("Office & Admin suite", () => {
   it("publishes an accurate, uniquely-addressable tool directory", () => {
-    assert.equal(OFFICE_SUITE_MODULES.length, 18);
-    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 18);
+    assert.equal(OFFICE_SUITE_MODULES.length, 19);
+    assert.equal(new Set(OFFICE_SUITE_MODULES.map((module) => module.slug)).size, 19);
     assert.deepEqual(
       new Set(OFFICE_SUITE_MODULES.map((module) => module.group)),
       new Set(OFFICE_SUITE_GROUPS)
@@ -157,6 +157,13 @@ describe("Functional Office tools", () => {
     ];
     assert.deepEqual(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T10:30:00Z", endsAt: "2026-07-31T11:30:00Z" }, existing).map((item) => item.id), ["one"]);
     assert.equal(appointmentsConflict({ assignedToId: "employee-a", startsAt: "2026-07-31T11:00:00Z", endsAt: "2026-07-31T12:00:00Z" }, existing).length, 0);
+    assert.equal(
+      appointmentsConflict(
+        { assignedToId: "employee-a", startsAt: "2026-07-31T10:30:00Z", endsAt: "2026-07-31T11:30:00Z" },
+        [{ ...existing[0], cancelled: true }, existing[1]]
+      ).length,
+      0
+    );
   });
 
   it("builds a project with name, customer, dates, and description", () => {

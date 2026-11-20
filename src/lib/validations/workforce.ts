@@ -86,11 +86,17 @@ export const schedulePublishSchema = z.object({
     .max(80),
 });
 
-export const timeClockActionSchema = z.object({
-  pin: z.string().length(4),
-  action: z.enum(["LOOKUP", "CLOCK_IN", "CLOCK_OUT", "START_BREAK", "END_BREAK"]),
-  locationId: z.string().optional(),
-});
+export const timeClockActionSchema = z
+  .object({
+    pin: z.string().length(4).optional(),
+    action: z.enum(["LOOKUP", "CLOCK_IN", "CLOCK_OUT", "START_BREAK", "END_BREAK"]),
+    locationId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.pin && data.action !== "CLOCK_IN" && data.action !== "CLOCK_OUT") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PIN is required", path: ["pin"] });
+    }
+  });
 
 const isoDateTime = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
   message: "Invalid ISO datetime",

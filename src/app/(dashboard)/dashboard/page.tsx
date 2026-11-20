@@ -30,6 +30,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { canPublishSocial } from "@/lib/social/access";
 import { getEmployeeModuleAccess } from "@/lib/access-control";
 import { NewProjectButton } from "@/components/dashboard/new-project-button";
+import { DashboardClockToggle } from "@/components/dashboard/clock-toggle";
 import { db } from "@/lib/db";
 import { celebrationSentence, upcomingCelebrations } from "@/lib/workforce/hr-dates";
 
@@ -50,6 +51,7 @@ export default async function DashboardPage() {
   const canSeeReports = moduleAccess.REPORTS && hasPermission(ctx, PERMISSIONS.VIEW_REPORTS);
   const canSeeSales = canSeeReports || canSell || hasPermission(ctx, PERMISSIONS.PROCESS_SALE);
   const canSeePayouts = hasPermission(ctx, PERMISSIONS.MANAGE_STRIPE) || canSeeReports;
+  const canClock = Boolean(moduleAccess.WORKFORCE);
   const canSeeAnniversaries = moduleAccess.WORKFORCE && hasPermission(ctx, PERMISSIONS.VIEW_WORKFORCE);
   const anniversaries = canSeeAnniversaries
     ? upcomingCelebrations(
@@ -99,6 +101,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canClock ? <DashboardClockToggle /> : null}
           {canSell ? (
             <Link href="/register">
               <Button>

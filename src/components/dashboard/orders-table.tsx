@@ -26,10 +26,13 @@ import {
 } from "@/lib/status-utils";
 import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import type { OrderStatus } from "@prisma/client";
+import { CreateProjectFromOrderButton } from "@/components/orders/create-project-from-order";
+import type { EmployeeOption } from "@/components/office/apps/record-client";
 
 export type OrderRow = {
   id: string;
   orderNumber: string;
+  customerId?: string | null;
   customerName: string | null;
   total: number;
   status: OrderStatus;
@@ -41,6 +44,8 @@ export type OrderRow = {
 type OrdersTableProps = {
   orders: OrderRow[];
   canTerminateOrders?: boolean;
+  canCreateProject?: boolean;
+  projectEmployees?: EmployeeOption[];
 };
 
 const ACTIVE_PENDING_STATUSES = new Set<OrderStatus>([
@@ -78,6 +83,8 @@ function rowCanTerminate(order: OrderRow, canTerminateOrders: boolean): boolean 
 export function OrdersTable({
   orders: initialOrders,
   canTerminateOrders = false,
+  canCreateProject = false,
+  projectEmployees = [],
 }: OrdersTableProps) {
   const formatDate = useFormatDate();
   const [orders, setOrders] = useState(initialOrders);
@@ -211,6 +218,20 @@ export function OrdersTable({
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
+                      {canCreateProject ? (
+                        <CreateProjectFromOrderButton
+                          size="sm"
+                          employees={projectEmployees}
+                          defaults={{
+                            title: `Order ${order.orderNumber}`,
+                            description: `Source order ${order.orderNumber}`,
+                            customerId: order.customerId ?? undefined,
+                            customerName: order.customerName ?? undefined,
+                            sourceOrderId: order.id,
+                            sourceOrderNumber: order.orderNumber,
+                          }}
+                        />
+                      ) : null}
                       {showTerminate && (
                         <Button
                           type="button"
@@ -254,7 +275,7 @@ export function OrdersTable({
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Date</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Total</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">Status</th>
-                  {canTerminateOrders && (
+                  {(canTerminateOrders || canCreateProject) && (
                     <th className="px-4 py-3 text-right font-medium text-slate-600">
                       Actions
                     </th>
@@ -291,8 +312,23 @@ export function OrdersTable({
                           {formatOrderStatus(order.status)}
                         </Badge>
                       </td>
-                      {canTerminateOrders && (
+                      {(canTerminateOrders || canCreateProject) && (
                         <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            {canCreateProject ? (
+                              <CreateProjectFromOrderButton
+                                size="sm"
+                                employees={projectEmployees}
+                                defaults={{
+                                  title: `Order ${order.orderNumber}`,
+                                  description: `Source order ${order.orderNumber}`,
+                                  customerId: order.customerId ?? undefined,
+                                  customerName: order.customerName ?? undefined,
+                                  sourceOrderId: order.id,
+                                  sourceOrderNumber: order.orderNumber,
+                                }}
+                              />
+                            ) : null}
                           {showTerminate ? (
                             <Button
                               type="button"
@@ -313,6 +349,7 @@ export function OrdersTable({
                               Terminate
                             </Button>
                           ) : null}
+                          </div>
                         </td>
                       )}
                     </tr>
