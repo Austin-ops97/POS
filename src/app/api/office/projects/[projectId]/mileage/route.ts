@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { requireModule } from "@/lib/access-control";
 import { getClientIp, handleApiError } from "@/lib/api-utils";
 import { db } from "@/lib/db";
-import { drivingMiles, MAPQUEST_KEY_MISSING, mapquestConfigured } from "@/lib/office/mapquest-mileage";
+import { drivingMiles } from "@/lib/office/project-mileage";
 import { updateOfficeWorkspaceRecord } from "@/lib/office/workspace-service";
 
 type Params = { params: Promise<{ projectId: string }> };
@@ -12,9 +12,6 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const ctx = await requireAuth();
     await requireModule(ctx, "PROJECTS");
-    if (!mapquestConfigured()) {
-      return NextResponse.json({ error: MAPQUEST_KEY_MISSING }, { status: 503 });
-    }
     const { projectId } = await params;
     const body = (await request.json()) as { origin?: string; destination?: string };
     const origin = String(body.origin ?? "").trim();

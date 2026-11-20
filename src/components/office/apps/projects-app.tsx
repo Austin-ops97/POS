@@ -45,7 +45,6 @@ export function ProjectsApp({
   employees,
   permissions,
   blobConfigured,
-  mapquestConfigured,
   initialProjectId,
   startCreating = false,
 }: {
@@ -54,7 +53,6 @@ export function ProjectsApp({
   employees: EmployeeOption[];
   permissions: OfficeAppPermissions;
   blobConfigured: boolean;
-  mapquestConfigured: boolean;
   initialProjectId?: string;
   startCreating?: boolean;
 }) {
@@ -446,7 +444,6 @@ export function ProjectsApp({
                   <ProjectMileagePanel
                     key={active.id}
                     project={active}
-                    configured={mapquestConfigured}
                     defaultOrigin={typeof data.address === "string" ? data.address : ""}
                     onSaved={(saved) => {
                       setRecords((items) => items.map((item) => (item.id === saved.id ? saved : item)));

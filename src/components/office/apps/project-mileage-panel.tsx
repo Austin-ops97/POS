@@ -5,16 +5,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
-import { MAPQUEST_KEY_MISSING } from "@/lib/office/mapquest-mileage";
 
 export function ProjectMileagePanel({
   project,
-  configured,
   defaultOrigin,
   onSaved,
 }: {
   project: OfficeWorkspaceRecordSummary;
-  configured: boolean;
   defaultOrigin: string;
   onSaved: (record: OfficeWorkspaceRecordSummary) => void;
 }) {
@@ -38,11 +35,11 @@ export function ProjectMileagePanel({
         body: JSON.stringify({ origin, destination }),
       });
       const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(body?.error ?? "Could not calculate mileage");
+      if (!res.ok) throw new Error(body?.error ?? "Could not calculate driving distance");
       onSaved(body.record as OfficeWorkspaceRecordSummary);
       toast.success(`${body.miles} miles saved`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not calculate mileage");
+      toast.error(error instanceof Error ? error.message : "Could not calculate driving distance");
     } finally {
       setBusy(false);
     }
@@ -51,24 +48,21 @@ export function ProjectMileagePanel({
   return (
     <form onSubmit={(event) => void submit(event)} className="rounded-2xl border border-slate-200 bg-white p-4">
       <h3 className="font-semibold text-slate-900">Mileage</h3>
-      {!configured ? (
-        <p className="mt-2 text-sm text-amber-800">{MAPQUEST_KEY_MISSING}</p>
-      ) : (
-        <div className="mt-3 grid gap-3">
-          <label className="text-sm font-medium">
-            Origin
-            <Input className="mt-1" value={origin} onChange={(e) => setOrigin(e.target.value)} required />
-          </label>
-          <label className="text-sm font-medium">
-            Destination
-            <Input className="mt-1" value={destination} onChange={(e) => setDestination(e.target.value)} required />
-          </label>
-          {miles != null ? <p className="text-sm text-slate-600">{miles} driving miles</p> : null}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Calculating…" : "Calculate miles"}
-          </Button>
-        </div>
-      )}
+      <p className="mt-1 text-xs text-slate-500">Enter US addresses and calculate driving distance when you are ready.</p>
+      <div className="mt-3 grid gap-3">
+        <label className="text-sm font-medium">
+          Origin
+          <Input className="mt-1" value={origin} onChange={(e) => setOrigin(e.target.value)} required autoComplete="off" />
+        </label>
+        <label className="text-sm font-medium">
+          Destination
+          <Input className="mt-1" value={destination} onChange={(e) => setDestination(e.target.value)} required autoComplete="off" />
+        </label>
+        {miles != null ? <p className="text-sm text-slate-600">{miles} driving miles</p> : null}
+        <Button type="submit" disabled={busy}>
+          {busy ? "Calculating…" : "Calculate driving distance"}
+        </Button>
+      </div>
     </form>
   );
 }
