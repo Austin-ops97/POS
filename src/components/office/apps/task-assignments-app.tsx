@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useMemo, useRef, useState } from "react";
 import { Camera, CheckCircle2, ImagePlus, ListTodo, Trash2, UserRound } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -134,22 +134,25 @@ export function TaskAssignmentsApp({
   );
   const { open, finished } = useMemo(() => splitTaskRecords(tasks), [tasks]);
 
-  function groupByWorker(list: typeof tasks) {
-    const byWorker = new Map<string, typeof tasks>();
-    for (const item of list) {
-      const key = item.record.assignedTo?.id ?? item.data.assignedToId ?? "unassigned";
-      const next = byWorker.get(key) ?? [];
-      next.push(item);
-      byWorker.set(key, next);
-    }
-    const named = employees
-      .map((employee) => ({ employee, items: byWorker.get(employee.id) ?? [] }))
-      .filter((group) => group.items.length > 0);
-    return { named, unassigned: byWorker.get("unassigned") ?? [] };
-  }
+  const groupByWorker = useCallback(
+    (list: typeof tasks) => {
+      const byWorker = new Map<string, typeof tasks>();
+      for (const item of list) {
+        const key = item.record.assignedTo?.id ?? item.data.assignedToId ?? "unassigned";
+        const next = byWorker.get(key) ?? [];
+        next.push(item);
+        byWorker.set(key, next);
+      }
+      const named = employees
+        .map((employee) => ({ employee, items: byWorker.get(employee.id) ?? [] }))
+        .filter((group) => group.items.length > 0);
+      return { named, unassigned: byWorker.get("unassigned") ?? [] };
+    },
+    [employees]
+  );
 
-  const openGrouped = useMemo(() => groupByWorker(open), [open, employees]);
-  const finishedGrouped = useMemo(() => groupByWorker(finished), [finished, employees]);
+  const openGrouped = useMemo(() => groupByWorker(open), [open, groupByWorker]);
+  const finishedGrouped = useMemo(() => groupByWorker(finished), [finished, groupByWorker]);
   const canRemove = permissions.canDelete || permissions.canCreate;
 
   function openEditor(record?: OfficeWorkspaceRecordSummary) {
@@ -342,6 +345,7 @@ export function TaskAssignmentsApp({
                           {data.completion.photos.length ? (
                             <div className="flex flex-wrap gap-2">
                               {data.completion.photos.map((photo) => (
+                                // eslint-disable-next-line @next/next/no-img-element -- completion photos are data URLs
                                 <img
                                   key={photo.id}
                                   src={photo.dataUrl}
@@ -607,6 +611,7 @@ export function TaskAssignmentsApp({
                     <div className="mt-3 flex flex-wrap gap-2">
                       {photos.map((photo) => (
                         <div key={photo.id} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- draft photos are data URLs */}
                           <img src={photo.dataUrl} alt={photo.name} className="h-20 w-20 rounded-lg object-cover" />
                           <button
                             type="button"

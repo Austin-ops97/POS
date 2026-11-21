@@ -23,6 +23,7 @@ import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import { PERMISSIONS } from "@/lib/permissions";
 import { SignatureCapture } from "@/components/dashboard/signature-capture";
 import { CreateProjectFromOrderButton } from "@/components/orders/create-project-from-order";
+import { orderSnapshotForProject } from "@/lib/office/project-create";
 
 export default async function OrderDetailPage({
   params,
@@ -103,17 +104,17 @@ export default async function OrderDetailPage({
         orderBy: { name: "asc" },
       })
     : [];
-  const lineNotes = order.items
-    .map((item) => `${item.quantity} × ${item.name}`)
-    .join("\n");
+  const snapshot = orderSnapshotForProject(order);
   const projectDefaults = {
     title: `Order ${order.orderNumber}`,
-    description: [`Source order ${order.orderNumber}`, lineNotes].filter(Boolean).join("\n\n"),
+    description: snapshot.description,
     customerId: order.customerId ?? undefined,
     customerName: customerName ?? undefined,
     sourceOrderId: order.id,
     sourceOrderNumber: order.orderNumber,
     address: order.customer?.address ?? undefined,
+    orderLines: snapshot.orderLines,
+    orderTotals: snapshot.orderTotals,
   };
 
   return (

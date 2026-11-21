@@ -28,14 +28,14 @@ import {
   type AlertRecipient,
 } from "@/lib/office/reminder-alerts";
 import { reminderTemplateAlias, renderReminderEmail } from "@/lib/office/reminder-email";
+import { publicAppOrigin } from "@/lib/app-origin";
 
 export { computeNextSendAt };
 
 const CLAIM_STALE_MS = 15 * 60_000;
 
 function projectReminderUrl() {
-  const base = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.emeraldvalestudios.online").replace(/\/$/, "");
-  return `${base}/office/apps/projects`;
+  return `${publicAppOrigin()}/office/apps/projects`;
 }
 
 function requireRemindersPermission(ctx: AuthContext) {

@@ -1,3 +1,17 @@
+export type ProjectOrderLine = {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+};
+
+export type ProjectOrderTotals = {
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  total: number;
+};
+
 export type ProjectCreateDraft = {
   title: string;
   description: string;
@@ -10,6 +24,8 @@ export type ProjectCreateDraft = {
   sourceOrderId?: string;
   sourceOrderNumber?: string;
   address?: string;
+  orderLines?: ProjectOrderLine[];
+  orderTotals?: ProjectOrderTotals;
 };
 
 export type ProjectCreateInput = {
@@ -28,6 +44,8 @@ export type ProjectCreateInput = {
     sourceOrderId: string | null;
     sourceOrderNumber: string | null;
     address: string | null;
+    orderLines: ProjectOrderLine[];
+    orderTotals: ProjectOrderTotals | null;
   };
 };
 
@@ -78,6 +96,8 @@ export function buildProjectRecordInput(
         sourceOrderId: draft.sourceOrderId?.trim() || null,
         sourceOrderNumber: draft.sourceOrderNumber?.trim() || null,
         address: draft.address?.trim() || null,
+        orderLines: draft.orderLines ?? [],
+        orderTotals: draft.orderTotals ?? null,
       },
     },
   };
@@ -123,6 +143,44 @@ export function projectSourceOrder(
   const number = typeof metadata?.sourceOrderNumber === "string" ? metadata.sourceOrderNumber.trim() : "";
   if (!id) return null;
   return { id, number: number || id };
+}
+
+function money(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+export function orderSnapshotForProject(order: {
+  orderNumber: string;
+  subtotal?: unknown;
+  discountAmount?: unknown;
+  taxAmount?: unknown;
+  total?: unknown;
+  items?: Array<{ name: string; quantity: number; unitPrice?: unknown; total?: unknown }>;
+}): { description: string; orderLines: ProjectOrderLine[]; orderTotals: ProjectOrderTotals } {
+  const orderLines = (order.items ?? []).map((item) => ({
+    name: item.name,
+    quantity: item.quantity,
+    unitPrice: money(item.unitPrice),
+    total: money(item.total),
+  }));
+  const orderTotals = {
+    subtotal: money(order.subtotal),
+    discountAmount: money(order.discountAmount),
+    taxAmount: money(order.taxAmount),
+    total: money(order.total),
+  };
+  const lines = orderLines.map(
+    (item) => `${item.quantity} × ${item.name} @ ${item.unitPrice.toFixed(2)} = ${item.total.toFixed(2)}`
+  );
+  const totals = [
+    `Subtotal ${orderTotals.subtotal.toFixed(2)}`,
+    orderTotals.discountAmount ? `Discount ${orderTotals.discountAmount.toFixed(2)}` : null,
+    `Tax ${orderTotals.taxAmount.toFixed(2)}`,
+    `Total ${orderTotals.total.toFixed(2)}`,
+  ].filter(Boolean);
+  const description = [`Source order ${order.orderNumber}`, ...lines, totals.join(" · ")].join("\n");
+  return { description: description.slice(0, 2000), orderLines, orderTotals };
 }
 
 export function formatProjectDate(value: string | null | undefined): string | null {

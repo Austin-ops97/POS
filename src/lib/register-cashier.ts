@@ -13,12 +13,15 @@ type CashierPayload = {
 };
 
 function getSigningSecret(): string {
-  return (
+  const configured =
     process.env.REGISTER_CASHIER_SECRET ||
     process.env.CLERK_SECRET_KEY ||
-    process.env.STRIPE_SECRET_KEY ||
-    "dev-register-cashier-secret"
-  );
+    process.env.STRIPE_SECRET_KEY;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Register cashier signing secret is not configured");
+  }
+  return "dev-register-cashier-secret";
 }
 
 function encodePayload(payload: CashierPayload): string {

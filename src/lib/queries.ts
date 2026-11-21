@@ -328,7 +328,7 @@ export async function getCategories(ctx: AuthContext) {
 export async function getOrders(ctx: AuthContext) {
   return db.order.findMany({
     where: { businessId: ctx.business.id },
-    include: { customer: true, employee: true, payments: true },
+    include: { customer: true, employee: true, payments: true, items: true },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

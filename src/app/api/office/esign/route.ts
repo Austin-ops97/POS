@@ -25,6 +25,7 @@ export async function POST(request: Request) {
         customerId: body.customerId || null,
         signerName: String(body.signerName ?? ""),
         signerEmail: String(body.signerEmail ?? ""),
+        requestOrigin: new URL(request.url).origin,
       }),
       { status: 201 }
     );

@@ -5,6 +5,7 @@ import { getOrders } from "@/lib/queries";
 import { PERMISSIONS } from "@/lib/permissions";
 import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import { OrdersTable, type OrderRow } from "@/components/dashboard/orders-table";
+import { orderSnapshotForProject } from "@/lib/office/project-create";
 import type { OrderStatus } from "@prisma/client";
 
 export const metadata = { title: "Orders" };
@@ -41,11 +42,16 @@ export default async function OrdersPage() {
     orderNumber: string;
     customer?: { firstName: string; lastName?: string | null } | null;
     employee?: { name: string } | null;
+    subtotal?: unknown;
+    discountAmount?: unknown;
+    taxAmount?: unknown;
     total: unknown;
     status: string;
     createdAt: Date | string;
+    items?: Array<{ name: string; quantity: number; unitPrice?: unknown; total?: unknown }>;
   }>).map((order) => {
     const status = order.status as OrderStatus;
+    const snapshot = orderSnapshotForProject(order);
     return {
       id: order.id,
       orderNumber: order.orderNumber,
@@ -58,6 +64,9 @@ export default async function OrdersPage() {
       status,
       createdAt: new Date(order.createdAt).toISOString(),
       canTerminate: canTerminateOrders && canTerminateOrder(status),
+      projectDescription: snapshot.description,
+      orderLines: snapshot.orderLines,
+      orderTotals: snapshot.orderTotals,
     } satisfies OrderRow;
   });
 

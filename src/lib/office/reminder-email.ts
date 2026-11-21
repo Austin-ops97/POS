@@ -24,6 +24,7 @@ export const REMINDER_TEMPLATE_VARIABLE_KEYS = [
 export type ReminderTemplateVariables = Record<(typeof REMINDER_TEMPLATE_VARIABLE_KEYS)[number], string>;
 
 export function reminderGreetingName(name?: string | null, email?: string | null): string | null {
+  void email;
   const raw = name?.trim() ?? "";
   if (raw && !raw.includes("@")) {
     return raw.split(/\s+/)[0] ?? null;

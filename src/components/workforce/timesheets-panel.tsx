@@ -60,6 +60,13 @@ function fromLocalInputValue(value: string): string {
   return new Date(value).toISOString();
 }
 
+function suggestedClockOut(entry: TimeEntryRow): string {
+  if (entry.clockOut) return toLocalInputValue(entry.clockOut);
+  const start = new Date(entry.clockIn);
+  const suggested = new Date(start.getTime() + 8 * 60 * 60 * 1000);
+  return toLocalInputValue(suggested.toISOString());
+}
+
 function formatPunch(iso: string | null | undefined, timeZone?: string): string {
   if (!iso) return "Open";
   return new Intl.DateTimeFormat("en-US", {
@@ -107,20 +114,13 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
     load();
   }, [load]);
 
-  function suggestedClockOut(entry: TimeEntryRow): string {
-    if (entry.clockOut) return toLocalInputValue(entry.clockOut);
-    const start = new Date(entry.clockIn);
-    const suggested = new Date(start.getTime() + 8 * 60 * 60 * 1000);
-    return toLocalInputValue(suggested.toISOString());
-  }
-
-  function openEdit(entry: TimeEntryRow, nextMode: "request" | "correct" = "request") {
+  const openEdit = useCallback((entry: TimeEntryRow, nextMode: "request" | "correct" = "request") => {
     setEditing(entry);
     setMode(nextMode);
     setClockIn(toLocalInputValue(entry.clockIn));
     setClockOut(suggestedClockOut(entry));
     setReason("");
-  }
+  }, []);
 
   useEffect(() => {
     if (openedFromQuery.current || !initialEntryId || loading) return;
@@ -129,7 +129,7 @@ export function TimesheetsPanel({ canApprove, currentEmployeeId, initialEntryId 
       openedFromQuery.current = true;
       openEdit(match, "correct");
     }
-  }, [initialEntryId, loading, entries, canApprove]);
+  }, [initialEntryId, loading, entries, canApprove, openEdit]);
 
   async function submitEdit() {
     if (!editing || !clockIn || !reason.trim()) {

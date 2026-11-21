@@ -21,7 +21,7 @@ import {
 import { columnName, evaluateFormula, parseCsv, toCsv } from "./spreadsheet";
 import { appointmentsConflict } from "./calendar";
 import { convertUnit } from "./converters";
-import { buildProjectRecordInput, normalizeProjectClientName, normalizeProjectSchedule } from "./project-create";
+import { buildProjectRecordInput, normalizeProjectClientName, normalizeProjectSchedule, orderSnapshotForProject } from "./project-create";
 import { isProjectBlobConfigError, PROJECT_BLOB_SETUP_MESSAGE } from "@/lib/storage/blob-config";
 
 describe("Office content security", () => {
@@ -187,6 +187,41 @@ describe("Functional Office tools", () => {
     assert.equal(built.input.dueAt, "2026-10-15T00:00:00.000Z");
     assert.equal(built.input.assignedToId, null);
     assert.deepEqual(built.input.metadata.tasks, []);
+    assert.deepEqual(built.input.metadata.orderLines, []);
+    assert.equal(built.input.metadata.orderTotals, null);
+  });
+
+  it("copies order line items and totals into the project snapshot", () => {
+    const snapshot = orderSnapshotForProject({
+      orderNumber: "ORD-9",
+      subtotal: 20,
+      discountAmount: 2,
+      taxAmount: 1.5,
+      total: 19.5,
+      items: [{ name: "Mulch", quantity: 2, unitPrice: 10, total: 20 }],
+    });
+    assert.match(snapshot.description, /2 × Mulch/);
+    assert.match(snapshot.description, /Total 19.50/);
+    assert.equal(snapshot.orderLines[0]?.name, "Mulch");
+    const built = buildProjectRecordInput({
+      title: "From order",
+      description: snapshot.description,
+      customerId: "",
+      clientName: "",
+      startsAt: "",
+      dueAt: "",
+      priority: "NORMAL",
+      assignedToId: "",
+      sourceOrderId: "ord_1",
+      sourceOrderNumber: "ORD-9",
+      orderLines: snapshot.orderLines,
+      orderTotals: snapshot.orderTotals,
+    });
+    assert.equal(built.ok, true);
+    if (!built.ok) return;
+    assert.equal(built.input.metadata.sourceOrderNumber, "ORD-9");
+    assert.equal(built.input.metadata.orderLines[0]?.quantity, 2);
+    assert.equal(built.input.metadata.orderTotals?.total, 19.5);
   });
 
   it("keeps an optional free-text client name when no directory customer is chosen", () => {

@@ -17,11 +17,11 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
         run: |
           set -euo pipefail
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "CRON_SECRET GitHub secret is not set"
-            exit 1
+          if [ -z "${CRON_SECRET:-}" ] || [ -z "${APP_URL:-}" ]; then
+            echo "Skipping reminder cron: CRON_SECRET and APP_URL must both be set."
+            exit 0
           fi
-          url="${APP_URL:-https://www.emeraldvalestudios.online}/api/cron/reminders"
+          url="${APP_URL}/api/cron/reminders"
           curl -fsS -X POST "$url" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json"

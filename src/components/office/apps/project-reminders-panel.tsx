@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Loader2, Pause, Play, Send, Trash2 } from "lucide-react";
+import { Bell, Pause, Play, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ReminderComposer } from "./reminder-composer";

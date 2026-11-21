@@ -109,28 +109,40 @@ CREATE TABLE "PtoLedgerEntry" (
     CONSTRAINT "PtoLedgerEntry_pkey" PRIMARY KEY ("id")
 );
 
--- Backfill compensation history from hourlyWage
-INSERT INTO "EmployeeCompensation" (
-    "id",
-    "employeeId",
-    "payType",
-    "hourlyRate",
-    "overtimeEligible",
-    "overtimeMultiplier",
-    "effectiveFrom",
-    "createdAt"
-)
-SELECT
-    "id" || '-initial-comp',
-    "id",
-    'HOURLY',
-    "hourlyWage",
-    true,
-    1.5,
-    COALESCE("hireDate", "createdAt"::date, CURRENT_DATE),
-    "createdAt"
-FROM "EmployeeProfile"
-WHERE "hourlyWage" IS NOT NULL;
+-- Backfill compensation history from hourlyWage when that column already exists
+-- (later migration 20260710175558 adds it). Skip on a fresh database.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'EmployeeProfile'
+      AND column_name = 'hourlyWage'
+  ) THEN
+    INSERT INTO "EmployeeCompensation" (
+        "id",
+        "employeeId",
+        "payType",
+        "hourlyRate",
+        "overtimeEligible",
+        "overtimeMultiplier",
+        "effectiveFrom",
+        "createdAt"
+    )
+    SELECT
+        "id" || '-initial-comp',
+        "id",
+        'HOURLY',
+        "hourlyWage",
+        true,
+        1.5,
+        COALESCE("hireDate", "createdAt"::date, CURRENT_DATE),
+        "createdAt"
+    FROM "EmployeeProfile"
+    WHERE "hourlyWage" IS NOT NULL;
+  END IF;
+END $$;
 
 -- CreateIndex
 CREATE INDEX "EmployeeProfile_businessId_status_idx" ON "EmployeeProfile"("businessId", "status");

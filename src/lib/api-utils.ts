@@ -158,7 +158,7 @@ export function handleApiError(error: unknown, context: string) {
     }
     if (
       error.message.includes("disabled for this business") ||
-      /^(At least |Photos can |Attachments can |This project cannot|This submission|A comment is required|No supervisor|Only JPEG|File is empty|Invalid )/i.test(
+      /^(At least |Photos can |Attachments can |This project cannot|This submission|A comment is required|No supervisor|Only JPEG|File is empty|Invalid |Enter an origin)/i.test(
         error.message
       )
     ) {

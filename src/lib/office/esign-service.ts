@@ -7,6 +7,7 @@ import { officeContentText } from "@/lib/office/content";
 import { isReceiptEmailConfigured } from "@/lib/receipts/receipt-email";
 import { Resend } from "resend";
 import { renderSignedEsignPdf } from "./esign-pdf";
+import { publicAppOrigin } from "@/lib/app-origin";
 
 function requireEsign(ctx: AuthContext) {
   if (!hasPermission(ctx, PERMISSIONS.CREATE_DOCUMENTS) && !hasPermission(ctx, PERMISSIONS.EDIT_DOCUMENTS)) {
@@ -18,8 +19,8 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function appOrigin() {
-  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.emeraldvalestudios.online").replace(/\/$/, "");
+function appOrigin(requestOrigin?: string | null) {
+  return publicAppOrigin(requestOrigin);
 }
 
 function serialize(request: {
@@ -99,6 +100,7 @@ export async function createAndSendEsign(ctx: AuthContext, input: {
   customerId?: string | null;
   signerName: string;
   signerEmail: string;
+  requestOrigin?: string | null;
 }) {
   requireEsign(ctx);
   const title = input.title.trim();
@@ -141,7 +143,7 @@ export async function createAndSendEsign(ctx: AuthContext, input: {
       events: { create: { type: "SENT", ipAddress: null, userAgent: null } },
     },
   });
-  const link = `${appOrigin()}/sign/${token}`;
+  const link = `${appOrigin(input.requestOrigin)}/sign/${token}`;
   const emailed = await sendSignEmail({
     to: signerEmail,
     signerName,

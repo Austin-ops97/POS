@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ export function OfficeEsignClient({
   const [busy, setBusy] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [documentId, setDocumentId] = useState("");
+  const [lastLink, setLastLink] = useState<{ url: string; emailed: boolean } | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,7 +60,16 @@ export function OfficeEsignClient({
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error ?? "Could not send for signature");
       setRows((items) => [body, ...items]);
-      toast.success("Signature request emailed");
+      const signUrl = typeof body.signUrl === "string" ? body.signUrl : "";
+      const emailed = body.emailSent === true;
+      setLastLink(signUrl ? { url: signUrl, emailed } : null);
+      if (emailed) {
+        toast.success("Signature request emailed");
+      } else {
+        toast.success("Email was not sent. Copy the signing link to share it.", {
+          duration: 12_000,
+        });
+      }
       event.currentTarget.reset();
       setCustomerId("");
       setDocumentId("");
@@ -154,6 +165,31 @@ export function OfficeEsignClient({
             {busy ? "Sending…" : "Send for signature"}
           </Button>
         </form>
+      ) : null}
+      {lastLink ? (
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 break-all text-slate-700">
+            {lastLink.emailed ? "Signing link (also emailed): " : "No email was sent. Signing link: "}
+            <a className="font-medium text-indigo-700 underline" href={lastLink.url}>
+              {lastLink.url}
+            </a>
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              void navigator.clipboard.writeText(lastLink.url).then(
+                () => toast.success("Signing link copied"),
+                () => toast.error("Could not copy the link")
+              );
+            }}
+          >
+            <Copy className="h-4 w-4" />
+            Copy link
+          </Button>
+        </div>
       ) : null}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-sm">

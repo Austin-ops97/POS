@@ -6,6 +6,7 @@ import {
   readCashierTokenFromRequest,
   REGISTER_CASHIER_COOKIE,
 } from "./register-cashier";
+import { handleApiError } from "./api-utils";
 
 describe("register cashier cookie", () => {
   it("round-trips a signed cashier payload", () => {
@@ -47,6 +48,21 @@ describe("register cashier cookie", () => {
       },
     });
     assert.equal(readCashierTokenFromRequest(request), value);
+  });
+});
+
+describe("mileage error mapping", () => {
+  it("returns 400 for origin, lookup, and route messages", async () => {
+    for (const message of [
+      "Invalid origin or destination: enter both addresses.",
+      "Invalid address lookup: could not look up the origin address. Try again in a moment.",
+      "Invalid route: could not calculate a driving route between those addresses.",
+    ]) {
+      const res = handleApiError(new Error(message), "mileage");
+      assert.equal(res.status, 400);
+      const body = (await res.json()) as { error: string };
+      assert.equal(body.error, message);
+    }
   });
 });
 

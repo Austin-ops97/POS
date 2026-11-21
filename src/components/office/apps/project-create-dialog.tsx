@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { buildProjectRecordInput } from "@/lib/office/project-create";
+import { buildProjectRecordInput, type ProjectOrderLine, type ProjectOrderTotals } from "@/lib/office/project-create";
 import type { ProjectCustomerOption } from "@/lib/office/project-form-options";
 import type { OfficeWorkspaceRecordSummary } from "@/lib/office/workspace-service";
 import { createWorkspaceRecord, type EmployeeOption } from "./record-client";
@@ -21,6 +21,8 @@ export type ProjectCreateDefaults = {
   sourceOrderId?: string;
   sourceOrderNumber?: string;
   address?: string;
+  orderLines?: ProjectOrderLine[];
+  orderTotals?: ProjectOrderTotals;
 };
 
 export function ProjectCreateDialog({
@@ -139,6 +141,8 @@ export function ProjectCreateDialog({
       sourceOrderId: defaults?.sourceOrderId,
       sourceOrderNumber: defaults?.sourceOrderNumber,
       address: defaults?.address,
+      orderLines: defaults?.orderLines,
+      orderTotals: defaults?.orderTotals,
     });
     if (!built.ok) {
       setError(built.error);

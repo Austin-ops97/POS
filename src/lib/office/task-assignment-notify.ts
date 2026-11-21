@@ -5,16 +5,13 @@ import {
   TASK_ASSIGNMENTS_HREF,
   shouldNotifyTaskAssignee,
 } from "@/lib/office/task-assignments";
+import { publicAppOrigin } from "@/lib/app-origin";
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]!);
 
 function taskAssignmentsUrl() {
-  const base = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.emeraldvalestudios.online").replace(
-    /\/$/,
-    ""
-  );
-  return `${base}${TASK_ASSIGNMENTS_HREF}`;
+  return `${publicAppOrigin()}${TASK_ASSIGNMENTS_HREF}`;
 }
 
 async function sendTaskEmail(input: {

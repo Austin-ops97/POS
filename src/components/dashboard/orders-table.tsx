@@ -28,6 +28,7 @@ import { canTerminateOrder } from "@/lib/orders/terminate-order-helpers";
 import type { OrderStatus } from "@prisma/client";
 import { CreateProjectFromOrderButton } from "@/components/orders/create-project-from-order";
 import type { EmployeeOption } from "@/components/office/apps/record-client";
+import type { ProjectOrderLine, ProjectOrderTotals } from "@/lib/office/project-create";
 
 export type OrderRow = {
   id: string;
@@ -39,6 +40,9 @@ export type OrderRow = {
   createdAt: string;
   employeeName?: string | null;
   canTerminate?: boolean;
+  projectDescription?: string;
+  orderLines?: ProjectOrderLine[];
+  orderTotals?: ProjectOrderTotals;
 };
 
 type OrdersTableProps = {
@@ -224,11 +228,13 @@ export function OrdersTable({
                           employees={projectEmployees}
                           defaults={{
                             title: `Order ${order.orderNumber}`,
-                            description: `Source order ${order.orderNumber}`,
+                            description: order.projectDescription ?? `Source order ${order.orderNumber}`,
                             customerId: order.customerId ?? undefined,
                             customerName: order.customerName ?? undefined,
                             sourceOrderId: order.id,
                             sourceOrderNumber: order.orderNumber,
+                            orderLines: order.orderLines,
+                            orderTotals: order.orderTotals,
                           }}
                         />
                       ) : null}
@@ -321,11 +327,13 @@ export function OrdersTable({
                                 employees={projectEmployees}
                                 defaults={{
                                   title: `Order ${order.orderNumber}`,
-                                  description: `Source order ${order.orderNumber}`,
+                                  description: order.projectDescription ?? `Source order ${order.orderNumber}`,
                                   customerId: order.customerId ?? undefined,
                                   customerName: order.customerName ?? undefined,
                                   sourceOrderId: order.id,
                                   sourceOrderNumber: order.orderNumber,
+                                  orderLines: order.orderLines,
+                                  orderTotals: order.orderTotals,
                                 }}
                               />
                             ) : null}
